@@ -1,0 +1,40 @@
+<?xml version='1.0' encoding='utf-8'?>
+<plugin id="cordova-plugin-purchasely" version="1.0.0" xmlns="http://apache.org/cordova/ns/plugins/1.0" xmlns:android="http://schemas.android.com/apk/res/android">
+    <name>Purchasely</name>
+    <js-module name="Purchasely" src="www/Purchasely.js">
+        <clobbers target="Purchasely" />
+    </js-module>
+    <platform name="ios">
+        <config-file parent="/*" target="config.xml">
+            <feature name="Purchasely">
+            <param name="ios-package" value="Purchasely" />
+            </feature>
+        </config-file>
+        <source-file src="src/ios/Purchasely.m" />
+    </platform>
+    <platform name="android">
+        <config-file parent="/*" target="res/xml/config.xml">
+            <feature name="Purchasely">
+                <param name="android-package" value="cordova.plugin.purchasely.PurchaselyPlugin" />
+            </feature>
+            <preference name="AndroidXEnabled" value="true" />
+        </config-file>
+        <config-file parent="/manifest/application" target="AndroidManifest.xml">
+            <activity
+                android:label="PLYProductActivity"
+                android:name="cordova.plugin.purchasely.PLYProductActivity"
+                android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+            </activity>
+            <activity
+                android:label="PLYSubscriptionsActivity"
+                android:name="cordova.plugin.purchasely.PLYSubscriptionsActivity"
+                android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+            </activity>
+        </config-file>
+        <framework src="io.purchasely:core:2.5.1" />
+        <source-file src="src/android/PurchaselyPlugin.java" target-dir="src/cordova/plugin/purchasely" />
+        <source-file src="src/android/PLYProductActivity.java" target-dir="src/cordova/plugin/purchasely" />
+        <source-file src="src/android/PLYSubscriptionsActivity.java" target-dir="src/cordova/plugin/purchasely" />
+        <source-file src="src/android/activity_ply_product_activity.xml" target-dir="res/layout"/>
+    </platform>
+</plugin>
