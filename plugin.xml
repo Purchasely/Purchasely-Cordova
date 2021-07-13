@@ -7,10 +7,19 @@
     <platform name="ios">
         <config-file parent="/*" target="config.xml">
             <feature name="Purchasely">
-            <param name="ios-package" value="Purchasely" />
+              <param name="ios-package" value="CDVPurchasely" />
             </feature>
         </config-file>
-        <source-file src="src/ios/Purchasely.m" />
+        <header-file src="src/ios/CDVPurchasely.h" />
+        <source-file src="src/ios/CDVPurchasely.m" />
+        <podspec>
+            <config>
+                <source url="https://github.com/CocoaPods/Specs.git"/>
+            </config>
+            <pods use-frameworks="true">
+                <pod name="Purchasely" spec="2.5.3"/>
+            </pods>
+        </podspec>
     </platform>
     <platform name="android">
         <config-file parent="/*" target="res/xml/config.xml">
