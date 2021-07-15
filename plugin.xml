@@ -12,6 +12,17 @@
         </config-file>
         <header-file src="src/ios/CDVPurchasely.h" />
         <source-file src="src/ios/CDVPurchasely.m" />
+        <header-file src="src/ios/CDVPurchasely+Events.h" />
+        <source-file src="src/ios/CDVPurchasely+Events.m" />
+        <header-file src="src/ios/Hybrid/Purchasely_Hybrid.h" />
+        <header-file src="src/ios/Hybrid/UIViewController+Hybrid.h" />
+        <source-file src="src/ios/Hybrid/UIViewController+Hybrid.m" />
+        <header-file src="src/ios/Hybrid/PLYProduct+Hybrid.h" />
+        <source-file src="src/ios/Hybrid/PLYProduct+Hybrid.m" />
+        <header-file src="src/ios/Hybrid/PLYPlan+Hybrid.h" />
+        <source-file src="src/ios/Hybrid/PLYPlan+Hybrid.m" />
+        <header-file src="src/ios/Hybrid/PLYSubscription+Hybrid.h" />
+        <source-file src="src/ios/Hybrid/PLYSubscription+Hybrid.m" />
         <podspec>
             <config>
                 <source url="https://github.com/CocoaPods/Specs.git"/>

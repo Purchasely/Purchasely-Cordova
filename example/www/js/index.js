@@ -33,7 +33,9 @@ function onDeviceReady() {
     document.getElementById("presentSubscriptions").addEventListener("click", presentSubscriptions);
     document.getElementById("purchaseWithPlanVendorId").addEventListener("click", purchaseWithPlanVendorId);
 
-    Purchasely.addEventsListener((event) => {
+	console.log("Purchasely anonymous Id" + Purchasely.getAnonymousUserId());
+
+	Purchasely.addEventsListener((event) => {
         console.log("Event Name " + event.name);
         console.log(event.properties);
         console.log(event);
