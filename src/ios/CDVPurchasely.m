@@ -197,10 +197,6 @@
 	self.eventCommand = nil;
 }
 
-- (void)displaySubscriptionCancellationInstruction:(CDVInvokedUrlCommand*)command {
-
-}
-
 - (void)handle:(CDVInvokedUrlCommand*)command {
 	NSString *deeplinkString = [command argumentAtIndex:0];
 	NSURL *deeplink = [NSURL URLWithString:deeplinkString];

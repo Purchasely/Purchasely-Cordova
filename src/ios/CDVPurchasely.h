@@ -32,8 +32,6 @@
 - (void)userSubscriptions:(CDVInvokedUrlCommand*)command;
 - (void)addEventsListener:(CDVInvokedUrlCommand*)command;
 - (void)removeEventsListener:(CDVInvokedUrlCommand*)command;
-
-- (void)displaySubscriptionCancellationInstruction:(CDVInvokedUrlCommand*)command;
 - (void)handle:(CDVInvokedUrlCommand*)command;
 - (void)close:(CDVInvokedUrlCommand*)command;
 
