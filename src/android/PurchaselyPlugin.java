@@ -141,11 +141,14 @@ public class PurchaselyPlugin extends CordovaPlugin {
         map.put("result", productViewResult);
         map.put("plan", plan != null ? plan.toMap() : "");
 
-        if(defaultCallback != null) {
-             defaultCallback.success(new JSONObject(map));
-        } else if(presentationCallback != null) {
+        if(presentationCallback != null) {
             presentationCallback.success(new JSONObject(map));
-        }
+            presentationCallback = null;
+        } else if(defaultCallback != null) {
+            PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, new JSONObject(map));
+            pluginResult.setKeepCallback(true);
+            defaultCallback.sendPluginResult(pluginResult);
+       }
     }
 
     private void startWithAPIKey(String apiKey,
@@ -172,8 +175,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
                 .logLevel(LogLevel.values()[logLevel])
                 .build();
 
-        //TODO change with Cordova
-        Purchasely.setAppTechnology(PLYAppTechnology.REACT_NATIVE);
+        Purchasely.setAppTechnology(PLYAppTechnology.CORDOVA);
 
         Purchasely.start();
 
