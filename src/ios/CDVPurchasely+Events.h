@@ -12,4 +12,6 @@
 
 }
 
+- (void)reloadContent: (NSNotification *)aNotification;
+
 @end

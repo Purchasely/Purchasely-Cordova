@@ -42,6 +42,10 @@ function onDeviceReady() {
     }, (error) => {
         console.log(error);
     });
+
+	Purchasely.purchasedSubscription(() => {
+		console.log("PURCHASED");
+	})
 }
 
 function openPresentation() {

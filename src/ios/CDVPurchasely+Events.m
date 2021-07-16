@@ -21,7 +21,7 @@
 	}
 }
 
-- (void)refreshContent: (NSNotification *)aNotification {
+- (void)reloadContent: (NSNotification *)aNotification {
 	if (self.purchasedCommand) {
 		CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
 		[pluginResult setKeepCallbackAsBool:YES];

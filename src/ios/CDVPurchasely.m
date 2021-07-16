@@ -7,6 +7,7 @@
 
 #import "CDVPurchasely.h"
 #import "Purchasely_Hybrid.h"
+#import "CDVPurchasely+Events.h"
 
 @implementation CDVPurchasely
 
@@ -153,9 +154,9 @@
 - (void)purchasedSubscription:(CDVInvokedUrlCommand*)command {
 	self.purchasedCommand = command;
 	[[NSNotificationCenter defaultCenter] addObserver:self
-												 selector:@selector(reloadContent)
-													 name: @"ply_purchasedSubscription"
-												   object:nil];
+											 selector:@selector(reloadContent:)
+												 name: @"ply_purchasedSubscription"
+											   object:nil];
 }
 
 - (void)productWithIdentifier:(CDVInvokedUrlCommand*)command {
