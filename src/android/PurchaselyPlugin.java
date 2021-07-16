@@ -244,12 +244,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
         JSONObject jsonObject = new JSONObject();
 
         Purchasely.userLogin(userId, refresh -> {
-            try {
-                jsonObject.put("refresh", refresh);
-            } catch (JSONException e) {
-                Log.e("Purchasely", "", e);
-            }
-            callbackContext.success(jsonObject);
+            callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK, refresh));
             return null;
         });
     }
@@ -314,7 +309,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
 
     private void restoreAllProducts(CallbackContext callbackContext) {
         Purchasely.restoreAllProducts(plyPlan -> {
-            callbackContext.success();
+            callbackContext.success(new JSONObject(plyPlan.toMap()));
             return null;
         }, plyError -> {
             callbackContext.error(plyError.getMessage());
@@ -359,14 +354,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
             return;
         }
         Uri uri = Uri.parse(deeplink);
-        boolean handled = Purchasely.handle(uri);
-        JSONObject result = new JSONObject();
-        try {
-            result.put("result", handled);
-        } catch (JSONException e) {
-            Log.e("Purchasely", "", e);
-        }
-        callbackContext.success(result);
+        callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK, Purchasely.handle(uri)));
     }
 
     private void productWithIdentifier(String vendorId, CallbackContext callbackContext) {

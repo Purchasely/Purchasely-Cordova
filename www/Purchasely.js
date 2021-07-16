@@ -18,8 +18,8 @@ exports.getAnonymousUserId = function (success, error) {
     exec(success, error, 'Purchasely', 'getAnonymousUserId', []);
 };
 
-exports.userLogin = function (userId, success, error) {
-    exec(success, error, 'Purchasely', 'userLogin', [userId]);
+exports.userLogin = function (userId, success) {
+    exec(success, defaultError, 'Purchasely', 'userLogin', [userId]);
 };
 
 exports.userLogout = function () {
@@ -85,3 +85,30 @@ exports.planWithIdentifier = function (planId, success) {
 exports.productWithIdentifier = function (productId, success) {
     exec(success, defaultError, 'Purchasely', 'productWithIdentifier', [productId]);
 };
+
+exports.LogLevel = {
+	DEBUG: 0,
+	INFO: 1,
+	WARN: 2,
+	ERROR: 3,
+}
+
+exports.Attribute = {
+	AMPLITUDE_SESSION_ID: 0,
+	FIREBASE_APP_INSTANCE_ID: 1,
+	AIRSHIP_CHANNEL_ID: 2
+}
+
+exports.PurchaseResult = {
+	PURCHASED: 0,
+	CANCELLED: 1,
+	RESTORED: 2
+}
+
+exports.SubscriptionSource = {
+    appleAppStore: 0,
+    googlePlayStore: 1,
+    amazonAppstore: 2,
+    huaweiAppGallery: 3,
+    none: 4
+}

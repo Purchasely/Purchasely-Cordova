@@ -27,13 +27,15 @@ function onDeviceReady() {
     console.log('Running cordova-' + cordova.platformId + '@' + cordova.version);
     document.getElementById('deviceready').classList.add('ready');
 
-    Purchasely.startWithAPIKey('afa96c76-1d8e-4e3c-a48f-204a3cd93a15', ['Google'], null, 0, false);
+    Purchasely.startWithAPIKey('afa96c76-1d8e-4e3c-a48f-204a3cd93a15', ['Google'], null, Purchasely.LogLevel.DEBUG, false);
 
     document.getElementById("openPresentation").addEventListener("click", openPresentation);
     document.getElementById("presentSubscriptions").addEventListener("click", presentSubscriptions);
     document.getElementById("purchaseWithPlanVendorId").addEventListener("click", purchaseWithPlanVendorId);
+    document.getElementById("restore").addEventListener("click", restore);
+    document.getElementById("openDeeplink").addEventListener("click", openDeeplink);
 
-	console.log("Purchasely anonymous Id" + Purchasely.getAnonymousUserId());
+    Purchasely.getAnonymousUserId(id => { console.log("Purchasely anonymous Id:" + id) });
 
 	Purchasely.addEventsListener((event) => {
         console.log("Event Name " + event.name);
@@ -46,10 +48,45 @@ function onDeviceReady() {
 	Purchasely.purchasedSubscription(() => {
 		console.log("PURCHASED");
 	})
+
+    Purchasely.userLogin('test_cordova', refresh => { console.log("User logged, refresh needed ? " + refresh);  });
+
+    Purchasely.setLogLevel(Purchasely.LogLevel.DEBUG);
+
+    Purchasely.setAttribute(Purchasely.Attribute.AMPLITUDE_SESSION_ID, 1);
+
+    Purchasely.isReadyToPurchase(true);
+
+    Purchasely.setDefaultPresentationResultHandler(
+        (callback) => {
+            console.log(callback);
+            if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
+                console.log("User cancelled purchased");
+            } else {
+                console.log("User purchased " + callback.plan.vendorId);
+            }
+        },
+        (error) => {
+            console.log("Error with purchase : " + error);
+        }
+    )
 }
 
 function openPresentation() {
-    Purchasely.presentPresentationWithIdentifier(null);
+    Purchasely.presentPresentationWithIdentifier(
+        null,
+        (callback) => {
+            console.log(callback);
+            if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
+                console.log("User cancelled purchased");
+            } else {
+                console.log("User purchased " + callback.plan.name);
+            }
+        },
+        (error) => {
+            console.log("Error with purchase : " + error);
+        }
+    );
 }
 
 function presentSubscriptions() {
@@ -58,4 +95,28 @@ function presentSubscriptions() {
 
 function purchaseWithPlanVendorId() {
     Purchasely.purchaseWithPlanVendorId("PURCHASELY_PLUS_MONTHLY");
+}
+
+function restore() {
+    Purchasely.restoreAllProducts(
+        (plan) => {
+            if(plan) console.log("Restore " + plan.vendorId);
+            else console.log("Nothing to restore");
+        },
+        (error) => {
+            console.log("Restore failed " + error);
+        },
+    );
+}
+
+function openDeeplink() {
+    Purchasely.handle(
+        "purchasely://ply/presentations/CAROUSEL",
+        isHandled => {
+            console.log("Deeplink is handled ? " + isHandled)
+        },
+        (error) => {
+            console.log(error)
+        },
+    );
 }
