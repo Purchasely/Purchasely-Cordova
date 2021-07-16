@@ -12,11 +12,21 @@
 @implementation CDVPurchasely (Events)
 
 - (void)eventTriggered:(enum PLYEvent)event properties:(NSDictionary<NSString *, id> * _Nullable)properties {
-	NSDictionary<NSString *, id> *eventDict = @{@"name": [NSString fromPLYEvent:event], @"properties": properties};
-	CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:eventDict];
+	if (self.eventCommand) {
+		NSDictionary<NSString *, id> *eventDict = @{@"name": [NSString fromPLYEvent:event], @"properties": properties};
+		CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:eventDict];
 
-	[pluginResult setKeepCallbackAsBool:YES];
-	[self.commandDelegate sendPluginResult:pluginResult callbackId:self.eventCommand.callbackId];
+		[pluginResult setKeepCallbackAsBool:YES];
+		[self.commandDelegate sendPluginResult:pluginResult callbackId:self.eventCommand.callbackId];
+	}
+}
+
+- (void)refreshContent: (NSNotification *)aNotification {
+	if (self.purchasedCommand) {
+		CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+		[pluginResult setKeepCallbackAsBool:YES];
+		[self.commandDelegate sendPluginResult:pluginResult callbackId:self.purchasedCommand.callbackId];
+	}
 }
 
 @end

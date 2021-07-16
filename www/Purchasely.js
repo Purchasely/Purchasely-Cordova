@@ -70,6 +70,10 @@ exports.restoreAllProducts = function (success, error) {
     exec(success, error, 'Purchasely', 'restoreAllProducts', []);
 };
 
+exports.purchasedSubscription = function (success, error) {
+    exec(success, error, 'Purchasely', 'purchasedSubscription', []);
+};
+
 exports.handle = function (deepLink, success, error) {
     exec(success, error, 'Purchasely', 'handle', [deepLink]);
 };

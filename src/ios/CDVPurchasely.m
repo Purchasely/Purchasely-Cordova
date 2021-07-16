@@ -150,6 +150,14 @@
 	}];
 }
 
+- (void)purchasedSubscription:(CDVInvokedUrlCommand*)command {
+	self.purchasedCommand = command;
+	[[NSNotificationCenter defaultCenter] addObserver:self
+												 selector:@selector(reloadContent)
+													 name: @"ply_purchasedSubscription"
+												   object:nil];
+}
+
 - (void)productWithIdentifier:(CDVInvokedUrlCommand*)command {
 	NSString *productVendorId = [command argumentAtIndex:0];
 

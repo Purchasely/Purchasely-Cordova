@@ -11,6 +11,7 @@
 @interface CDVPurchasely<PLYEventDelegate> : CDVPlugin {
 }
 
+@property CDVInvokedUrlCommand* purchasedCommand;
 @property CDVInvokedUrlCommand* eventCommand;
 
 - (void)startWithAPIKey:(CDVInvokedUrlCommand*)command;
@@ -27,6 +28,7 @@
 - (void)presentSubscriptions:(CDVInvokedUrlCommand*)command;
 - (void)purchaseWithPlanVendorId:(CDVInvokedUrlCommand*)command;
 - (void)restoreAllProducts:(CDVInvokedUrlCommand*)command;
+- (void)purchasedSubscription:(CDVInvokedUrlCommand*)command;
 - (void)productWithIdentifier:(CDVInvokedUrlCommand*)command;
 - (void)planWithIdentifier:(CDVInvokedUrlCommand*)command;
 - (void)userSubscriptions:(CDVInvokedUrlCommand*)command;
