@@ -26,7 +26,9 @@ import io.purchasely.ext.PLYEvent;
 import io.purchasely.ext.PLYProductViewResult;
 import io.purchasely.ext.PlanListener;
 import io.purchasely.ext.ProductListener;
+import io.purchasely.ext.PurchaseListener;
 import io.purchasely.ext.Purchasely;
+import io.purchasely.ext.State;
 import io.purchasely.ext.StoreType;
 import io.purchasely.ext.SubscriptionsListener;
 import io.purchasely.models.PLYPlan;
@@ -80,6 +82,9 @@ public class PurchaselyPlugin extends CordovaPlugin {
                 break;
             case "setDefaultPresentationResultHandler":
                 setDefaultPresentationResultHandler(callbackContext);
+                break;
+            case "purchasedSubscription":
+                purchasedSubscription(callbackContext);
                 break;
             case "isReadyToPurchase":
                 isReadyToPurchase(args.getBoolean(0));
@@ -241,8 +246,6 @@ public class PurchaselyPlugin extends CordovaPlugin {
     }
 
     private void userLogin(String userId, CallbackContext callbackContext) {
-        JSONObject jsonObject = new JSONObject();
-
         Purchasely.userLogin(userId, refresh -> {
             callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK, refresh));
             return null;
@@ -268,6 +271,16 @@ public class PurchaselyPlugin extends CordovaPlugin {
     private void setDefaultPresentationResultHandler(CallbackContext callbackContext) {
         defaultCallback = callbackContext;
         Purchasely.setDefaultPresentationResultHandler(PurchaselyPlugin::sendPurchaseResult);
+    }
+
+    private void purchasedSubscription(CallbackContext callbackContext) {
+        Purchasely.setPurchaseListener(state -> {
+            if(state instanceof State.PurchaseComplete || state instanceof State.RestorationComplete) {
+                PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, "");
+                pluginResult.setKeepCallback(true);
+                callbackContext.sendPluginResult(pluginResult);
+            }
+        });
     }
 
     private void synchronize() {
