@@ -102,9 +102,6 @@ public class PurchaselyPlugin extends CordovaPlugin {
             case "restoreAllProducts":
                 restoreAllProducts(callbackContext);
                 break;
-            case "displaySubscriptionCancellationInstruction":
-                displaySubscriptionCancellationInstruction();
-                break;
             case "userSubscriptions":
                 userSubscriptions(callbackContext);
                 break;
@@ -323,10 +320,6 @@ public class PurchaselyPlugin extends CordovaPlugin {
             callbackContext.error(plyError.getMessage());
             return null;
         });
-    }
-
-    private void displaySubscriptionCancellationInstruction() {
-        Purchasely.displaySubscriptionCancellationInstruction(cordova.getActivity(), 0);
     }
 
     private void userSubscriptions(CallbackContext callbackContext) {

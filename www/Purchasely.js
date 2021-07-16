@@ -70,10 +70,6 @@ exports.restoreAllProducts = function (success, error) {
     exec(success, error, 'Purchasely', 'restoreAllProducts', []);
 };
 
-exports.displaySubscriptionCancellationInstruction = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'displaySubscriptionCancellationInstruction', []);
-};
-
 exports.handle = function (deepLink, success, error) {
     exec(success, error, 'Purchasely', 'handle', [deepLink]);
 };
