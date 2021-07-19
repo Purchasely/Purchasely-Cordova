@@ -90,8 +90,8 @@ exports.setLoginTappedHandler = function (success) {
     exec(success, defaultError, 'Purchasely', 'setLoginTappedHandler', []);
 };
 
-exports.onLoginClosed = function (userLoggedIn) {
-    exec(() => {}, defaultError, 'Purchasely', 'onLoginClosed', [userLoggedIn]);
+exports.onUserLoggedIn = function (userLoggedIn) {
+    exec(() => {}, defaultError, 'Purchasely', 'onUserLoggedIn', [userLoggedIn]);
 };
 
 exports.setConfirmPurchaseHandler = function (success) {
@@ -99,7 +99,7 @@ exports.setConfirmPurchaseHandler = function (success) {
 };
 
 exports.processToPayment = function (processToPayment) {
-    exec(() => {}, defaultError, 'Purchasely', 'onPurchaseHandledClosed', [processToPayment]);
+    exec(() => {}, defaultError, 'Purchasely', 'processToPayment', [processToPayment]);
 };
 
 exports.LogLevel = {

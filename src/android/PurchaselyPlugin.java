@@ -135,14 +135,14 @@ public class PurchaselyPlugin extends CordovaPlugin {
                 case "setLoginTappedHandler":
                     setLoginTappedHandler(callbackContext);
                     break;
-                case "onLoginClosed":
-                    onLoginClosed(args.getBoolean(0));
+                case "onUserLoggedIn":
+                    onUserLoggedIn(args.getBoolean(0));
                     break;
                 case "setConfirmPurchaseHandler":
                     setConfirmPurchaseHandler(callbackContext);
                     break;
-                case "onPurchaseHandledClosed":
-                    onPurchaseHandledClosed(args.getBoolean(0));
+                case "processToPayment":
+                    processToPayment(args.getBoolean(0));
                     break;
                 default:
                     return false;
@@ -469,7 +469,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
         });
     }
 
-    private void onLoginClosed(boolean userLoggedIn) {
+    private void onUserLoggedIn(boolean userLoggedIn) {
         if(loginClosedListener != null)  {
             cordova.getActivity().runOnUiThread(() -> loginClosedListener.userLoggedIn(userLoggedIn));
         }
@@ -485,7 +485,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
         });
     }
 
-    private void onPurchaseHandledClosed(boolean continueToPayment) {
+    private void processToPayment(boolean continueToPayment) {
         if(continuePurchaseListener != null) {
             cordova.getActivity().runOnUiThread(() -> continuePurchaseListener.processToPayment(continueToPayment));
         }
