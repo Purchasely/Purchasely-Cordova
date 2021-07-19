@@ -4,6 +4,8 @@ import android.content.Intent;
 import android.net.Uri;
 import android.util.Log;
 
+import androidx.fragment.app.FragmentActivity;
+
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.PluginResult;
@@ -19,13 +21,17 @@ import java.util.List;
 
 import io.purchasely.billing.Store;
 import io.purchasely.ext.Attribute;
+import io.purchasely.ext.ContinuePurchaseListener;
 import io.purchasely.ext.EventListener;
 import io.purchasely.ext.LogLevel;
+import io.purchasely.ext.LoginClosedListener;
+import io.purchasely.ext.LoginTappedListener;
 import io.purchasely.ext.PLYAppTechnology;
 import io.purchasely.ext.PLYEvent;
 import io.purchasely.ext.PLYProductViewResult;
 import io.purchasely.ext.PlanListener;
 import io.purchasely.ext.ProductListener;
+import io.purchasely.ext.PurchaseCompletionListener;
 import io.purchasely.ext.PurchaseListener;
 import io.purchasely.ext.Purchasely;
 import io.purchasely.ext.State;
@@ -44,86 +50,105 @@ public class PurchaselyPlugin extends CordovaPlugin {
     static CallbackContext presentationCallback = null;
     static CallbackContext eventsCallback = null;
 
+    private LoginClosedListener loginClosedListener = null;
+    private ContinuePurchaseListener continuePurchaseListener = null;
+
     @Override
-    public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
-        switch (action) {
-            case "startWithAPIKey":
-                startWithAPIKey(
-                        args.getString(0),
-                        args.getJSONArray(1),
-                        args.getString(2),
-                        args.getInt(3),
-                        args.getBoolean(4),
-                        callbackContext);
-                break;
-            case "close":
-                close();
-                break;
-            case "addEventsListener":
-                addEventsListener(callbackContext);
-                break;
-            case "removeEventsListener":
-                removeEventsListener();
-                break;
-            case "getAnonymousUserId":
-                getAnonymousUserId(callbackContext);
-                break;
-            case "userLogin":
-                userLogin(args.getString(0), callbackContext);
-                break;
-            case "userLogout":
-                userLogout();
-                break;
-            case "setLogLevel":
-                setLogLevel(args.getInt(0));
-                break;
-            case "setAttribute":
-                setAttribute(args.getInt(0), args.getString(1));
-                break;
-            case "setDefaultPresentationResultHandler":
-                setDefaultPresentationResultHandler(callbackContext);
-                break;
-            case "purchasedSubscription":
-                purchasedSubscription(callbackContext);
-                break;
-            case "isReadyToPurchase":
-                isReadyToPurchase(args.getBoolean(0));
-                break;
-            case "synchronize":
-                synchronize();
-                break;
-            case "presentPresentationWithIdentifier":
-                presentPresentationWithIdentifier(args.getString(0), callbackContext);
-                break;
-            case "presentProductWithIdentifier":
-                presentProductWithIdentifier(args.getString(0), args.getString(1), callbackContext);
-                break;
-            case "presentPlanWithIdentifier":
-                presentPlanWithIdentifier(args.getString(0), args.getString(1), callbackContext);
-                break;
-            case "presentSubscriptions":
-                presentSubscriptions();
-                break;
-            case "restoreAllProducts":
-                restoreAllProducts(callbackContext);
-                break;
-            case "userSubscriptions":
-                userSubscriptions(callbackContext);
-                break;
-            case "handle":
-                handle(args.getString(0), callbackContext);
-                break;
-            case "productWithIdentifier":
-                productWithIdentifier(args.getString(0), callbackContext);
-                break;
-            case "planWithIdentifier":
-                planWithIdentifier(args.getString(0), callbackContext);
-                break;
-            case "purchaseWithPlanVendorId":
-                purchaseWithPlanVendorId(args.getString(0), callbackContext);
-                break;
-            default:
-                return false;
+    public boolean execute(String action, JSONArray args, CallbackContext callbackContext) {
+        try {
+            switch (action) {
+                case "startWithAPIKey":
+                    startWithAPIKey(
+                            args.getString(0),
+                            args.getJSONArray(1),
+                            args.getString(2),
+                            args.getInt(3),
+                            args.getBoolean(4),
+                            callbackContext);
+                    break;
+                case "close":
+                    close();
+                    break;
+                case "addEventsListener":
+                    addEventsListener(callbackContext);
+                    break;
+                case "removeEventsListener":
+                    removeEventsListener();
+                    break;
+                case "getAnonymousUserId":
+                    getAnonymousUserId(callbackContext);
+                    break;
+                case "userLogin":
+                    userLogin(args.getString(0), callbackContext);
+                    break;
+                case "userLogout":
+                    userLogout();
+                    break;
+                case "setLogLevel":
+                    setLogLevel(args.getInt(0));
+                    break;
+                case "setAttribute":
+                    setAttribute(args.getInt(0), args.getString(1));
+                    break;
+                case "setDefaultPresentationResultHandler":
+                    setDefaultPresentationResultHandler(callbackContext);
+                    break;
+                case "purchasedSubscription":
+                    purchasedSubscription(callbackContext);
+                    break;
+                case "isReadyToPurchase":
+                    isReadyToPurchase(args.getBoolean(0));
+                    break;
+                case "synchronize":
+                    synchronize();
+                    break;
+                case "presentPresentationWithIdentifier":
+                    presentPresentationWithIdentifier(args.getString(0), callbackContext);
+                    break;
+                case "presentProductWithIdentifier":
+                    presentProductWithIdentifier(args.getString(0), args.getString(1), callbackContext);
+                    break;
+                case "presentPlanWithIdentifier":
+                    presentPlanWithIdentifier(args.getString(0), args.getString(1), callbackContext);
+                    break;
+                case "presentSubscriptions":
+                    presentSubscriptions();
+                    break;
+                case "restoreAllProducts":
+                    restoreAllProducts(callbackContext);
+                    break;
+                case "userSubscriptions":
+                    userSubscriptions(callbackContext);
+                    break;
+                case "handle":
+                    handle(args.getString(0), callbackContext);
+                    break;
+                case "productWithIdentifier":
+                    productWithIdentifier(args.getString(0), callbackContext);
+                    break;
+                case "planWithIdentifier":
+                    planWithIdentifier(args.getString(0), callbackContext);
+                    break;
+                case "purchaseWithPlanVendorId":
+                    purchaseWithPlanVendorId(args.getString(0), callbackContext);
+                    break;
+                case "setLoginTappedHandler":
+                    setLoginTappedHandler(callbackContext);
+                    break;
+                case "onLoginClosed":
+                    onLoginClosed(args.getBoolean(0));
+                    break;
+                case "setConfirmPurchaseHandler":
+                    setConfirmPurchaseHandler(callbackContext);
+                    break;
+                case "onPurchaseHandledClosed":
+                    onPurchaseHandledClosed(args.getBoolean(0));
+                    break;
+                default:
+                    return false;
+            }
+        } catch (JSONException e) {
+            Log.e("Purchasely", String.format("Error executing action %s", action), e);
         }
 
         return true;
@@ -212,6 +237,10 @@ public class PurchaselyPlugin extends CordovaPlugin {
     }
 
     private void close() {
+        defaultCallback = null;
+        presentationCallback = null;
+        loginClosedListener = null;
+        continuePurchaseListener = null;
         Purchasely.close();
     }
 
@@ -428,5 +457,37 @@ public class PurchaselyPlugin extends CordovaPlugin {
                 callbackContext.error(throwable.getMessage());
             }
         });
+    }
+
+    private void setLoginTappedHandler(CallbackContext callbackContext) {
+        Purchasely.setLoginTappedHandler((fragmentActivity, loginClosedListener) -> {
+            this.loginClosedListener = loginClosedListener;
+
+            PluginResult result = new PluginResult(PluginResult.Status.OK);
+            result.setKeepCallback(true);
+            callbackContext.sendPluginResult(result);
+        });
+    }
+
+    private void onLoginClosed(boolean userLoggedIn) {
+        if(loginClosedListener != null)  {
+            cordova.getActivity().runOnUiThread(() -> loginClosedListener.userLoggedIn(userLoggedIn));
+        }
+    }
+
+    private void setConfirmPurchaseHandler(CallbackContext callbackContext) {
+        Purchasely.setConfirmPurchaseHandler((fragmentActivity, continuePurchaseListener) -> {
+            this.continuePurchaseListener = continuePurchaseListener;
+
+            PluginResult result = new PluginResult(PluginResult.Status.OK);
+            result.setKeepCallback(true);
+            callbackContext.sendPluginResult(result);
+        });
+    }
+
+    private void onPurchaseHandledClosed(boolean continueToPayment) {
+        if(continuePurchaseListener != null) {
+            cordova.getActivity().runOnUiThread(() -> continuePurchaseListener.processToPayment(continueToPayment));
+        }
     }
 }

@@ -86,6 +86,22 @@ exports.productWithIdentifier = function (productId, success) {
     exec(success, defaultError, 'Purchasely', 'productWithIdentifier', [productId]);
 };
 
+exports.setLoginTappedHandler = function (success) {
+    exec(success, defaultError, 'Purchasely', 'setLoginTappedHandler', []);
+};
+
+exports.onLoginClosed = function (userLoggedIn) {
+    exec(() => {}, defaultError, 'Purchasely', 'onLoginClosed', [userLoggedIn]);
+};
+
+exports.setConfirmPurchaseHandler = function (success) {
+    exec(success, defaultError, 'Purchasely', 'setConfirmPurchaseHandler', []);
+};
+
+exports.processToPayment = function (processToPayment) {
+    exec(() => {}, defaultError, 'Purchasely', 'onPurchaseHandledClosed', [processToPayment]);
+};
+
 exports.LogLevel = {
 	DEBUG: 0,
 	INFO: 1,

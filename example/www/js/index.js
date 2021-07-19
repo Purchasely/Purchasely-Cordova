@@ -70,6 +70,21 @@ function onDeviceReady() {
             console.log("Error with purchase : " + error);
         }
     )
+
+    Purchasely.setLoginTappedHandler(onLoginTapped => {
+        //Present your own screen for user to log in
+
+        //Call this method to update Purchasely Paywall
+        Purchasely.onLoginClosed(true);
+    });
+
+    Purchasely.setConfirmPurchaseHandler(onPurchaseTapped => {
+        //Present your own screen before purchase
+
+        //Call this method to process to payment
+        Purchasely.processToPayment(false);
+    })
+
 }
 
 function openPresentation() {
