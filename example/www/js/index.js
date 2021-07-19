@@ -82,7 +82,7 @@ function onDeviceReady() {
         //Present your own screen before purchase
 
         //Call this method to process to payment
-        Purchasely.processToPayment(false);
+        Purchasely.processToPayment(true);
     })
 
 }
