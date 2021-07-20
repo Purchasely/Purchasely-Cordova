@@ -14,6 +14,12 @@
 @property CDVInvokedUrlCommand* purchasedCommand;
 @property CDVInvokedUrlCommand* eventCommand;
 
+@property CDVInvokedUrlCommand* loginTappedCommand;
+@property void (^loginClosedHandler)(BOOL loggedIn);
+
+@property CDVInvokedUrlCommand* authorizePurchaseCommand;
+@property void (^authorizePurchaseHandler)(BOOL authorizePurchase);
+
 - (void)startWithAPIKey:(CDVInvokedUrlCommand*)command;
 - (void)setLogLevel:(CDVInvokedUrlCommand*)command;
 - (void)userLogin:(CDVInvokedUrlCommand*)command;
@@ -36,5 +42,10 @@
 - (void)removeEventsListener:(CDVInvokedUrlCommand*)command;
 - (void)handle:(CDVInvokedUrlCommand*)command;
 - (void)close:(CDVInvokedUrlCommand*)command;
+- (void)setLoginTappedHandler:(CDVInvokedUrlCommand*)command;
+- (void)onUserLoggedIn:(CDVInvokedUrlCommand*)command;
+- (void)setConfirmPurchaseHandler:(CDVInvokedUrlCommand*)command;
+- (void)processToPayment:(CDVInvokedUrlCommand*)command;
+
 
 @end

@@ -221,7 +221,39 @@
 - (void)close:(CDVInvokedUrlCommand*)command {
 }
 
+- (void)setLoginTappedHandler:(CDVInvokedUrlCommand*)command {
+	self.loginTappedCommand = command;
+	[Purchasely setLoginTappedHandler:^(UIViewController * _Nonnull controller, void (^ _Nonnull closedHandler)(BOOL)) {
+		self.loginClosedHandler = closedHandler;
 
+		CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+		[result setKeepCallbackAsBool:YES];
+		[self.commandDelegate sendPluginResult:result callbackId:self.loginTappedCommand.callbackId];
+	}];
+}
+
+- (void)onUserLoggedIn:(CDVInvokedUrlCommand*)command {
+	BOOL userDidLogin = [[command argumentAtIndex:0] boolValue];
+
+	self.loginClosedHandler(userDidLogin);
+}
+
+- (void)setConfirmPurchaseHandler:(CDVInvokedUrlCommand*)command {
+	self.authorizePurchaseCommand = command;
+	[Purchasely setConfimPurchaseHandler:^(UIViewController * _Nonnull controller, void (^ _Nonnull authorizePurchaseHandler)(BOOL)) {
+		self.authorizePurchaseHandler = authorizePurchaseHandler;
+
+		CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+		[result setKeepCallbackAsBool:YES];
+		[self.commandDelegate sendPluginResult:result callbackId:self.authorizePurchaseCommand.callbackId];
+	}];
+}
+
+- (void)processToPayment:(CDVInvokedUrlCommand*)command {
+	BOOL processToPayment = [[command argumentAtIndex:0] boolValue];
+
+	self.authorizePurchaseHandler(processToPayment);
+}
 
 // Helpers
 
