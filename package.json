@@ -1,7 +1,7 @@
 {
   "name": "cordova-plugin-purchasely",
   "version": "1.0.0",
-  "description": "",
+  "description": "Purchasely is a solution to ease the integration and boost your In-App Purchases & Subscriptions on the App Store, Google Play Store, Amazon Appstore and Huawei App Gallery.",
   "cordova": {
     "id": "cordova-plugin-purchasely",
     "platforms": [
@@ -12,8 +12,39 @@
   "keywords": [
     "ecosystem:cordova",
     "cordova-ios",
-    "cordova-android"
+    "cordova-android",
+    "purchasely",
+    "in-app",
+    "ios",
+    "android",
+    "iap",
+    "purchases",
+    "subscription",
+    "storekit",
+    "billing",
+    "google",
+    "play",
+    "app",
+    "store",
+    "huawei",
+    "hms",
+    "amazon"
   ],
-  "author": "",
-  "license": "ISC"
+  "author": "Purchasely",
+  "license": "ISC",
+  "main": "index.js",
+  "directories": {
+    "example": "example"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Purchasely/Purchasely-Cordova-Sources.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Purchasely/Purchasely-Cordova-Sources/issues"
+  },
+  "homepage": "https://github.com/Purchasely/Purchasely-Cordova-Sources#readme"
 }
