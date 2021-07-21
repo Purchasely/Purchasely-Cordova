@@ -1,31 +1,34 @@
-# Purchasely-Cordova-Sources
+# Cordova plugin Purchasely
 
-## Add plugin :
+Purchasely is a solution to ease the integration and boost your In-App Purchase & Subscriptions on the App Store, Google Play Store and Huawei App Gallery.
 
-`cd example/`
+## Installation
 
-`cordova plugin add /home/kevin/Documents/Purchasely/Cordova/Purchasely --link`
-
-
-## Add android platform :
-
-`cd example/`
-
-`cordova platform add android`
-
-### Add Google-Play dependencies
-
-In folder `example/platforms/android/app` create a file called `build-extras.gradle` and add thoses lines :
-```groovy
-dependencies {
-    implementation "io.purchasely:google-play:2.5.4"
-}
+```sh
+cordova plugin add @purchasely/cordova-plugin-purchasely
 ```
 
-### Troubleshot
+## Usage
 
-`cd example/`
+```js
+Purchasely.startWithAPIKey('API_KEY', ['Google'], null, Purchasely.LogLevel.DEBUG, false);
 
-`cordova platform remove android`
+Purchasely.presentPresentationWithIdentifier(
+    'my_presentation_id',
+    (callback) => {
+        console.log(callback);
+        if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
+            console.log("User cancelled purchased");
+        } else {
+            console.log("User purchased " + callback.plan.name);
+        }
+    },
+    (error) => {
+        console.log("Error with purchase : " + error);
+    }
+);
+```
 
-`cordova plugin remove cordova-plugin-purchasely`
+## 🏁 Documentation
+
+A complete documentation is available on our website [https://docs.purchasely.com](https://docs.purchasely.com/quick-start/sdk-installation/cordova)
