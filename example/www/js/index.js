@@ -35,6 +35,13 @@ function onDeviceReady() {
 	document.getElementById("restore").addEventListener("click", restore);
 	document.getElementById("openDeeplink").addEventListener("click", openDeeplink);
 
+	Purchasely.allProducts( products => {
+		console.log("Products " + products.length);
+		console.log("First product name: " + products[0].name);
+	}, (error) => {
+		console.log(error);
+	});
+
 	Purchasely.getAnonymousUserId(id => { console.log("Purchasely anonymous Id:" + id) });
 
 	Purchasely.addEventsListener((event) => {
@@ -49,9 +56,11 @@ function onDeviceReady() {
 		console.log("Purchased performed, reload content to unlock.");
 	});
 
-	Purchasely.userLogin('my_user_id', refresh => {
+	Purchasely.userLogin('test_cordova', refresh => {
 		console.log("User logged, refresh needed ? " + refresh);
 	});
+
+	Purchasely.userLogout();
 
 	Purchasely.setLogLevel(Purchasely.LogLevel.DEBUG);
 

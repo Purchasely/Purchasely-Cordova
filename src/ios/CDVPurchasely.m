@@ -159,6 +159,22 @@
 											   object:nil];
 }
 
+- (void)allProducts:(CDVInvokedUrlCommand*)command {
+	[Purchasely allProductsWithSuccess:^(NSArray<PLYProduct *> * _Nonnull products) {
+		NSMutableArray *productsArray = [NSMutableArray array];
+
+		for (PLYProduct *product in products) {
+			if (product != nil) {
+				[productsArray addObject: product.asDictionary];
+			}
+		}
+
+		[self successFor:command resultArray:productsArray];
+	} failure:^(NSError * _Nullable error) {
+		[self failureFor:command resultString:error.localizedDescription];
+	}];
+}
+
 - (void)productWithIdentifier:(CDVInvokedUrlCommand*)command {
 	NSString *productVendorId = [command argumentAtIndex:0];
 
@@ -240,7 +256,7 @@
 
 - (void)setConfirmPurchaseHandler:(CDVInvokedUrlCommand*)command {
 	self.authorizePurchaseCommand = command;
-	[Purchasely setConfimPurchaseHandler:^(UIViewController * _Nonnull controller, void (^ _Nonnull authorizePurchaseHandler)(BOOL)) {
+	[Purchasely setConfirmPurchaseHandler:^(UIViewController * _Nonnull controller, void (^ _Nonnull authorizePurchaseHandler)(BOOL)) {
 		self.authorizePurchaseHandler = authorizePurchaseHandler;
 
 		CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];

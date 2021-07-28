@@ -78,6 +78,10 @@ exports.handle = function (deepLink, success, error) {
     exec(success, error, 'Purchasely', 'handle', [deepLink]);
 };
 
+exports.allProducts = function (success, error) {
+    exec(success, defaultError, 'Purchasely', 'allProducts', []);
+};
+
 exports.planWithIdentifier = function (planId, success) {
     exec(success, defaultError, 'Purchasely', 'planWithIdentifier', [planId]);
 };
