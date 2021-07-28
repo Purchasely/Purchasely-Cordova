@@ -18,7 +18,7 @@
 In folder `example/platforms/android/app` create a file called `build-extras.gradle` and add thoses lines :
 ```groovy
 dependencies {
-    implementation "io.purchasely:google-play:2.5.4"
+    implementation "io.purchasely:google-play:2.5.5"
 }
 ```
 

@@ -31,6 +31,7 @@ import io.purchasely.ext.PLYEvent;
 import io.purchasely.ext.PLYProductViewResult;
 import io.purchasely.ext.PlanListener;
 import io.purchasely.ext.ProductListener;
+import io.purchasely.ext.ProductsListener;
 import io.purchasely.ext.PurchaseCompletionListener;
 import io.purchasely.ext.PurchaseListener;
 import io.purchasely.ext.Purchasely;
@@ -122,6 +123,9 @@ public class PurchaselyPlugin extends CordovaPlugin {
                     break;
                 case "handle":
                     handle(args.getString(0), callbackContext);
+                    break;
+                case "allProducts":
+                    allProducts(callbackContext);
                     break;
                 case "productWithIdentifier":
                     productWithIdentifier(args.getString(0), callbackContext);
@@ -360,7 +364,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
     }
 
     private void userSubscriptions(CallbackContext callbackContext) {
-        Purchasely.getUserSubscriptions(new SubscriptionsListener() {
+        Purchasely.userSubscriptions(new SubscriptionsListener() {
             @Override
             public void onSuccess(@NotNull List<PLYSubscriptionData> list) {
                 JSONArray result = new JSONArray();
@@ -378,7 +382,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
                     } else if(data.getData().getStoreType() == StoreType.APPSTORE) {
                         map.put("subscriptionSource", StoreType.APPSTORE.ordinal());
                     }
-                    result.put(map);
+                    result.put(new JSONObject(map));
                 }
                 callbackContext.success(result);
             }
@@ -397,6 +401,24 @@ public class PurchaselyPlugin extends CordovaPlugin {
         }
         Uri uri = Uri.parse(deeplink);
         callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK, Purchasely.handle(uri)));
+    }
+
+    private void allProducts(CallbackContext callbackContext) {
+        Purchasely.allProducts(new ProductsListener() {
+            @Override
+            public void onSuccess(@NotNull List<PLYProduct> list) {
+                JSONArray result = new JSONArray();
+                for (int i = 0; i < list.size(); i++) {
+                    result.put(new JSONObject(list.get(i).toMap()));
+                }
+                callbackContext.success(result);
+            }
+
+            @Override
+            public void onFailure(@NotNull Throwable throwable) {
+                callbackContext.error(throwable.getMessage());
+            }
+        });
     }
 
     private void productWithIdentifier(String vendorId, CallbackContext callbackContext) {
