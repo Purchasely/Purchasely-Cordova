@@ -24,14 +24,15 @@ public class PLYProductActivity extends AppCompatActivity {
         String presentationId = getIntent().getExtras().getString("presentationId");
         String productId = getIntent().getExtras().getString("productId");
         String planId = getIntent().getExtras().getString("planId");
+        String contentId = getIntent().getExtras().getString("contentId");
 
         Fragment fragment;
         if(planId != null && !planId.isEmpty()) {
-            fragment = Purchasely.planFragment(planId, presentationId, listener);
+            fragment = Purchasely.planFragment(planId, presentationId, contentId, listener);
         } else if(productId != null && !productId.isEmpty()) {
-            fragment = Purchasely.productFragment(productId, presentationId, listener);
+            fragment = Purchasely.productFragment(productId, presentationId, contentId, listener);
         } else {
-            fragment = Purchasely.presentationFragment(presentationId, listener);
+            fragment = Purchasely.presentationFragment(presentationId, contentId, listener);
         }
 
         getSupportFragmentManager().beginTransaction()

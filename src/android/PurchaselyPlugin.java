@@ -104,13 +104,27 @@ public class PurchaselyPlugin extends CordovaPlugin {
                     synchronize();
                     break;
                 case "presentPresentationWithIdentifier":
-                    presentPresentationWithIdentifier(args.getString(0), callbackContext);
+                    presentPresentationWithIdentifier(
+                        args.getString(0),
+                        args.getString(1),
+                        callbackContext
+                        );
                     break;
                 case "presentProductWithIdentifier":
-                    presentProductWithIdentifier(args.getString(0), args.getString(1), callbackContext);
+                    presentProductWithIdentifier(
+                        args.getString(0),
+                        args.getString(1),
+                        args.getString(2),
+                        callbackContext
+                    );
                     break;
                 case "presentPlanWithIdentifier":
-                    presentPlanWithIdentifier(args.getString(0), args.getString(1), callbackContext);
+                    presentPlanWithIdentifier(
+                        args.getString(0),
+                        args.getString(1),
+                        args.getString(2),
+                        callbackContext
+                    );
                     break;
                 case "presentSubscriptions":
                     presentSubscriptions();
@@ -134,7 +148,11 @@ public class PurchaselyPlugin extends CordovaPlugin {
                     planWithIdentifier(args.getString(0), callbackContext);
                     break;
                 case "purchaseWithPlanVendorId":
-                    purchaseWithPlanVendorId(args.getString(0), callbackContext);
+                    purchaseWithPlanVendorId(
+                        args.getString(0),
+                        args.getString(1),
+                        callbackContext
+                    );
                     break;
                 case "setLoginTappedHandler":
                     setLoginTappedHandler(callbackContext);
@@ -208,9 +226,11 @@ public class PurchaselyPlugin extends CordovaPlugin {
 
         Purchasely.setAppTechnology(PLYAppTechnology.CORDOVA);
 
-        Purchasely.start();
-
-        callbackContext.success();
+        Purchasely.start(isConfigured -> {
+            if(isConfigured)    callbackContext.success();
+            else                callbackContext.error("SDK not configured");
+            return null;
+        });
     }
 
     private ArrayList<Store> getStoresInstances(List<String> stores) {
@@ -321,30 +341,36 @@ public class PurchaselyPlugin extends CordovaPlugin {
     }
 
     private void presentPresentationWithIdentifier(String presentationVendorId,
+                                                    String contentId,
                                                    CallbackContext callbackContext) {
         presentationCallback = callbackContext;
         Intent intent = new Intent(cordova.getContext(), cordova.plugin.purchasely.PLYProductActivity.class);
         intent.putExtra("presentationId", presentationVendorId);
+        intent.putExtra("contentId", contentId);
         cordova.getActivity().startActivity(intent);
     }
 
     private void presentProductWithIdentifier(String productVendorId,
                                               String presentationVendorId,
+                                              String contentId,
                                               CallbackContext callbackContext) {
         presentationCallback = callbackContext;
         Intent intent = new Intent(cordova.getContext(), cordova.plugin.purchasely.PLYProductActivity.class);
         intent.putExtra("presentationId", presentationVendorId);
         intent.putExtra("productId", productVendorId);
+        intent.putExtra("contentId", contentId);
         cordova.getActivity().startActivity(intent);
     }
 
     private void presentPlanWithIdentifier(String planVendorId,
                                           String presentationVendorId,
-                                           CallbackContext callbackContext) {
+                                          String contentId,
+                                          CallbackContext callbackContext) {
         presentationCallback = callbackContext;
         Intent intent = new Intent(cordova.getContext(), cordova.plugin.purchasely.PLYProductActivity.class);
         intent.putExtra("presentationId", presentationVendorId);
         intent.putExtra("planId", planVendorId);
+        intent.putExtra("contentId", contentId);
         cordova.getActivity().startActivity(intent);
     }
 
@@ -373,14 +399,14 @@ public class PurchaselyPlugin extends CordovaPlugin {
                     HashMap<String, Object> map = new HashMap<>(data.toMap());
                     map.put("plan", data.getPlan().toMap());
                     map.put("product", data.getProduct().toMap());
-                    if(data.getData().getStoreType() == StoreType.PLAYSTORE) {
-                        map.put("subscriptionSource", StoreType.PLAYSTORE.ordinal());
-                    } else if(data.getData().getStoreType() == StoreType.AMAZON) {
-                        map.put("subscriptionSource", StoreType.AMAZON.ordinal());
-                    } else if(data.getData().getStoreType() == StoreType.HUAWEI) {
-                        map.put("subscriptionSource", StoreType.HUAWEI.ordinal());
-                    } else if(data.getData().getStoreType() == StoreType.APPSTORE) {
-                        map.put("subscriptionSource", StoreType.APPSTORE.ordinal());
+                    if(data.getData().getStoreType() == StoreType.GOOGLE_PLAY_STORE) {
+                        map.put("subscriptionSource", StoreType.GOOGLE_PLAY_STORE.ordinal());
+                    } else if(data.getData().getStoreType() == StoreType.AMAZON_APP_STORE) {
+                        map.put("subscriptionSource", StoreType.AMAZON_APP_STORE.ordinal());
+                    } else if(data.getData().getStoreType() == StoreType.HUAWEI_APP_GALLERY) {
+                        map.put("subscriptionSource", StoreType.HUAWEI_APP_GALLERY.ordinal());
+                    } else if(data.getData().getStoreType() == StoreType.APPLE_APP_STORE) {
+                        map.put("subscriptionSource", StoreType.APPLE_APP_STORE.ordinal());
                     }
                     result.put(new JSONObject(map));
                 }
@@ -457,12 +483,12 @@ public class PurchaselyPlugin extends CordovaPlugin {
         });
     }
 
-    private void purchaseWithPlanVendorId(String planVendorId, CallbackContext callbackContext) {
+    private void purchaseWithPlanVendorId(String planVendorId, String contentId, CallbackContext callbackContext) {
         Purchasely.getPlan(planVendorId, new PlanListener() {
             @Override
             public void onSuccess(@Nullable PLYPlan plyPlan) {
                 if(plyPlan != null) {
-                    Purchasely.purchase(cordova.getActivity(), plyPlan, plyPlan1 -> {
+                    Purchasely.purchase(cordova.getActivity(), plyPlan, contentId, plyPlan1 -> {
                         callbackContext.success(new JSONObject(plyPlan1.toMap()));
                         return null;
                     }, plyError -> {

@@ -2,8 +2,8 @@ var exec = require('cordova/exec');
 
 var defaultError = (e) => { console.log(e); }
 
-exports.startWithAPIKey = function (apiKey, stores, userId, logLevel, observerMode) {
-    exec(() => {}, defaultError, 'Purchasely', 'startWithAPIKey', [apiKey, stores, userId, logLevel, observerMode]);
+exports.startWithAPIKey = function (apiKey, stores, userId, logLevel, observerMode, success, error) {
+    exec(success, error, 'Purchasely', 'startWithAPIKey', [apiKey, stores, userId, logLevel, observerMode]);
 };
 
 exports.addEventsListener = function (success, error) {
@@ -46,24 +46,24 @@ exports.synchronize = function () {
     exec(() => {}, defaultError, 'Purchasely', 'synchronize', []);
 };
 
-exports.presentPresentationWithIdentifier = function (presentationId, success, error) {
-    exec(success, error, 'Purchasely', 'presentPresentationWithIdentifier', [presentationId]);
+exports.presentPresentationWithIdentifier = function (presentationId, contentId, success, error) {
+    exec(success, error, 'Purchasely', 'presentPresentationWithIdentifier', [presentationId, contentId]);
 };
 
-exports.presentProductWithIdentifier = function (productId, presentationId, success, error) {
-    exec(success, error, 'Purchasely', 'presentProductWithIdentifier', [productId, presentationId]);
+exports.presentProductWithIdentifier = function (productId, presentationId, contentId, success, error) {
+    exec(success, error, 'Purchasely', 'presentProductWithIdentifier', [productId, presentationId, contentId]);
 };
 
-exports.presentPlanWithIdentifier = function (planId, presentationId, success, error) {
-    exec(success, error, 'Purchasely', 'presentPlanWithIdentifier', [planId, presentationId]);
+exports.presentPlanWithIdentifier = function (planId, presentationId, contentId, success, error) {
+    exec(success, error, 'Purchasely', 'presentPlanWithIdentifier', [planId, presentationId, contentId]);
 };
 
 exports.presentSubscriptions = function () {
     exec(() => {}, defaultError, 'Purchasely', 'presentSubscriptions', []);
 };
 
-exports.purchaseWithPlanVendorId = function (planId, success, error) {
-    exec( success, error, 'Purchasely', 'purchaseWithPlanVendorId', [planId]);
+exports.purchaseWithPlanVendorId = function (planId, contentId, success, error) {
+    exec( success, error, 'Purchasely', 'purchaseWithPlanVendorId', [planId, contentId]);
 };
 
 exports.restoreAllProducts = function (success, error) {
