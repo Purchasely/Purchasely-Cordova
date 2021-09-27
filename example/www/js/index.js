@@ -27,7 +27,20 @@ function onDeviceReady() {
 	console.log('Running cordova-' + cordova.platformId + '@' + cordova.version);
 	document.getElementById('deviceready').classList.add('ready');
 
-	Purchasely.startWithAPIKey('afa96c76-1d8e-4e3c-a48f-204a3cd93a15', ['Google'], null, Purchasely.LogLevel.DEBUG, false);
+	console.log("Hi");
+
+	Purchasely.startWithAPIKey(
+		'afa96c76-1d8e-4e3c-a48f-204a3cd93a15',
+		['Google'],
+		null,
+		Purchasely.LogLevel.DEBUG,
+		false,
+		(isConfigured) => {
+			if(isConfigured) onPuchaselySdkReady();
+		},
+		(error) => {
+			console.log(error);
+		});
 
 	document.getElementById("openPresentation").addEventListener("click", openPresentation);
 	document.getElementById("presentSubscriptions").addEventListener("click", presentSubscriptions);
@@ -35,6 +48,9 @@ function onDeviceReady() {
 	document.getElementById("restore").addEventListener("click", restore);
 	document.getElementById("openDeeplink").addEventListener("click", openDeeplink);
 
+}
+
+function onPuchaselySdkReady() {
 	Purchasely.allProducts( products => {
 		console.log("Products " + products.length);
 		console.log("First product name: " + products[0].name);
@@ -94,7 +110,6 @@ function onDeviceReady() {
 		// Call this method to process to payment
 		Purchasely.processToPayment(true);
 	});
-
 }
 
 function openPresentation() {

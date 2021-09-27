@@ -13,6 +13,8 @@
 
 `cordova platform add android`
 
+`cordova run android`
+
 ### Add Google-Play dependencies
 
 In folder `example/platforms/android/app` create a file called `build-extras.gradle` and add thoses lines :

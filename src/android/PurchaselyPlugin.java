@@ -18,10 +18,12 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import io.purchasely.billing.Store;
 import io.purchasely.ext.Attribute;
 import io.purchasely.ext.ContinuePurchaseListener;
+import io.purchasely.ext.DistributionType;
 import io.purchasely.ext.EventListener;
 import io.purchasely.ext.LogLevel;
 import io.purchasely.ext.LoginClosedListener;
@@ -188,7 +190,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
 
         HashMap<String, Object> map = new HashMap<>();
         map.put("result", productViewResult);
-        map.put("plan", plan != null ? plan.toMap() : "");
+        map.put("plan", transformPlanToMap(plan));
 
         if(presentationCallback != null) {
             presentationCallback.success(new JSONObject(map));
@@ -226,9 +228,14 @@ public class PurchaselyPlugin extends CordovaPlugin {
 
         Purchasely.setAppTechnology(PLYAppTechnology.CORDOVA);
 
-        Purchasely.start(isConfigured -> {
-            if(isConfigured)    callbackContext.success();
-            else                callbackContext.error("SDK not configured");
+        Purchasely.start((isConfigured, error) -> {
+            if(isConfigured) {
+                callbackContext.success();
+            } else {
+                callbackContext.error(
+                        error != null ? error.getMessage() : "Purchasely SDK not configured"
+                );
+            }
             return null;
         });
     }
@@ -381,7 +388,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
 
     private void restoreAllProducts(CallbackContext callbackContext) {
         Purchasely.restoreAllProducts(plyPlan -> {
-            callbackContext.success(new JSONObject(plyPlan.toMap()));
+            callbackContext.success(new JSONObject(transformPlanToMap(plyPlan)));
             return null;
         }, plyError -> {
             callbackContext.error(plyError.getMessage());
@@ -397,7 +404,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
                 for (int i = 0; i < list.size(); i++) {
                     PLYSubscriptionData data = list.get(i);
                     HashMap<String, Object> map = new HashMap<>(data.toMap());
-                    map.put("plan", data.getPlan().toMap());
+                    map.put("plan", transformPlanToMap(data.getPlan()));
                     map.put("product", data.getProduct().toMap());
                     if(data.getData().getStoreType() == StoreType.GOOGLE_PLAY_STORE) {
                         map.put("subscriptionSource", StoreType.GOOGLE_PLAY_STORE.ordinal());
@@ -470,7 +477,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
             @Override
             public void onSuccess(@Nullable PLYPlan plyPlan) {
                 if(plyPlan != null) {
-                    callbackContext.success(new JSONObject(plyPlan.toMap()));
+                    callbackContext.success(new JSONObject(transformPlanToMap(plyPlan)));
                 } else {
                     callbackContext.error("No plan found with " + vendorId);
                 }
@@ -489,7 +496,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
             public void onSuccess(@Nullable PLYPlan plyPlan) {
                 if(plyPlan != null) {
                     Purchasely.purchase(cordova.getActivity(), plyPlan, contentId, plyPlan1 -> {
-                        callbackContext.success(new JSONObject(plyPlan1.toMap()));
+                        callbackContext.success(new JSONObject(transformPlanToMap(plyPlan1)));
                         return null;
                     }, plyError -> {
                         callbackContext.error(plyError.getMessage());
@@ -537,5 +544,23 @@ public class PurchaselyPlugin extends CordovaPlugin {
         if(continuePurchaseListener != null) {
             cordova.getActivity().runOnUiThread(() -> continuePurchaseListener.processToPayment(continueToPayment));
         }
+    }
+
+    private static Map<String, Object> transformPlanToMap(PLYPlan plan)  {
+        if(plan == null) return new HashMap<>();
+
+        HashMap<String, Object> map = new HashMap<>(plan.toMap());
+        if(plan.getType() == DistributionType.CONSUMABLE) {
+            map.put("type", DistributionType.CONSUMABLE.ordinal());
+        } else if(plan.getType() == DistributionType.CONSUMABLE) {
+            map.put("type", DistributionType.NON_CONSUMABLE.ordinal());
+        } else if(plan.getType() == DistributionType.NON_CONSUMABLE) {
+            map.put("type", DistributionType.RENEWING_SUBSCRIPTION.ordinal());
+        } else if(plan.getType() == DistributionType.NON_RENEWING_SUBSCRIPTION) {
+            map.put("type", DistributionType.NON_RENEWING_SUBSCRIPTION.ordinal());
+        } else if(plan.getType() == DistributionType.UNKNOWN) {
+            map.put("type", DistributionType.UNKNOWN.ordinal());
+        }
+        return map;
     }
 }

@@ -50,12 +50,24 @@ exports.presentPresentationWithIdentifier = function (presentationId, contentId,
     exec(success, error, 'Purchasely', 'presentPresentationWithIdentifier', [presentationId, contentId]);
 };
 
+exports.presentPresentationWithIdentifier = function (presentationId, success, error) {
+    exec(success, error, 'Purchasely', 'presentPresentationWithIdentifier', [presentationId, null]);
+};
+
 exports.presentProductWithIdentifier = function (productId, presentationId, contentId, success, error) {
     exec(success, error, 'Purchasely', 'presentProductWithIdentifier', [productId, presentationId, contentId]);
 };
 
+exports.presentProductWithIdentifier = function (productId, presentationId, success, error) {
+    exec(success, error, 'Purchasely', 'presentProductWithIdentifier', [productId, presentationId, null]);
+};
+
 exports.presentPlanWithIdentifier = function (planId, presentationId, contentId, success, error) {
     exec(success, error, 'Purchasely', 'presentPlanWithIdentifier', [planId, presentationId, contentId]);
+};
+
+exports.presentPlanWithIdentifier = function (planId, presentationId, success, error) {
+    exec(success, error, 'Purchasely', 'presentPlanWithIdentifier', [planId, presentationId, null]);
 };
 
 exports.presentSubscriptions = function () {
@@ -64,6 +76,10 @@ exports.presentSubscriptions = function () {
 
 exports.purchaseWithPlanVendorId = function (planId, contentId, success, error) {
     exec( success, error, 'Purchasely', 'purchaseWithPlanVendorId', [planId, contentId]);
+};
+
+exports.purchaseWithPlanVendorId = function (planId, success, error) {
+    exec( success, error, 'Purchasely', 'purchaseWithPlanVendorId', [planId, null]);
 };
 
 exports.restoreAllProducts = function (success, error) {
@@ -135,4 +151,12 @@ exports.SubscriptionSource = {
     amazonAppstore: 2,
     huaweiAppGallery: 3,
     none: 4
+}
+
+exports.PlanType = {
+    consumable: 0,
+    nonConsumable: 1,
+    autoRenewingSubscription: 2,
+    nonRenewingSubscription: 3,
+    unknown: 4
 }
