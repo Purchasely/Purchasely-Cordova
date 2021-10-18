@@ -17,7 +17,7 @@
 	NSInteger logLevel = [[command argumentAtIndex:3] intValue];
 	BOOL observerMode = [[command argumentAtIndex:4] boolValue];
 
-	[Purchasely startWithAPIKey:apiKey appUserId:userId observerMode:observerMode eventDelegate:nil uiDelegate:nil confirmPurchaseHandler:nil logLevel:logLevel];
+	[Purchasely startWithAPIKey:apiKey appUserId:userId observerMode:observerMode eventDelegate:nil uiDelegate:nil confirmPurchaseHandler:nil logLevel:logLevel initialized:nil];
 	[Purchasely setAppTechnology:PLYAppTechnologyCordova];
 }
 
