@@ -46,7 +46,7 @@ function onDeviceReady() {
 	document.getElementById("presentSubscriptions").addEventListener("click", presentSubscriptions);
 	document.getElementById("purchaseWithPlanVendorId").addEventListener("click", purchaseWithPlanVendorId);
 	document.getElementById("restore").addEventListener("click", restore);
-	document.getElementById("openDeeplink").addEventListener("click", openDeeplink);
+	document.getElementById("processToPayment").addEventListener("click", processToPayment);
 
 }
 
@@ -106,9 +106,6 @@ function onPuchaselySdkReady() {
 
 	Purchasely.setConfirmPurchaseHandler(onPurchaseTapped => {
 		// Present your own screen before purchase
-
-		// Call this method to process to payment
-		Purchasely.processToPayment(true);
 	});
 }
 
@@ -135,6 +132,11 @@ function presentSubscriptions() {
 
 function purchaseWithPlanVendorId() {
 	Purchasely.purchaseWithPlanVendorId("PURCHASELY_PLUS_MONTHLY");
+}
+
+function processToPayment() {
+	// Call this method to process to payment
+	Purchasely.processToPayment(true);
 }
 
 function restore() {

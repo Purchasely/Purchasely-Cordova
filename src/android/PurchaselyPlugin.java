@@ -4,9 +4,8 @@ import android.content.Intent;
 import android.net.Uri;
 import android.util.Log;
 
-import androidx.fragment.app.FragmentActivity;
-
 import org.apache.cordova.CallbackContext;
+import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.PluginResult;
 import org.jetbrains.annotations.NotNull;
@@ -15,6 +14,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -24,18 +24,13 @@ import io.purchasely.billing.Store;
 import io.purchasely.ext.Attribute;
 import io.purchasely.ext.ContinuePurchaseListener;
 import io.purchasely.ext.DistributionType;
-import io.purchasely.ext.EventListener;
 import io.purchasely.ext.LogLevel;
 import io.purchasely.ext.LoginClosedListener;
-import io.purchasely.ext.LoginTappedListener;
 import io.purchasely.ext.PLYAppTechnology;
-import io.purchasely.ext.PLYEvent;
 import io.purchasely.ext.PLYProductViewResult;
 import io.purchasely.ext.PlanListener;
 import io.purchasely.ext.ProductListener;
 import io.purchasely.ext.ProductsListener;
-import io.purchasely.ext.PurchaseCompletionListener;
-import io.purchasely.ext.PurchaseListener;
 import io.purchasely.ext.Purchasely;
 import io.purchasely.ext.State;
 import io.purchasely.ext.StoreType;
@@ -52,6 +47,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
     static CallbackContext defaultCallback = null;
     static CallbackContext presentationCallback = null;
     static CallbackContext eventsCallback = null;
+    static ProductActivity productActivity = null;
 
     private LoginClosedListener loginClosedListener = null;
     private ContinuePurchaseListener continuePurchaseListener = null;
@@ -272,6 +268,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
         presentationCallback = null;
         loginClosedListener = null;
         continuePurchaseListener = null;
+        productActivity = null;
         Purchasely.close();
     }
 
@@ -517,6 +514,10 @@ public class PurchaselyPlugin extends CordovaPlugin {
     private void setLoginTappedHandler(CallbackContext callbackContext) {
         Purchasely.setLoginTappedHandler((fragmentActivity, loginClosedListener) -> {
             this.loginClosedListener = loginClosedListener;
+            if(productActivity != null
+                && productActivity.activity != null) {
+                productActivity.activity.get().finish();
+            }
 
             PluginResult result = new PluginResult(PluginResult.Status.OK);
             result.setKeepCallback(true);
@@ -526,6 +527,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
 
     private void onUserLoggedIn(boolean userLoggedIn) {
         if(loginClosedListener != null)  {
+            if(productActivity != null) productActivity.relaunch(cordova);
             cordova.getActivity().runOnUiThread(() -> loginClosedListener.userLoggedIn(userLoggedIn));
         }
     }
@@ -533,6 +535,10 @@ public class PurchaselyPlugin extends CordovaPlugin {
     private void setConfirmPurchaseHandler(CallbackContext callbackContext) {
         Purchasely.setConfirmPurchaseHandler((fragmentActivity, continuePurchaseListener) -> {
             this.continuePurchaseListener = continuePurchaseListener;
+            if(productActivity != null
+                    && productActivity.activity != null) {
+                productActivity.activity.get().finish();
+            }
 
             PluginResult result = new PluginResult(PluginResult.Status.OK);
             result.setKeepCallback(true);
@@ -542,7 +548,17 @@ public class PurchaselyPlugin extends CordovaPlugin {
 
     private void processToPayment(boolean continueToPayment) {
         if(continuePurchaseListener != null) {
-            cordova.getActivity().runOnUiThread(() -> continuePurchaseListener.processToPayment(continueToPayment));
+            if(productActivity != null) productActivity.relaunch(cordova);
+
+            new Thread(() -> {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    Log.e("Purchasely", "process to payment error", e);
+                } finally {
+                    cordova.getActivity().runOnUiThread(() -> continuePurchaseListener.processToPayment(continueToPayment));
+                }
+            }).start();
         }
     }
 
@@ -562,5 +578,22 @@ public class PurchaselyPlugin extends CordovaPlugin {
             map.put("type", DistributionType.UNKNOWN.ordinal());
         }
         return map;
+    }
+
+    public static class ProductActivity {
+        String presentationId = null;
+        String productId = null;
+        String planId = null;
+        String contentId = null;
+        WeakReference<PLYProductActivity> activity = null;
+
+        public void relaunch(CordovaInterface cordova) {
+            Intent intent = new Intent(cordova.getContext(), cordova.plugin.purchasely.PLYProductActivity.class);
+            intent.putExtra("presentationId", presentationId);
+            intent.putExtra("productId", productId);
+            intent.putExtra("planId", planId);
+            intent.putExtra("contentId", contentId);
+            cordova.getActivity().startActivity(intent);
+        }
     }
 }

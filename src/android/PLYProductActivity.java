@@ -6,6 +6,8 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
 
+import java.lang.ref.WeakReference;
+
 import io.purchasely.ext.ProductViewResultListener;
 import io.purchasely.ext.Purchasely;
 
@@ -41,6 +43,20 @@ public class PLYProductActivity extends AppCompatActivity {
                             "id",
                             package_name), fragment)
                     .commit();
+
+        PurchaselyPlugin.ProductActivity productActivity = new PurchaselyPlugin.ProductActivity();
+        productActivity.presentationId = presentationId;
+        productActivity.productId = productId;
+        productActivity.planId = planId;
+        productActivity.contentId = contentId;
+        productActivity.activity = new WeakReference<>(this);
+        PurchaselyPlugin.productActivity = productActivity;
+    }
+
+    @Override
+    protected void onDestroy() {
+        PurchaselyPlugin.productActivity.activity = null;
+        super.onDestroy();
     }
 
     ProductViewResultListener listener = PurchaselyPlugin::sendPurchaseResult;
