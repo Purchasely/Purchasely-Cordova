@@ -254,7 +254,7 @@
 	[Purchasely setLoginTappedHandler:^(UIViewController * _Nonnull controller, void (^ _Nonnull closedHandler)(BOOL)) {
 		self.loginClosedHandler = closedHandler;
 
-		[self.viewController dismissViewControllerAnimated:true completion:^{
+		[self.presentedPresentationViewController dismissViewControllerAnimated:true completion:^{
 			CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
 			[result setKeepCallbackAsBool:YES];
 			[self.commandDelegate sendPluginResult:result callbackId:self.loginTappedCommand.callbackId];
@@ -274,7 +274,7 @@
 	[Purchasely setConfirmPurchaseHandler:^(UIViewController * _Nonnull controller, void (^ _Nonnull authorizePurchaseHandler)(BOOL)) {
 		self.authorizePurchaseHandler = authorizePurchaseHandler;
 
-		[self.viewController dismissViewControllerAnimated:true completion:^{
+		[self.presentedPresentationViewController dismissViewControllerAnimated:true completion:^{
 			CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
 			[result setKeepCallbackAsBool:YES];
 			[self.commandDelegate sendPluginResult:result callbackId:self.authorizePurchaseCommand.callbackId];
