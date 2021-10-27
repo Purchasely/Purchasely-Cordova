@@ -1,5 +1,6 @@
 package cordova.plugin.purchasely;
 
+import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.util.Log;
@@ -348,7 +349,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
                                                     String contentId,
                                                    CallbackContext callbackContext) {
         presentationCallback = callbackContext;
-        Intent intent = new Intent(cordova.getContext(), cordova.plugin.purchasely.PLYProductActivity.class);
+        Intent intent = PLYProductActivity.newIntent(cordova.getActivity());
         intent.putExtra("presentationId", presentationVendorId);
         intent.putExtra("contentId", contentId);
         cordova.getActivity().startActivity(intent);
@@ -359,7 +360,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
                                               String contentId,
                                               CallbackContext callbackContext) {
         presentationCallback = callbackContext;
-        Intent intent = new Intent(cordova.getContext(), cordova.plugin.purchasely.PLYProductActivity.class);
+        Intent intent = PLYProductActivity.newIntent(cordova.getActivity());
         intent.putExtra("presentationId", presentationVendorId);
         intent.putExtra("productId", productVendorId);
         intent.putExtra("contentId", contentId);
@@ -371,7 +372,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
                                           String contentId,
                                           CallbackContext callbackContext) {
         presentationCallback = callbackContext;
-        Intent intent = new Intent(cordova.getContext(), cordova.plugin.purchasely.PLYProductActivity.class);
+        Intent intent = PLYProductActivity.newIntent(cordova.getActivity());
         intent.putExtra("presentationId", presentationVendorId);
         intent.putExtra("planId", planVendorId);
         intent.putExtra("contentId", contentId);
@@ -514,10 +515,9 @@ public class PurchaselyPlugin extends CordovaPlugin {
     private void setLoginTappedHandler(CallbackContext callbackContext) {
         Purchasely.setLoginTappedHandler((fragmentActivity, loginClosedListener) -> {
             this.loginClosedListener = loginClosedListener;
-            if(productActivity != null
-                && productActivity.activity != null) {
-                productActivity.activity.get().finish();
-            }
+            Intent intent = new Intent(fragmentActivity, cordova.getActivity().getClass());
+            intent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            cordova.getActivity().startActivity(intent);
 
             PluginResult result = new PluginResult(PluginResult.Status.OK);
             result.setKeepCallback(true);
@@ -535,10 +535,9 @@ public class PurchaselyPlugin extends CordovaPlugin {
     private void setConfirmPurchaseHandler(CallbackContext callbackContext) {
         Purchasely.setConfirmPurchaseHandler((fragmentActivity, continuePurchaseListener) -> {
             this.continuePurchaseListener = continuePurchaseListener;
-            if(productActivity != null
-                    && productActivity.activity != null) {
-                productActivity.activity.get().finish();
-            }
+            Intent intent = new Intent(fragmentActivity, cordova.getActivity().getClass());
+            intent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            cordova.getActivity().startActivity(intent);
 
             PluginResult result = new PluginResult(PluginResult.Status.OK);
             result.setKeepCallback(true);
@@ -548,17 +547,23 @@ public class PurchaselyPlugin extends CordovaPlugin {
 
     private void processToPayment(boolean continueToPayment) {
         if(continuePurchaseListener != null) {
-            if(productActivity != null) productActivity.relaunch(cordova);
-
-            new Thread(() -> {
-                try {
-                    Thread.sleep(500);
-                } catch (InterruptedException e) {
-                    Log.e("Purchasely", "process to payment error", e);
-                } finally {
+            if(productActivity != null) {
+                boolean softRelaunched = productActivity.relaunch(cordova);
+                if(softRelaunched) {
                     cordova.getActivity().runOnUiThread(() -> continuePurchaseListener.processToPayment(continueToPayment));
+                } else {
+                    new Thread(() -> {
+                        try {
+                            Thread.sleep(500);
+                        } catch (InterruptedException e) {
+                            Log.e("Purchasely", "process to payment error", e);
+                        } finally {
+                            cordova.getActivity().runOnUiThread(() -> continuePurchaseListener.processToPayment(continueToPayment));
+                        }
+                    }).start();
                 }
-            }).start();
+
+            }
         }
     }
 
@@ -587,13 +592,28 @@ public class PurchaselyPlugin extends CordovaPlugin {
         String contentId = null;
         WeakReference<PLYProductActivity> activity = null;
 
-        public void relaunch(CordovaInterface cordova) {
-            Intent intent = new Intent(cordova.getContext(), cordova.plugin.purchasely.PLYProductActivity.class);
-            intent.putExtra("presentationId", presentationId);
-            intent.putExtra("productId", productId);
-            intent.putExtra("planId", planId);
-            intent.putExtra("contentId", contentId);
-            cordova.getActivity().startActivity(intent);
+        public boolean relaunch(CordovaInterface cordova) {
+            PLYProductActivity backgroundActivity = activity.get();
+            if(backgroundActivity != null
+                && !backgroundActivity.isFinishing()
+                && !backgroundActivity.isDestroyed()) {
+                Intent intent = new Intent(cordova.getActivity(), PLYProductActivity.class);
+                intent.putExtra("presentationId", presentationId);
+                intent.putExtra("productId", productId);
+                intent.putExtra("planId", planId);
+                intent.putExtra("contentId", contentId);
+                intent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                cordova.getActivity().startActivity(intent);
+                return true;
+            } else {
+                Intent intent = PLYProductActivity.newIntent(cordova.getActivity());
+                intent.putExtra("presentationId", presentationId);
+                intent.putExtra("productId", productId);
+                intent.putExtra("planId", planId);
+                intent.putExtra("contentId", contentId);
+                cordova.getActivity().startActivity(intent);
+                return false;
+            }
         }
     }
 }
