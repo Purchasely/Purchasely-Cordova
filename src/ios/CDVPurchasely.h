@@ -11,6 +11,8 @@
 @interface CDVPurchasely<PLYEventDelegate> : CDVPlugin {
 }
 
+@property (nonatomic, retain) UIViewController* presentedPresentationViewController;
+
 @property CDVInvokedUrlCommand* purchasedCommand;
 @property CDVInvokedUrlCommand* eventCommand;
 

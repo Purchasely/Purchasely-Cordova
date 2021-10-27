@@ -17,7 +17,13 @@
 	NSInteger logLevel = [[command argumentAtIndex:3] intValue];
 	BOOL observerMode = [[command argumentAtIndex:4] boolValue];
 
-	[Purchasely startWithAPIKey:apiKey appUserId:userId observerMode:observerMode eventDelegate:nil uiDelegate:nil confirmPurchaseHandler:nil logLevel:logLevel initialized:nil];
+	[Purchasely startWithAPIKey:apiKey appUserId:userId observerMode:observerMode eventDelegate:nil uiDelegate:nil confirmPurchaseHandler:nil logLevel:logLevel initialized:^(BOOL initialized, NSError * _Nullable error) {
+		if (error != nil) {
+			[self failureFor:command resultString: error.localizedDescription];
+		} else {
+			[self successFor:command resultBool:initialized];
+		}
+	}];
 	[Purchasely setAppTechnology:PLYAppTechnologyCordova];
 }
 
@@ -78,6 +84,8 @@
 	[navCtrl.navigationBar setShadowImage: [UIImage new]];
 	[navCtrl.navigationBar setTintColor: [UIColor whiteColor]];
 
+	self.presentedPresentationViewController = navCtrl;
+
 	[Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage];
 }
 
@@ -96,6 +104,8 @@
 	[navCtrl.navigationBar setShadowImage: [UIImage new]];
 	[navCtrl.navigationBar setTintColor: [UIColor whiteColor]];
 
+	self.presentedPresentationViewController = navCtrl;
+
 	[Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage];
 }
 
@@ -113,6 +123,8 @@
 	[navCtrl.navigationBar setBackgroundImage:[UIImage new] forBarMetrics:UIBarMetricsDefault];
 	[navCtrl.navigationBar setShadowImage: [UIImage new]];
 	[navCtrl.navigationBar setTintColor: [UIColor whiteColor]];
+
+	self.presentedPresentationViewController = navCtrl;
 
 	[Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage];
 }
@@ -242,15 +254,18 @@
 	[Purchasely setLoginTappedHandler:^(UIViewController * _Nonnull controller, void (^ _Nonnull closedHandler)(BOOL)) {
 		self.loginClosedHandler = closedHandler;
 
-		CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
-		[result setKeepCallbackAsBool:YES];
-		[self.commandDelegate sendPluginResult:result callbackId:self.loginTappedCommand.callbackId];
+		[self.viewController dismissViewControllerAnimated:true completion:^{
+			CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+			[result setKeepCallbackAsBool:YES];
+			[self.commandDelegate sendPluginResult:result callbackId:self.loginTappedCommand.callbackId];
+		}];
 	}];
 }
 
 - (void)onUserLoggedIn:(CDVInvokedUrlCommand*)command {
 	BOOL userDidLogin = [[command argumentAtIndex:0] boolValue];
 
+	[Purchasely showController:self.presentedPresentationViewController type: PLYUIControllerTypeProductPage];
 	self.loginClosedHandler(userDidLogin);
 }
 
@@ -259,15 +274,18 @@
 	[Purchasely setConfirmPurchaseHandler:^(UIViewController * _Nonnull controller, void (^ _Nonnull authorizePurchaseHandler)(BOOL)) {
 		self.authorizePurchaseHandler = authorizePurchaseHandler;
 
-		CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
-		[result setKeepCallbackAsBool:YES];
-		[self.commandDelegate sendPluginResult:result callbackId:self.authorizePurchaseCommand.callbackId];
+		[self.viewController dismissViewControllerAnimated:true completion:^{
+			CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+			[result setKeepCallbackAsBool:YES];
+			[self.commandDelegate sendPluginResult:result callbackId:self.authorizePurchaseCommand.callbackId];
+		}];
 	}];
 }
 
 - (void)processToPayment:(CDVInvokedUrlCommand*)command {
 	BOOL processToPayment = [[command argumentAtIndex:0] boolValue];
 
+	[Purchasely showController:self.presentedPresentationViewController type: PLYUIControllerTypeProductPage];
 	self.authorizePurchaseHandler(processToPayment);
 }
 
