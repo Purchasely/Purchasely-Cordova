@@ -21,7 +21,7 @@
   "cordova": {
     "plugins": {
       "cordova-plugin-whitelist": {},
-      "cordova-plugin-purchasely": {}
+      "@purchasley/cordova-plugin-purchasely": {}
     },
     "platforms": [
       "ios",
