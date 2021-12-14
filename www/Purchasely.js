@@ -126,6 +126,10 @@ exports.userSubscriptions = function (success, error) {
     exec(success, defaultError, 'Purchasely', 'userSubscriptions', []);
 };
 
+exports.setLanguage = function (language) {
+    exec(() => {}, defaultError, 'Purchasely', 'setLanguage', [language]);
+};
+
 exports.LogLevel = {
 	DEBUG: 0,
 	INFO: 1,
@@ -136,7 +140,8 @@ exports.LogLevel = {
 exports.Attribute = {
 	AMPLITUDE_SESSION_ID: 0,
 	FIREBASE_APP_INSTANCE_ID: 1,
-	AIRSHIP_CHANNEL_ID: 2
+	AIRSHIP_CHANNEL_ID: 2,
+    BATCH_INSTALLATION_ID: 3
 }
 
 exports.PurchaseResult = {

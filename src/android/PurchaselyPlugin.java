@@ -14,11 +14,13 @@ import org.jetbrains.annotations.Nullable;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.w3c.dom.Attr;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import io.purchasely.billing.Store;
@@ -83,6 +85,9 @@ public class PurchaselyPlugin extends CordovaPlugin {
                     break;
                 case "userLogout":
                     userLogout();
+                    break;
+                case "setLanguage":
+                    setLanguage(args.getString(0));
                     break;
                 case "setLogLevel":
                     setLogLevel(args.getInt(0));
@@ -316,6 +321,14 @@ public class PurchaselyPlugin extends CordovaPlugin {
 
     private void setLogLevel(int logLevel) {
         Purchasely.setLogLevel(LogLevel.values()[logLevel]);
+    }
+
+    private void setLanguage(String language) {
+        try {
+            Purchasely.setLanguage(new Locale(language));
+        } catch (Exception e) {
+            Purchasely.setLanguage(Locale.getDefault());
+        }
     }
 
     private void isReadyToPurchase(boolean isReadyToPurchase) {
