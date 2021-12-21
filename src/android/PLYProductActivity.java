@@ -32,11 +32,16 @@ public class PLYProductActivity extends AppCompatActivity {
 
         Fragment fragment;
         if(planId != null && !planId.isEmpty()) {
-            fragment = Purchasely.planFragment(planId, presentationId, contentId, listener);
+            fragment = Purchasely.planFragment(planId, presentationId, contentId, null, listener);
         } else if(productId != null && !productId.isEmpty()) {
-            fragment = Purchasely.productFragment(productId, presentationId, contentId, listener);
+            fragment = Purchasely.productFragment(productId, presentationId, contentId, null, listener);
         } else {
-            fragment = Purchasely.presentationFragment(presentationId, contentId, listener);
+            fragment = Purchasely.presentationFragment(presentationId, contentId, null, listener);
+        }
+
+        if(fragment == null) {
+            supportFinishAfterTransition();
+            return;
         }
 
         getSupportFragmentManager().beginTransaction()

@@ -36,7 +36,7 @@ function onDeviceReady() {
 		['Google'],
 		null,
 		Purchasely.LogLevel.DEBUG,
-		false,
+		Purchasely.RunningMode.full,
 		(isConfigured) => {
 			if(isConfigured) onPuchaselySdkReady();
 		},
@@ -100,16 +100,42 @@ function onPuchaselySdkReady() {
 		console.log("Error with purchase : " + error);
 	});
 
-	Purchasely.setLoginTappedHandler(onLoginTapped => {
-		// Present your own screen for user to log in
+	Purchasely.setPaywallActionInterceptor((result) => {
+		console.log(result);
+		console.log('Received action from paywall');
 
-		// Call this method to update Purchasely Paywall
-		Purchasely.userLogin('my_user_id');
-		Purchasely.onUserLoggedIn(true);
-	});
-
-	Purchasely.setConfirmPurchaseHandler(onPurchaseTapped => {
-		// Present your own screen before purchase
+		if (result.action === Purchasely.PaywallAction.navigate) {
+			console.log(
+			'User wants to navigate to website ' +
+				result.parameters.title +
+				' ' +
+				result.parameters.url
+			);
+			Purchasely.onProcessAction(true);
+		} else if (result.action === Purchasely.PaywallAction.close) {
+			console.log('User wants to close paywall');
+			Purchasely.onProcessAction(true);
+		} else if (result.action === Purchasely.PaywallAction.login) {
+			console.log('User wants to login');
+			//Present your own screen for user to log in
+			Purchasely.closePaywall();
+			Purchasely.userLogin('MY_USER_ID');
+			//Call this method to update Purchasely Paywall
+			Purchasely.onProcessAction(true);
+		} else if (result.action === Purchasely.PaywallAction.open_presentation) {
+			console.log('User wants to open a new paywall');
+			Purchasely.onProcessAction(true);
+		} else if (result.action === Purchasely.PaywallAction.purchase) {
+			console.log('User wants to purchase');
+			//If you want to intercept it, close paywall and display your screen
+			Purchasely.closePaywall();
+		} else if (result.action === Purchasely.PaywallAction.restore) {
+			console.log('User wants to restore his purchases');
+			Purchasely.onProcessAction(true);
+		} else {
+			console.log('Action unknown ' + result.action);
+			Purchasely.onProcessAction(true);
+		}
 	});
 }
 
@@ -140,7 +166,7 @@ function purchaseWithPlanVendorId() {
 
 function processToPayment() {
 	// Call this method to process to payment
-	Purchasely.processToPayment(true);
+	Purchasely.onProcessAction(true);
 }
 
 function restore() {
