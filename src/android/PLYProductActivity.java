@@ -1,5 +1,7 @@
 package cordova.plugin.purchasely;
 
+import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
 
 import androidx.annotation.Nullable;
@@ -60,4 +62,10 @@ public class PLYProductActivity extends AppCompatActivity {
     }
 
     ProductViewResultListener listener = PurchaselyPlugin::sendPurchaseResult;
+
+    static Intent newIntent(Activity activity) {
+        Intent intent = new Intent(activity, PLYProductActivity.class);
+        //intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+        return intent;
+    }
 }
