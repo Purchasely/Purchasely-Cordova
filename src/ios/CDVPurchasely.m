@@ -163,6 +163,14 @@
 	}];
 }
 
+- (void)silentRestoreAllProducts:(CDVInvokedUrlCommand*)command {
+	[Purchasely silentRestoreAllProductsWithSuccess:^{
+		[self successFor:command];
+	} failure:^(NSError * _Nonnull error) {
+		[self failureFor:command resultString:error.localizedDescription];
+	}];
+}
+
 - (void)purchasedSubscription:(CDVInvokedUrlCommand*)command {
 	self.purchasedCommand = command;
 	[[NSNotificationCenter defaultCenter] addObserver:self
@@ -247,6 +255,12 @@
 }
 
 - (void)close:(CDVInvokedUrlCommand*)command {
+}
+
+- (void)setLanguage:(CDVInvokedUrlCommand*)command {
+	NSString *language = [command argumentAtIndex:0];
+	NSLocale *locale = [NSLocale localeWithLocaleIdentifier:language];
+	[Purchasely setLanguageFrom:locale];
 }
 
 - (void)setLoginTappedHandler:(CDVInvokedUrlCommand*)command {

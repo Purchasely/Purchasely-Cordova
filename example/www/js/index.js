@@ -29,6 +29,8 @@ function onDeviceReady() {
 
 	console.log("Hi");
 
+	Purchasely.setLanguage('es')
+	
 	Purchasely.startWithAPIKey(
 		'afa96c76-1d8e-4e3c-a48f-204a3cd93a15',
 		['Google'],
@@ -46,6 +48,7 @@ function onDeviceReady() {
 	document.getElementById("presentSubscriptions").addEventListener("click", presentSubscriptions);
 	document.getElementById("purchaseWithPlanVendorId").addEventListener("click", purchaseWithPlanVendorId);
 	document.getElementById("restore").addEventListener("click", restore);
+	document.getElementById("silentRestore").addEventListener("click", silentRestore);
 	document.getElementById("processToPayment").addEventListener("click", processToPayment);
 
 }
@@ -81,6 +84,7 @@ function onPuchaselySdkReady() {
 	Purchasely.setLogLevel(Purchasely.LogLevel.DEBUG);
 
 	Purchasely.setAttribute(Purchasely.Attribute.FIREBASE_APP_INSTANCE_ID, "1");
+	Purchasely.setAttribute(Purchasely.Attribute.BATCH_INSTALLATION_ID, "testBatch1");
 
 	Purchasely.isReadyToPurchase(true);
 
@@ -147,6 +151,18 @@ function restore() {
 		},
 		(error) => {
 			console.log("Restore failed " + error);
+		},
+	);
+}
+
+function silentRestore() {
+	Purchasely.silentRestoreAllProducts(
+		(plan) => {
+			if(plan) console.log("Silent restore " + plan.vendorId);
+			else console.log("Nothing to restore");
+		},
+		(error) => {
+			console.log("Silent Restore failed " + error);
 		},
 	);
 }
