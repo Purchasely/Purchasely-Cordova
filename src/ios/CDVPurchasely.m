@@ -299,8 +299,12 @@
 - (void)processToPayment:(CDVInvokedUrlCommand*)command {
 	BOOL processToPayment = [[command argumentAtIndex:0] boolValue];
 
-	[Purchasely showController:self.presentedPresentationViewController type: PLYUIControllerTypeProductPage];
-	self.authorizePurchaseHandler(processToPayment);
+	if (self.presentedPresentationViewController != nil) {
+		[Purchasely showController:self.presentedPresentationViewController type: PLYUIControllerTypeProductPage];
+		if (self.authorizePurchaseHandler != nil) {
+			self.authorizePurchaseHandler(processToPayment);
+		}
+	}
 }
 
 // Helpers
