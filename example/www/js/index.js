@@ -29,7 +29,7 @@ function onDeviceReady() {
 
 	console.log("Hi");
 
-	Purchasely.setLanguage('es')
+	Purchasely.setLanguage('en')
 	
 	Purchasely.startWithAPIKey(
 		'afa96c76-1d8e-4e3c-a48f-204a3cd93a15',
