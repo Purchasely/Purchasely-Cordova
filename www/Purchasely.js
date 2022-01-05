@@ -86,6 +86,10 @@ exports.restoreAllProducts = function (success, error) {
     exec(success, error, 'Purchasely', 'restoreAllProducts', []);
 };
 
+exports.silentRestoreAllProducts = function (success, error) {
+    exec(success, error, 'Purchasely', 'silentRestoreAllProducts', []);
+};
+
 exports.purchasedSubscription = function (success, error) {
     exec(success, error, 'Purchasely', 'purchasedSubscription', []);
 };

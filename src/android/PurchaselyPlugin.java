@@ -136,6 +136,9 @@ public class PurchaselyPlugin extends CordovaPlugin {
                 case "restoreAllProducts":
                     restoreAllProducts(callbackContext);
                     break;
+                case "silentRestoreAllProducts":
+                    restoreAllProducts(callbackContext);
+                    break;
                 case "userSubscriptions":
                     userSubscriptions(callbackContext);
                     break;
