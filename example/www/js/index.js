@@ -96,13 +96,13 @@ function onPuchaselySdkReady() {
 			console.log("User purchased " + callback.plan.vendorId);
 		}
 	},
-												   (error) => {
+		(error) => {
 		console.log("Error with purchase : " + error);
 	});
 
 	Purchasely.setPaywallActionInterceptor((result) => {
 		console.log(result);
-		console.log('Received action from paywall');
+		console.log('Received action from paywall ' + result.info.presentationId);
 
 		if (result.action === Purchasely.PaywallAction.navigate) {
 			console.log(
