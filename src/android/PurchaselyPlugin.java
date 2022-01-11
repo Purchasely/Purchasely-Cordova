@@ -32,11 +32,9 @@ import io.purchasely.billing.Store;
 import io.purchasely.ext.Attribute;
 import io.purchasely.ext.DistributionType;
 import io.purchasely.ext.LogLevel;
-import io.purchasely.ext.LoginClosedListener;
 import io.purchasely.ext.PLYAppTechnology;
 import io.purchasely.ext.PLYPaywallActionListener;
 import io.purchasely.ext.PLYPresentationAction;
-import io.purchasely.ext.PLYPresentationActionKeys;
 import io.purchasely.ext.PLYProcessActionListener;
 import io.purchasely.ext.PLYProductViewResult;
 import io.purchasely.ext.PLYRunningMode;
@@ -542,25 +540,29 @@ public class PurchaselyPlugin extends CordovaPlugin {
     }
 
     private void setPaywallActionInterceptor(CallbackContext callbackContext) {
-        Purchasely.setPaywallActionsInterceptor((fragmentActivity, plyPresentationAction, map, plyProcessActionListener) -> {
+        Purchasely.setPaywallActionsInterceptor(
+                (info, plyPresentationAction, map, plyProcessActionListener) -> {
             processActionListener = plyProcessActionListener;
 
             HashMap<String, Object> parametersForCordova = new HashMap<>();
-            for (PLYPresentationActionKeys key : map.keySet()) {
-                Object value = map.get(key);
-                if (value instanceof PLYPlan) {
-                    value = transformPlanToMap((PLYPlan) value);
-                } else {
-                    value = value != null ? value.toString() : "";
-                }
-                parametersForCordova.put(key.toString().toLowerCase(), value);
-            }
+            parametersForCordova.put("title", map.getTitle());
+            parametersForCordova.put("url", map.getUrl());
+            parametersForCordova.put("plan", transformPlanToMap(map.getPlan()));
+            parametersForCordova.put("presentation", map.getPresentation());
+
+            HashMap<String, Object> infoMap = new HashMap<>();
+            if(info.getContentId() != null) infoMap.put("contentId", info.getContentId());
+            if(info.getPresentationId() != null) infoMap.put("presentationId", info.getPresentationId());
 
             HashMap<String, Object> resultForCordova = new HashMap<>();
+            resultForCordova.put("info", infoMap);
             resultForCordova.put("action", plyPresentationAction.getValue());
             resultForCordova.put("parameters", parametersForCordova);
 
-            PluginResult result = new PluginResult(PluginResult.Status.OK, new JSONObject(resultForCordova));
+            PluginResult result = new PluginResult(
+                    PluginResult.Status.OK,
+                    new JSONObject(resultForCordova)
+            );
             result.setKeepCallback(true);
             callbackContext.sendPluginResult(result);
         });
