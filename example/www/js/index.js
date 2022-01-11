@@ -84,6 +84,22 @@ function onPuchaselySdkReady() {
 
 	Purchasely.isReadyToPurchase(true);
 
+	Purchasely.planWithIdentifier('PURCHASELY_PLUS_MONTHLY', (plan) => {
+		console.log(' ==> Plan');
+		console.log(plan.vendorId);
+		console.log(plan.productId);
+		console.log(plan.name);
+		console.log(plan.price);
+		console.log(plan.amount);
+		console.log(plan.period);
+		console.log(plan.hasIntroductoryPrice);
+		console.log(plan.introPrice);
+		console.log(plan.introAmount);
+		console.log(plan.introDuration);
+	}, (error) => {
+		console.log(error);
+	});
+
 	Purchasely.setDefaultPresentationResultHandler(callback => {
 		console.log(callback);
 		if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
