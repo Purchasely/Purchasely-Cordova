@@ -36,7 +36,7 @@ function onDeviceReady() {
 		['Google'],
 		null,
 		Purchasely.LogLevel.DEBUG,
-		Purchasely.RunningMode.transactionOnly,
+		Purchasely.RunningMode.full,
 		(isConfigured) => {
 			if(isConfigured) onPuchaselySdkReady();
 		},
