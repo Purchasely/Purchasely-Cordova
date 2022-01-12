@@ -11,10 +11,23 @@ cordova plugin add @purchasely/cordova-plugin-purchasely
 ## Usage
 
 ```js
-Purchasely.startWithAPIKey('API_KEY', ['Google'], null, Purchasely.LogLevel.DEBUG, false);
+Purchasely.startWithAPIKey(
+    'API_KEY',
+    ['Google'], // list of stores for Android, accepted values: Google, Huawei and Amazon
+    null, // your user id
+    Purchasely.LogLevel.DEBUG, // log level, should be warning or error in production
+    Purchasely.RunningMode.full, // running mode
+    (isConfigured) => {
+        if(isConfigured) // you can use the SDK like display a paywall or make a purchase
+    },
+    (error) => {
+        console.log(error);
+    }
+);
 
 Purchasely.presentPresentationWithIdentifier(
-    'my_presentation_id',
+    'my_presentation_id', // may be null
+    'my_content_id', // may be null
     (callback) => {
         console.log(callback);
         if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
