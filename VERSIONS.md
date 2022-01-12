@@ -14,4 +14,4 @@ This file provides the underlying native SDK versions that the Cordova SDK relie
 | 1.1.7   | 2.7.3       | 2.7.4           |
 | 1.1.8   | 2.7.3       | 2.7.6           |
 | 1.2.0   | 2.8.0       | 2.8.0           |
-| 2.0.0   | 3.0.0       | 3.0.0           |
+| 2.0.0   | 3.0.0       | 3.0.1           |
