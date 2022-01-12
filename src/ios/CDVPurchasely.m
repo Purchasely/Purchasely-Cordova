@@ -15,15 +15,15 @@
 	NSString *apiKey = [command argumentAtIndex:0];
 	NSString *userId = [command argumentAtIndex:2];
 	NSInteger logLevel = [[command argumentAtIndex:3] intValue];
-	BOOL observerMode = [[command argumentAtIndex:4] boolValue];
+	NSInteger runningMode = [[command argumentAtIndex:4] intValue];
 
-	[Purchasely startWithAPIKey:apiKey appUserId:userId observerMode:observerMode eventDelegate:nil uiDelegate:nil confirmPurchaseHandler:nil logLevel:logLevel initialized:^(BOOL initialized, NSError * _Nullable error) {
-		if (error != nil) {
-			[self failureFor:command resultString: error.localizedDescription];
-		} else {
-			[self successFor:command resultBool:initialized];
-		}
-	}];
+    [Purchasely startWithAPIKey:apiKey appUserId:userId runningMode:runningMode eventDelegate:nil uiDelegate:nil paywallActionsInterceptor:nil logLevel:logLevel initialized:^(BOOL initialized, NSError * _Nullable error) {
+        if (error != nil) {
+            [self failureFor:command resultString: error.localizedDescription];
+        } else {
+            [self successFor:command resultBool:initialized];
+        }
+    }];
 	[Purchasely setAppTechnology:PLYAppTechnologyCordova];
 }
 
@@ -73,60 +73,66 @@
 - (void)presentPresentationWithIdentifier:(CDVInvokedUrlCommand*)command {
 	NSString *presentationVendorId = [command argumentAtIndex:0];
 
-	UIViewController *ctrl = [Purchasely presentationControllerWith:presentationVendorId completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
-		NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
-		[self successFor:command resultDict:resultDict];
-	}];
+    UIViewController *ctrl = [Purchasely presentationControllerWith:presentationVendorId loaded:nil completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
+        NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
+        [self successFor:command resultDict:resultDict];
+    }];
 
-	UINavigationController *navCtrl = [[UINavigationController alloc] initWithRootViewController:ctrl];
-	[navCtrl.navigationBar setTranslucent:YES];
-	[navCtrl.navigationBar setBackgroundImage:[UIImage new] forBarMetrics:UIBarMetricsDefault];
-	[navCtrl.navigationBar setShadowImage: [UIImage new]];
-	[navCtrl.navigationBar setTintColor: [UIColor whiteColor]];
+    if (ctrl != nil) {
+        UINavigationController *navCtrl = [[UINavigationController alloc] initWithRootViewController:ctrl];
+        [navCtrl.navigationBar setTranslucent:YES];
+        [navCtrl.navigationBar setBackgroundImage:[UIImage new] forBarMetrics:UIBarMetricsDefault];
+        [navCtrl.navigationBar setShadowImage: [UIImage new]];
+        [navCtrl.navigationBar setTintColor: [UIColor whiteColor]];
 
-	self.presentedPresentationViewController = navCtrl;
+        self.presentedPresentationViewController = navCtrl;
 
-	[Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage];
+        [Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage];
+    }
 }
 
 - (void)presentPlanWithIdentifier:(CDVInvokedUrlCommand*)command {
 	NSString *planVendorId = [command argumentAtIndex:0];
 	NSString *presentationVendorId = [command argumentAtIndex:1];
 
-	UIViewController *ctrl = [Purchasely planControllerFor:planVendorId with:presentationVendorId completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
+	UIViewController *ctrl = [Purchasely planControllerFor:planVendorId with:presentationVendorId loaded:nil completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
 		NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
 		[self successFor:command resultDict:resultDict];
 	}];
 
-	UINavigationController *navCtrl = [[UINavigationController alloc] initWithRootViewController:ctrl];
-	[navCtrl.navigationBar setTranslucent:YES];
-	[navCtrl.navigationBar setBackgroundImage:[UIImage new] forBarMetrics:UIBarMetricsDefault];
-	[navCtrl.navigationBar setShadowImage: [UIImage new]];
-	[navCtrl.navigationBar setTintColor: [UIColor whiteColor]];
-
-	self.presentedPresentationViewController = navCtrl;
-
-	[Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage];
+    if (ctrl != nil) {
+        UINavigationController *navCtrl = [[UINavigationController alloc] initWithRootViewController:ctrl];
+        [navCtrl.navigationBar setTranslucent:YES];
+        [navCtrl.navigationBar setBackgroundImage:[UIImage new] forBarMetrics:UIBarMetricsDefault];
+        [navCtrl.navigationBar setShadowImage: [UIImage new]];
+        [navCtrl.navigationBar setTintColor: [UIColor whiteColor]];
+        
+        self.presentedPresentationViewController = navCtrl;
+        
+        [Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage];
+    }
 }
 
 - (void)presentProductWithIdentifier:(CDVInvokedUrlCommand*)command {
 	NSString *productVendorId = [command argumentAtIndex:0];
 	NSString *presentationVendorId = [command argumentAtIndex:1];
 
-	UIViewController *ctrl = [Purchasely productControllerFor:productVendorId with:presentationVendorId completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
+    UIViewController *ctrl = [Purchasely productControllerFor:productVendorId with:presentationVendorId loaded:nil completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
 		NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
 		[self successFor:command resultDict:resultDict];
 	}];
 
-	UINavigationController *navCtrl = [[UINavigationController alloc] initWithRootViewController:ctrl];
-	[navCtrl.navigationBar setTranslucent:YES];
-	[navCtrl.navigationBar setBackgroundImage:[UIImage new] forBarMetrics:UIBarMetricsDefault];
-	[navCtrl.navigationBar setShadowImage: [UIImage new]];
-	[navCtrl.navigationBar setTintColor: [UIColor whiteColor]];
-
-	self.presentedPresentationViewController = navCtrl;
-
-	[Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage];
+    if (ctrl != nil) {
+        UINavigationController *navCtrl = [[UINavigationController alloc] initWithRootViewController:ctrl];
+        [navCtrl.navigationBar setTranslucent:YES];
+        [navCtrl.navigationBar setBackgroundImage:[UIImage new] forBarMetrics:UIBarMetricsDefault];
+        [navCtrl.navigationBar setShadowImage: [UIImage new]];
+        [navCtrl.navigationBar setTintColor: [UIColor whiteColor]];
+        
+        self.presentedPresentationViewController = navCtrl;
+        
+        [Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage];
+    }
 }
 
 - (void)presentSubscriptions:(CDVInvokedUrlCommand*)command {
@@ -263,50 +269,6 @@
 	[Purchasely setLanguageFrom:locale];
 }
 
-- (void)setLoginTappedHandler:(CDVInvokedUrlCommand*)command {
-	self.loginTappedCommand = command;
-	[Purchasely setLoginTappedHandler:^(UIViewController * _Nonnull controller, void (^ _Nonnull closedHandler)(BOOL)) {
-		self.loginClosedHandler = closedHandler;
-
-		[self.presentedPresentationViewController dismissViewControllerAnimated:true completion:^{
-			CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
-			[result setKeepCallbackAsBool:YES];
-			[self.commandDelegate sendPluginResult:result callbackId:self.loginTappedCommand.callbackId];
-		}];
-	}];
-}
-
-- (void)onUserLoggedIn:(CDVInvokedUrlCommand*)command {
-	BOOL userDidLogin = [[command argumentAtIndex:0] boolValue];
-
-	[Purchasely showController:self.presentedPresentationViewController type: PLYUIControllerTypeProductPage];
-	self.loginClosedHandler(userDidLogin);
-}
-
-- (void)setConfirmPurchaseHandler:(CDVInvokedUrlCommand*)command {
-	self.authorizePurchaseCommand = command;
-	[Purchasely setConfirmPurchaseHandler:^(UIViewController * _Nonnull controller, void (^ _Nonnull authorizePurchaseHandler)(BOOL)) {
-		self.authorizePurchaseHandler = authorizePurchaseHandler;
-
-		[self.presentedPresentationViewController dismissViewControllerAnimated:true completion:^{
-			CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
-			[result setKeepCallbackAsBool:YES];
-			[self.commandDelegate sendPluginResult:result callbackId:self.authorizePurchaseCommand.callbackId];
-		}];
-	}];
-}
-
-- (void)processToPayment:(CDVInvokedUrlCommand*)command {
-	BOOL processToPayment = [[command argumentAtIndex:0] boolValue];
-
-	if (self.presentedPresentationViewController != nil) {
-		[Purchasely showController:self.presentedPresentationViewController type: PLYUIControllerTypeProductPage];
-		if (self.authorizePurchaseHandler != nil) {
-			self.authorizePurchaseHandler(processToPayment);
-		}
-	}
-}
-
 // Helpers
 
 - (NSDictionary<NSString *, NSObject *> *) resultDictionaryForPresentationController:(PLYProductViewControllerResult)result plan:(PLYPlan * _Nullable)plan {
@@ -331,6 +293,112 @@
 		[productViewResult setObject:[plan asDictionary] forKey:@"plan"];
 	}
 	return productViewResult;
+}
+
+- (NSDictionary<NSString *, NSObject *> *) resultDictionaryForActionInterceptor:(PLYPresentationAction) action
+                                                                     parameters: (PLYPresentationActionParameters * _Nullable) params
+                                                              presentationInfos: (PLYPresentationInfo * _Nullable) infos {
+    NSMutableDictionary<NSString *, NSObject *> *actionInterceptorResult = [NSMutableDictionary new];
+
+    NSString* actionString;
+
+    switch (action) {
+        case PLYPresentationActionLogin:
+            actionString = @"login";
+            break;
+        case PLYPresentationActionPurchase:
+            actionString = @"purchase";
+            break;
+        case PLYPresentationActionClose:
+            actionString = @"close";
+            break;
+        case PLYPresentationActionRestore:
+            actionString = @"restore";
+            break;
+        case PLYPresentationActionNavigate:
+            actionString = @"navigate";
+            break;
+        case PLYPresentationActionPromoCode:
+            actionString = @"promo_code";
+            break;
+        case PLYPresentationActionOpenPresentation:
+            actionString = @"open_presentation";
+            break;
+    }
+
+    [actionInterceptorResult setObject:actionString forKey:@"action"];
+
+    if (infos != nil) {
+        NSMutableDictionary<NSString *, NSObject *> *infosResult = [NSMutableDictionary new];
+        if (infos.contentId != nil) {
+            [infosResult setObject:infos.contentId forKey:@"contentId"];
+        }
+        if (infos.presentationId != nil) {
+            [infosResult setObject:infos.presentationId forKey:@"presentationId"];
+        }
+        [actionInterceptorResult setObject:infosResult forKey:@"info"];
+    }
+    if (params != nil) {
+        NSMutableDictionary<NSString *, NSObject *> *paramsResult = [NSMutableDictionary new];
+        if (params.url != nil) {
+            [paramsResult setObject:params.url.absoluteString forKey:@"url"];
+        }
+        if (params.plan != nil) {
+            [paramsResult setObject:[params.plan asDictionary] forKey:@"plan"];
+        }
+        if (params.title != nil) {
+            [paramsResult setObject:params.title forKey:@"title"];
+        }
+        if (params.presentation != nil) {
+            [paramsResult setObject:params.presentation forKey:@"presentation"];
+        }
+        [actionInterceptorResult setObject:paramsResult forKey:@"parameters"];
+    }
+    
+    return actionInterceptorResult;
+}
+
+//- (void)setConfirmPurchaseHandler:(CDVInvokedUrlCommand*)command {
+//    self.authorizePurchaseCommand = command;
+//    [Purchasely setConfirmPurchaseHandler:^(UIViewController * _Nonnull controller, void (^ _Nonnull authorizePurchaseHandler)(BOOL)) {
+//        self.authorizePurchaseHandler = authorizePurchaseHandler;
+//
+//        [self.presentedPresentationViewController dismissViewControllerAnimated:true completion:^{
+//            CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+//            [result setKeepCallbackAsBool:YES];
+//            [self.commandDelegate sendPluginResult:result callbackId:self.authorizePurchaseCommand.callbackId];
+//        }];
+//    }];
+//}
+
+- (void)setPaywallActionInterceptor:(CDVInvokedUrlCommand*)command {
+    self.paywallActionInterceptorCommand = command;
+    [Purchasely setPaywallActionsInterceptor:^(enum PLYPresentationAction action, PLYPresentationActionParameters * _Nullable parameters, PLYPresentationInfo * _Nullable infos, void (^ _Nonnull onProcessActionHandler)(BOOL)) {
+        self.onProcessActionHandler = onProcessActionHandler;
+        NSDictionary *resultDict = [self resultDictionaryForActionInterceptor:action parameters:parameters presentationInfos:infos];
+
+        CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:resultDict];
+        [pluginResult setKeepCallbackAsBool:YES];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:self.paywallActionInterceptorCommand.callbackId];
+
+    }];
+}
+
+- (void)onProcessAction:(CDVInvokedUrlCommand*)command {
+    BOOL processAction = [[command argumentAtIndex:0] boolValue];
+    if (self.onProcessActionHandler != nil) {
+        self.onProcessActionHandler(processAction);
+    }
+}
+
+- (void)closePaywall:(CDVInvokedUrlCommand*)command {
+    if (self.presentedPresentationViewController != nil) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self.presentedPresentationViewController dismissViewControllerAnimated:true completion:^{
+                self.presentedPresentationViewController = nil;
+            }];
+        });
+    }
 }
 
 - (void)successFor:(CDVInvokedUrlCommand *)command {

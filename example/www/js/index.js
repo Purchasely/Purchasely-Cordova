@@ -36,7 +36,7 @@ function onDeviceReady() {
 		['Google'],
 		null,
 		Purchasely.LogLevel.DEBUG,
-		Purchasely.RunningMode.full,
+		Purchasely.RunningMode.transactionOnly,
 		(isConfigured) => {
 			if(isConfigured) onPuchaselySdkReady();
 		},
@@ -127,7 +127,8 @@ function onPuchaselySdkReady() {
 				' ' +
 				result.parameters.url
 			);
-			Purchasely.onProcessAction(true);
+			console.log('prevent Purchasely SDK to navigate to website');
+			Purchasely.onProcessAction(false);
 		} else if (result.action === Purchasely.PaywallAction.close) {
 			console.log('User wants to close paywall');
 			Purchasely.onProcessAction(true);
@@ -145,6 +146,7 @@ function onPuchaselySdkReady() {
 			console.log('User wants to purchase');
 			//If you want to intercept it, close paywall and display your screen
 			Purchasely.closePaywall();
+			Purchasely.onProcessAction(true);
 		} else if (result.action === Purchasely.PaywallAction.restore) {
 			console.log('User wants to restore his purchases');
 			Purchasely.onProcessAction(true);
