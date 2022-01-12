@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<plugin id="@purchasely/cordova-plugin-purchasely" version="1.2.0" xmlns="http://apache.org/cordova/ns/plugins/1.0" xmlns:android="http://schemas.android.com/apk/res/android">
+<plugin id="@purchasely/cordova-plugin-purchasely" version="2.0.0" xmlns="http://apache.org/cordova/ns/plugins/1.0" xmlns:android="http://schemas.android.com/apk/res/android">
     <name>Purchasely</name>
     <js-module name="Purchasely" src="www/Purchasely.js">
         <clobbers target="Purchasely" />
@@ -51,7 +51,7 @@
                 android:theme="@style/Theme.AppCompat.Light.NoActionBar">
             </activity>
         </config-file>
-        <framework src="io.purchasely:core:3.0.0-alpha08" />
+        <framework src="io.purchasely:core:3.0.0" />
         <source-file src="src/android/PurchaselyPlugin.java" target-dir="src/cordova/plugin/purchasely" />
         <source-file src="src/android/PLYProductActivity.java" target-dir="src/cordova/plugin/purchasely" />
         <source-file src="src/android/PLYSubscriptionsActivity.java" target-dir="src/cordova/plugin/purchasely" />
