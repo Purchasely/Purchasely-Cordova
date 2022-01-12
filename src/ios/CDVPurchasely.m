@@ -163,6 +163,14 @@
 	}];
 }
 
+- (void)silentRestoreAllProducts:(CDVInvokedUrlCommand*)command {
+	[Purchasely silentRestoreAllProductsWithSuccess:^{
+		[self successFor:command];
+	} failure:^(NSError * _Nonnull error) {
+		[self failureFor:command resultString:error.localizedDescription];
+	}];
+}
+
 - (void)purchasedSubscription:(CDVInvokedUrlCommand*)command {
 	self.purchasedCommand = command;
 	[[NSNotificationCenter defaultCenter] addObserver:self
@@ -249,6 +257,12 @@
 - (void)close:(CDVInvokedUrlCommand*)command {
 }
 
+- (void)setLanguage:(CDVInvokedUrlCommand*)command {
+	NSString *language = [command argumentAtIndex:0];
+	NSLocale *locale = [NSLocale localeWithLocaleIdentifier:language];
+	[Purchasely setLanguageFrom:locale];
+}
+
 - (void)setLoginTappedHandler:(CDVInvokedUrlCommand*)command {
 	self.loginTappedCommand = command;
 	[Purchasely setLoginTappedHandler:^(UIViewController * _Nonnull controller, void (^ _Nonnull closedHandler)(BOOL)) {
@@ -285,8 +299,12 @@
 - (void)processToPayment:(CDVInvokedUrlCommand*)command {
 	BOOL processToPayment = [[command argumentAtIndex:0] boolValue];
 
-	[Purchasely showController:self.presentedPresentationViewController type: PLYUIControllerTypeProductPage];
-	self.authorizePurchaseHandler(processToPayment);
+	if (self.presentedPresentationViewController != nil) {
+		[Purchasely showController:self.presentedPresentationViewController type: PLYUIControllerTypeProductPage];
+		if (self.authorizePurchaseHandler != nil) {
+			self.authorizePurchaseHandler(processToPayment);
+		}
+	}
 }
 
 // Helpers
