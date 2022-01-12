@@ -5,6 +5,9 @@ import android.content.Intent;
 import android.net.Uri;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+import androidx.fragment.app.FragmentActivity;
+
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.CordovaPlugin;
@@ -19,18 +22,22 @@ import org.w3c.dom.Attr;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.BiConsumer;
 
 import io.purchasely.billing.Store;
 import io.purchasely.ext.Attribute;
-import io.purchasely.ext.ContinuePurchaseListener;
 import io.purchasely.ext.DistributionType;
 import io.purchasely.ext.LogLevel;
-import io.purchasely.ext.LoginClosedListener;
 import io.purchasely.ext.PLYAppTechnology;
+import io.purchasely.ext.PLYPaywallActionListener;
+import io.purchasely.ext.PLYPresentationAction;
+import io.purchasely.ext.PLYProcessActionListener;
 import io.purchasely.ext.PLYProductViewResult;
+import io.purchasely.ext.PLYRunningMode;
 import io.purchasely.ext.PlanListener;
 import io.purchasely.ext.ProductListener;
 import io.purchasely.ext.ProductsListener;
@@ -52,8 +59,13 @@ public class PurchaselyPlugin extends CordovaPlugin {
     static CallbackContext eventsCallback = null;
     static ProductActivity productActivity = null;
 
-    private LoginClosedListener loginClosedListener = null;
-    private ContinuePurchaseListener continuePurchaseListener = null;
+    private PLYProcessActionListener processActionListener;
+
+    private static int runningModeTransactionOnly = 0;
+    private static int runningModeObserver = 1;
+    private static int runningModePaywallOnly = 2;
+    private static int runningModePaywallObserver = 3;
+    private static int runningModeFull = 4;
 
     @Override
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) {
@@ -65,7 +77,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
                             args.getJSONArray(1),
                             args.getString(2),
                             args.getInt(3),
-                            args.getBoolean(4),
+                            args.getInt(4),
                             callbackContext);
                     break;
                 case "close":
@@ -161,17 +173,14 @@ public class PurchaselyPlugin extends CordovaPlugin {
                         callbackContext
                     );
                     break;
-                case "setLoginTappedHandler":
-                    setLoginTappedHandler(callbackContext);
+                case "setPaywallActionInterceptor":
+                    setPaywallActionInterceptor(callbackContext);
                     break;
-                case "onUserLoggedIn":
-                    onUserLoggedIn(args.getBoolean(0));
+                case "onProcessAction":
+                    onProcessAction(args.getBoolean(0));
                     break;
-                case "setConfirmPurchaseHandler":
-                    setConfirmPurchaseHandler(callbackContext);
-                    break;
-                case "processToPayment":
-                    processToPayment(args.getBoolean(0));
+                case "closePaywall":
+                    closePaywall(callbackContext);
                     break;
                 default:
                     return false;
@@ -211,7 +220,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
                                  JSONArray stores,
                                  String userId,
                                  int logLevel,
-                                 boolean observerMode,
+                                 int runningMode,
                                  CallbackContext callbackContext) {
         ArrayList<String> list = new ArrayList<>();
         for (int i=0; i< stores.length(); i++) {
@@ -223,11 +232,17 @@ public class PurchaselyPlugin extends CordovaPlugin {
         }
         ArrayList<Store> storesInstances = getStoresInstances(list);
 
+        PLYRunningMode plyRunningMode = PLYRunningMode.Full.INSTANCE;
+        if(runningMode == runningModeTransactionOnly) plyRunningMode = PLYRunningMode.TransactionOnly.INSTANCE;
+        else if(runningMode == runningModeObserver) plyRunningMode = PLYRunningMode.Observer.INSTANCE;
+        else if(runningMode == runningModePaywallOnly) plyRunningMode = PLYRunningMode.PaywallOnly.INSTANCE;
+        else if(runningMode == runningModePaywallObserver) plyRunningMode = PLYRunningMode.PaywallObserver.INSTANCE;
+
         new Purchasely.Builder(cordova.getContext())
                 .apiKey(apiKey)
                 .stores(storesInstances)
                 .userId(userId)
-                .observerMode(observerMode)
+                .runningMode(plyRunningMode)
                 .logLevel(LogLevel.values()[logLevel])
                 .build();
 
@@ -275,8 +290,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
     private void close() {
         defaultCallback = null;
         presentationCallback = null;
-        loginClosedListener = null;
-        continuePurchaseListener = null;
+        processActionListener = null;
         productActivity = null;
         Purchasely.close();
     }
@@ -469,7 +483,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
     }
 
     private void productWithIdentifier(String vendorId, CallbackContext callbackContext) {
-        Purchasely.getProduct(vendorId, new ProductListener() {
+        Purchasely.product(vendorId, new ProductListener() {
             @Override
             public void onSuccess(@Nullable PLYProduct plyProduct) {
                 if(plyProduct != null) {
@@ -487,7 +501,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
     }
 
     private void planWithIdentifier(String vendorId, CallbackContext callbackContext) {
-        Purchasely.getPlan(vendorId, new PlanListener() {
+        Purchasely.plan(vendorId, new PlanListener() {
             @Override
             public void onSuccess(@Nullable PLYPlan plyPlan) {
                 if(plyPlan != null) {
@@ -505,7 +519,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
     }
 
     private void purchaseWithPlanVendorId(String planVendorId, String contentId, CallbackContext callbackContext) {
-        Purchasely.getPlan(planVendorId, new PlanListener() {
+        Purchasely.plan(planVendorId, new PlanListener() {
             @Override
             public void onSuccess(@Nullable PLYPlan plyPlan) {
                 if(plyPlan != null) {
@@ -528,53 +542,57 @@ public class PurchaselyPlugin extends CordovaPlugin {
         });
     }
 
-    private void setLoginTappedHandler(CallbackContext callbackContext) {
-        Purchasely.setLoginTappedHandler((fragmentActivity, loginClosedListener) -> {
-            this.loginClosedListener = loginClosedListener;
-            Intent intent = new Intent(fragmentActivity, cordova.getActivity().getClass());
-            intent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-            cordova.getActivity().startActivity(intent);
+    private void setPaywallActionInterceptor(CallbackContext callbackContext) {
+        Purchasely.setPaywallActionsInterceptor(
+                (info, plyPresentationAction, map, plyProcessActionListener) -> {
+            processActionListener = plyProcessActionListener;
 
-            PluginResult result = new PluginResult(PluginResult.Status.OK);
+            HashMap<String, Object> parametersForCordova = new HashMap<>();
+            parametersForCordova.put("title", map.getTitle());
+            parametersForCordova.put("url", map.getUrl());
+            parametersForCordova.put("plan", transformPlanToMap(map.getPlan()));
+            parametersForCordova.put("presentation", map.getPresentation());
+
+            HashMap<String, Object> infoMap = new HashMap<>();
+            if(info.getContentId() != null) infoMap.put("contentId", info.getContentId());
+            if(info.getPresentationId() != null) infoMap.put("presentationId", info.getPresentationId());
+
+            HashMap<String, Object> resultForCordova = new HashMap<>();
+            resultForCordova.put("info", infoMap);
+            resultForCordova.put("action", plyPresentationAction.getValue());
+            resultForCordova.put("parameters", parametersForCordova);
+
+            PluginResult result = new PluginResult(
+                    PluginResult.Status.OK,
+                    new JSONObject(resultForCordova)
+            );
             result.setKeepCallback(true);
             callbackContext.sendPluginResult(result);
         });
     }
 
-    private void onUserLoggedIn(boolean userLoggedIn) {
-        if(loginClosedListener != null)  {
-            if(productActivity != null) productActivity.relaunch(cordova);
-            cordova.getActivity().runOnUiThread(() -> loginClosedListener.userLoggedIn(userLoggedIn));
-        }
+    private void closePaywall(CallbackContext callbackContext) {
+        Activity purchaselyActivity = productActivity.activity.get();
+        Activity activity =  purchaselyActivity != null ? purchaselyActivity : cordova.getActivity();
+        Intent intent = new Intent(activity, cordova.getActivity().getClass());
+        intent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+        cordova.getActivity().startActivity(intent);
     }
 
-    private void setConfirmPurchaseHandler(CallbackContext callbackContext) {
-        Purchasely.setConfirmPurchaseHandler((fragmentActivity, continuePurchaseListener) -> {
-            this.continuePurchaseListener = continuePurchaseListener;
-            Intent intent = new Intent(fragmentActivity, cordova.getActivity().getClass());
-            intent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-            cordova.getActivity().startActivity(intent);
-
-            PluginResult result = new PluginResult(PluginResult.Status.OK);
-            result.setKeepCallback(true);
-            callbackContext.sendPluginResult(result);
-        });
-    }
-
-    private void processToPayment(boolean continueToPayment) {
-        if(continuePurchaseListener != null) {
+    private void onProcessAction(boolean processAction) {
+        if(processActionListener != null) {
             if(productActivity != null) {
                 boolean softRelaunched = productActivity.relaunch(cordova);
                 if(softRelaunched) {
-                    cordova.getActivity().runOnUiThread(() -> continuePurchaseListener.processToPayment(continueToPayment));
+                    cordova.getActivity().runOnUiThread(() -> processActionListener.processAction(processAction));
                 } else {
                     new Thread(() -> {
                         try {
                             Thread.sleep(500);
                         } catch (InterruptedException e) {
-                            Log.e("Purchasely", "process to payment error", e);
+                            Log.e("Purchasely", "process action error", e);
                         } finally {
-                            cordova.getActivity().runOnUiThread(() -> continuePurchaseListener.processToPayment(continueToPayment));
+                            cordova.getActivity().runOnUiThread(() -> processActionListener.processAction(processAction));
                         }
                     }).start();
                 }

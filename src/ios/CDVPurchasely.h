@@ -11,16 +11,13 @@
 @interface CDVPurchasely<PLYEventDelegate> : CDVPlugin {
 }
 
-@property (nonatomic, retain) UIViewController* presentedPresentationViewController;
+@property (nonatomic, assign) UIViewController* presentedPresentationViewController;
 
 @property CDVInvokedUrlCommand* purchasedCommand;
 @property CDVInvokedUrlCommand* eventCommand;
 
-@property CDVInvokedUrlCommand* loginTappedCommand;
-@property void (^loginClosedHandler)(BOOL loggedIn);
-
-@property CDVInvokedUrlCommand* authorizePurchaseCommand;
-@property void (^authorizePurchaseHandler)(BOOL authorizePurchase);
+@property CDVInvokedUrlCommand* paywallActionInterceptorCommand;
+@property void (^onProcessActionHandler)(BOOL proceed);
 
 - (void)startWithAPIKey:(CDVInvokedUrlCommand*)command;
 - (void)setLogLevel:(CDVInvokedUrlCommand*)command;
@@ -36,6 +33,7 @@
 - (void)presentSubscriptions:(CDVInvokedUrlCommand*)command;
 - (void)purchaseWithPlanVendorId:(CDVInvokedUrlCommand*)command;
 - (void)restoreAllProducts:(CDVInvokedUrlCommand*)command;
+- (void)silentRestoreAllProducts:(CDVInvokedUrlCommand*)command;
 - (void)purchasedSubscription:(CDVInvokedUrlCommand*)command;
 - (void)allProducts:(CDVInvokedUrlCommand*)command;
 - (void)productWithIdentifier:(CDVInvokedUrlCommand*)command;
@@ -45,10 +43,8 @@
 - (void)removeEventsListener:(CDVInvokedUrlCommand*)command;
 - (void)handle:(CDVInvokedUrlCommand*)command;
 - (void)close:(CDVInvokedUrlCommand*)command;
-- (void)setLoginTappedHandler:(CDVInvokedUrlCommand*)command;
-- (void)onUserLoggedIn:(CDVInvokedUrlCommand*)command;
-- (void)setConfirmPurchaseHandler:(CDVInvokedUrlCommand*)command;
-- (void)processToPayment:(CDVInvokedUrlCommand*)command;
-
+- (void)setPaywallActionInterceptor:(CDVInvokedUrlCommand*)command;
+- (void)onProcessAction:(CDVInvokedUrlCommand*)command;
+- (void)closePaywall:(CDVInvokedUrlCommand*)command;
 
 @end

@@ -2,8 +2,8 @@ var exec = require('cordova/exec');
 
 var defaultError = (e) => { console.log(e); }
 
-exports.startWithAPIKey = function (apiKey, stores, userId, logLevel, observerMode, success, error) {
-    exec(success, error, 'Purchasely', 'startWithAPIKey', [apiKey, stores, userId, logLevel, observerMode]);
+exports.startWithAPIKey = function (apiKey, stores, userId, logLevel, runningMode, success, error) {
+    exec(success, error, 'Purchasely', 'startWithAPIKey', [apiKey, stores, userId, logLevel, runningMode]);
 };
 
 exports.addEventsListener = function (success, error) {
@@ -110,20 +110,16 @@ exports.productWithIdentifier = function (productId, success) {
     exec(success, defaultError, 'Purchasely', 'productWithIdentifier', [productId]);
 };
 
-exports.setLoginTappedHandler = function (success) {
-    exec(success, defaultError, 'Purchasely', 'setLoginTappedHandler', []);
+exports.setPaywallActionInterceptor = function (success) {
+    exec(success, defaultError, 'Purchasely', 'setPaywallActionInterceptor', []);
 };
 
-exports.onUserLoggedIn = function (userLoggedIn) {
-    exec(() => {}, defaultError, 'Purchasely', 'onUserLoggedIn', [userLoggedIn]);
+exports.onProcessAction = function (processAction) {
+    exec(() => {}, defaultError, 'Purchasely', 'onProcessAction', [processAction]);
 };
 
-exports.setConfirmPurchaseHandler = function (success) {
-    exec(success, defaultError, 'Purchasely', 'setConfirmPurchaseHandler', []);
-};
-
-exports.processToPayment = function (processToPayment) {
-    exec(() => {}, defaultError, 'Purchasely', 'processToPayment', [processToPayment]);
+exports.closePaywall = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'closePaywall', []);
 };
 
 exports.userSubscriptions = function (success, error) {
@@ -168,4 +164,23 @@ exports.PlanType = {
     autoRenewingSubscription: 2,
     nonRenewingSubscription: 3,
     unknown: 4
+}
+
+
+exports.RunningMode = {
+    transactionOnly: 0,
+    observer: 1,
+    paywallOnly: 2,
+    paywallObserver: 3,
+    full: 4
+}
+
+exports.PaywallAction = {
+    close: 'close',
+    login: 'login',
+    navigate: 'navigate',
+    purchase: 'purchase',
+    restore: 'restore',
+    open_presentation: 'open_presentation',
+    promo_code: 'promo_code',
 }
