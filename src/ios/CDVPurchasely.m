@@ -72,8 +72,10 @@
 
 - (void)presentPresentationWithIdentifier:(CDVInvokedUrlCommand*)command {
 	NSString *presentationVendorId = [command argumentAtIndex:0];
+    NSString *contentId = [command argumentAtIndex:1];
+    BOOL isFullscreen = [[command argumentAtIndex:2] boolValue];
 
-    UIViewController *ctrl = [Purchasely presentationControllerWith:presentationVendorId loaded:nil completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
+    UIViewController *ctrl = [Purchasely presentationControllerWith:presentationVendorId contentId:contentId loaded:nil completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
         NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
         [self successFor:command resultDict:resultDict];
     }];
@@ -86,7 +88,10 @@
         [navCtrl.navigationBar setTintColor: [UIColor whiteColor]];
 
         self.presentedPresentationViewController = navCtrl;
-
+        
+        if (isFullscreen) {
+            navCtrl.modalPresentationStyle = UIModalPresentationFullScreen;
+        }
         [Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage];
     }
 }
@@ -94,8 +99,10 @@
 - (void)presentPlanWithIdentifier:(CDVInvokedUrlCommand*)command {
 	NSString *planVendorId = [command argumentAtIndex:0];
 	NSString *presentationVendorId = [command argumentAtIndex:1];
-
-	UIViewController *ctrl = [Purchasely planControllerFor:planVendorId with:presentationVendorId loaded:nil completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
+    NSString *contentId = [command argumentAtIndex:2];
+    BOOL isFullscreen = [[command argumentAtIndex:3] boolValue];
+    
+    UIViewController *ctrl = [Purchasely planControllerFor:planVendorId with:presentationVendorId contentId:contentId loaded:nil completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
 		NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
 		[self successFor:command resultDict:resultDict];
 	}];
@@ -109,6 +116,9 @@
         
         self.presentedPresentationViewController = navCtrl;
         
+        if (isFullscreen) {
+            navCtrl.modalPresentationStyle = UIModalPresentationFullScreen;
+        }
         [Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage];
     }
 }
@@ -116,8 +126,10 @@
 - (void)presentProductWithIdentifier:(CDVInvokedUrlCommand*)command {
 	NSString *productVendorId = [command argumentAtIndex:0];
 	NSString *presentationVendorId = [command argumentAtIndex:1];
-
-    UIViewController *ctrl = [Purchasely productControllerFor:productVendorId with:presentationVendorId loaded:nil completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
+    NSString *contentId = [command argumentAtIndex:2];
+    BOOL isFullscreen = [[command argumentAtIndex:3] boolValue];
+    
+    UIViewController *ctrl = [Purchasely productControllerFor:productVendorId with:presentationVendorId contentId:contentId loaded:nil completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
 		NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
 		[self successFor:command resultDict:resultDict];
 	}];
@@ -131,6 +143,9 @@
         
         self.presentedPresentationViewController = navCtrl;
         
+        if (isFullscreen) {
+            navCtrl.modalPresentationStyle = UIModalPresentationFullScreen;
+        }
         [Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage];
     }
 }

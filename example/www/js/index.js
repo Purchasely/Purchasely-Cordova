@@ -159,7 +159,9 @@ function onPuchaselySdkReady() {
 
 function openPresentation() {
 	Purchasely.presentPresentationWithIdentifier(
+		'defaultbis',
 		null,
+		true,
 		(callback) => {
 			console.log(callback);
 			if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
