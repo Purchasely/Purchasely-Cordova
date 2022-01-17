@@ -50,36 +50,12 @@ exports.presentPresentationWithIdentifier = function (presentationId, contentId,
     exec(success, error, 'Purchasely', 'presentPresentationWithIdentifier', [presentationId, contentId, isFullscreen]);
 };
 
-exports.presentPresentationWithIdentifier = function (presentationId, contentId, success, error) {
-    exec(success, error, 'Purchasely', 'presentPresentationWithIdentifier', [presentationId, contentId, false]);
-};
-
-exports.presentPresentationWithIdentifier = function (presentationId, success, error) {
-    exec(success, error, 'Purchasely', 'presentPresentationWithIdentifier', [presentationId, null, false]);
-};
-
 exports.presentProductWithIdentifier = function (productId, presentationId, contentId, isFullscreen, success, error) {
     exec(success, error, 'Purchasely', 'presentProductWithIdentifier', [productId, presentationId, contentId, isFullscreen]);
 };
 
-exports.presentProductWithIdentifier = function (productId, presentationId, contentId, success, error) {
-    exec(success, error, 'Purchasely', 'presentProductWithIdentifier', [productId, presentationId, contentId, false]);
-};
-
-exports.presentProductWithIdentifier = function (productId, presentationId, success, error) {
-    exec(success, error, 'Purchasely', 'presentProductWithIdentifier', [productId, presentationId, null, false]);
-};
-
 exports.presentPlanWithIdentifier = function (planId, presentationId, contentId, isFullscreen, success, error) {
     exec(success, error, 'Purchasely', 'presentPlanWithIdentifier', [planId, presentationId, contentId, isFullscreen]);
-};
-
-exports.presentPlanWithIdentifier = function (planId, presentationId, contentId, success, error) {
-    exec(success, error, 'Purchasely', 'presentPlanWithIdentifier', [planId, presentationId, contentId, false]);
-};
-
-exports.presentPlanWithIdentifier = function (planId, presentationId, success, error) {
-    exec(success, error, 'Purchasely', 'presentPlanWithIdentifier', [planId, presentationId, null, false]);
 };
 
 exports.presentSubscriptions = function () {
