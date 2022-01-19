@@ -30,7 +30,7 @@ function onDeviceReady() {
 	console.log("Hi");
 
 	Purchasely.setLanguage('en')
-	
+
 	Purchasely.startWithAPIKey(
 		'afa96c76-1d8e-4e3c-a48f-204a3cd93a15',
 		['Google'],
@@ -159,9 +159,9 @@ function onPuchaselySdkReady() {
 
 function openPresentation() {
 	Purchasely.presentPresentationWithIdentifier(
-		'default',
 		null,
-		false,
+		null,
+		true,
 		(callback) => {
 			console.log(callback);
 			if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
