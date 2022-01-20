@@ -17,6 +17,7 @@
 	NSInteger logLevel = [[command argumentAtIndex:3] intValue];
 	NSInteger runningMode = [[command argumentAtIndex:4] intValue];
 
+	[Purchasely setAppTechnology:PLYAppTechnologyCordova];
     [Purchasely startWithAPIKey:apiKey appUserId:userId runningMode:runningMode eventDelegate:nil uiDelegate:nil paywallActionsInterceptor:nil logLevel:logLevel initialized:^(BOOL initialized, NSError * _Nullable error) {
         if (error != nil) {
             [self failureFor:command resultString: error.localizedDescription];
@@ -24,7 +25,6 @@
             [self successFor:command resultBool:initialized];
         }
     }];
-	[Purchasely setAppTechnology:PLYAppTechnologyCordova];
 }
 
 - (void)setLogLevel:(CDVInvokedUrlCommand*)command {
