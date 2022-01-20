@@ -28,6 +28,7 @@ Purchasely.startWithAPIKey(
 Purchasely.presentPresentationWithIdentifier(
     'my_presentation_id', // may be null
     'my_content_id', // may be null
+    false, //display in fullscreen mode
     (callback) => {
         console.log(callback);
         if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
