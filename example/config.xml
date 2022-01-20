@@ -18,6 +18,16 @@
     <platform name="android">
         <allow-intent href="market:*" />
         <preference name="AndroidXEnabled" value="true" />
+        <!--<edit-config
+            file="AndroidManifest.xml"
+            target="/manifest/application/activity[@android:name='cordova.plugin.purchasely.PLYProductActivity']"
+            mode="overwrite">
+            <activity
+                android:label="PLYProductActivity"
+                android:name="cordova.plugin.purchasely.PLYProductActivity"
+                android:theme="@style/Theme.Purchasely.Fullscreen">
+            </activity>
+        </edit-config>-->
     </platform>
     <platform name="ios">
         <allow-intent href="itms:*" />

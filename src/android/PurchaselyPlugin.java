@@ -123,6 +123,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
                     presentPresentationWithIdentifier(
                         args.getString(0),
                         args.getString(1),
+                        args.getBoolean(2),
                         callbackContext
                         );
                     break;
@@ -131,6 +132,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
                         args.getString(0),
                         args.getString(1),
                         args.getString(2),
+                        args.getBoolean(3),
                         callbackContext
                     );
                     break;
@@ -139,6 +141,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
                         args.getString(0),
                         args.getString(1),
                         args.getString(2),
+                        args.getBoolean(3),
                         callbackContext
                     );
                     break;
@@ -376,36 +379,42 @@ public class PurchaselyPlugin extends CordovaPlugin {
     }
 
     private void presentPresentationWithIdentifier(String presentationVendorId,
-                                                    String contentId,
+                                                   String contentId,
+                                                   boolean isFullScreen,
                                                    CallbackContext callbackContext) {
         presentationCallback = callbackContext;
         Intent intent = PLYProductActivity.newIntent(cordova.getActivity());
         intent.putExtra("presentationId", presentationVendorId);
         intent.putExtra("contentId", contentId);
+        intent.putExtra("isFullScreen", isFullScreen);
         cordova.getActivity().startActivity(intent);
     }
 
     private void presentProductWithIdentifier(String productVendorId,
                                               String presentationVendorId,
                                               String contentId,
+                                              boolean isFullScreen,
                                               CallbackContext callbackContext) {
         presentationCallback = callbackContext;
         Intent intent = PLYProductActivity.newIntent(cordova.getActivity());
         intent.putExtra("presentationId", presentationVendorId);
         intent.putExtra("productId", productVendorId);
         intent.putExtra("contentId", contentId);
+        intent.putExtra("isFullScreen", isFullScreen);
         cordova.getActivity().startActivity(intent);
     }
 
     private void presentPlanWithIdentifier(String planVendorId,
                                           String presentationVendorId,
                                           String contentId,
+                                          boolean isFullScreen,
                                           CallbackContext callbackContext) {
         presentationCallback = callbackContext;
         Intent intent = PLYProductActivity.newIntent(cordova.getActivity());
         intent.putExtra("presentationId", presentationVendorId);
         intent.putExtra("planId", planVendorId);
         intent.putExtra("contentId", contentId);
+        intent.putExtra("isFullScreen", isFullScreen);
         cordova.getActivity().startActivity(intent);
     }
 

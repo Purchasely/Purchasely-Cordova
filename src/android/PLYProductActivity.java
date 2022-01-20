@@ -6,6 +6,7 @@ import android.os.Bundle;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.WindowCompat;
 import androidx.fragment.app.Fragment;
 
 import java.lang.ref.WeakReference;
@@ -18,6 +19,12 @@ public class PLYProductActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable @org.jetbrains.annotations.Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        boolean isFullScreen = getIntent().getExtras().getBoolean("isFullScreen");
+        if(isFullScreen) {
+            WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        }
+
         String package_name = getApplication().getPackageName();
         setContentView(getApplication().getResources()
                 .getIdentifier("activity_ply_product_activity",
