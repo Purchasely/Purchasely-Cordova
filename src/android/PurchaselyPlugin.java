@@ -556,9 +556,14 @@ public class PurchaselyPlugin extends CordovaPlugin {
                 (info, plyPresentationAction, map, plyProcessActionListener) -> {
             processActionListener = plyProcessActionListener;
 
+            String url = null;
+            if(map.getUrl() != null) {
+                url = map.getUrl().toString();
+            }
+
             HashMap<String, Object> parametersForCordova = new HashMap<>();
             parametersForCordova.put("title", map.getTitle());
-            parametersForCordova.put("url", map.getUrl());
+            parametersForCordova.put("url", url);
             parametersForCordova.put("plan", transformPlanToMap(map.getPlan()));
             parametersForCordova.put("presentation", map.getPresentation());
 
