@@ -127,6 +127,14 @@ public class PurchaselyPlugin extends CordovaPlugin {
                         callbackContext
                         );
                     break;
+                case "presentPresentationForPlacement":
+                    presentPresentationForPlacement(
+                            args.getString(0),
+                            args.getString(1),
+                            args.getBoolean(2),
+                            callbackContext
+                    );
+                    break;
                 case "presentProductWithIdentifier":
                     presentProductWithIdentifier(
                         args.getString(0),
@@ -390,6 +398,18 @@ public class PurchaselyPlugin extends CordovaPlugin {
         cordova.getActivity().startActivity(intent);
     }
 
+    private void presentPresentationForPlacement(String placementVendorId,
+                                                   String contentId,
+                                                   boolean isFullScreen,
+                                                   CallbackContext callbackContext) {
+        presentationCallback = callbackContext;
+        Intent intent = PLYProductActivity.newIntent(cordova.getActivity());
+        intent.putExtra("placementId", placementVendorId);
+        intent.putExtra("contentId", contentId);
+        intent.putExtra("isFullScreen", isFullScreen);
+        cordova.getActivity().startActivity(intent);
+    }
+
     private void presentProductWithIdentifier(String productVendorId,
                                               String presentationVendorId,
                                               String contentId,
@@ -570,6 +590,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
             HashMap<String, Object> infoMap = new HashMap<>();
             if(info.getContentId() != null) infoMap.put("contentId", info.getContentId());
             if(info.getPresentationId() != null) infoMap.put("presentationId", info.getPresentationId());
+            if(info.getPlacementId() != null) infoMap.put("placementId", info.getPlacementId());
 
             HashMap<String, Object> resultForCordova = new HashMap<>();
             resultForCordova.put("info", infoMap);
