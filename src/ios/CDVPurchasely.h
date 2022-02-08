@@ -28,6 +28,7 @@
 - (void)isReadyToPurchase:(CDVInvokedUrlCommand*)command;
 - (void)setDefaultPresentationResultHandler:(CDVInvokedUrlCommand*)command;
 - (void)presentPresentationWithIdentifier:(CDVInvokedUrlCommand*)command;
+- (void)presentPresentationForPlacement:(CDVInvokedUrlCommand*)command;
 - (void)presentPlanWithIdentifier:(CDVInvokedUrlCommand*)command;
 - (void)presentProductWithIdentifier:(CDVInvokedUrlCommand*)command;
 - (void)presentSubscriptions:(CDVInvokedUrlCommand*)command;
