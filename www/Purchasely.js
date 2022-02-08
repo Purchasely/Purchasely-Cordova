@@ -50,6 +50,10 @@ exports.presentPresentationWithIdentifier = function (presentationId, contentId,
     exec(success, error, 'Purchasely', 'presentPresentationWithIdentifier', [presentationId, contentId, isFullscreen]);
 };
 
+exports.presentPresentationForPlacement = function (placementId, contentId, isFullscreen, success, error) {
+    exec(success, error, 'Purchasely', 'presentPresentationForPlacement', [placementId, contentId, isFullscreen]);
+};
+
 exports.presentProductWithIdentifier = function (productId, presentationId, contentId, isFullscreen, success, error) {
     exec(success, error, 'Purchasely', 'presentProductWithIdentifier', [productId, presentationId, contentId, isFullscreen]);
 };

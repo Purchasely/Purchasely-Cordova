@@ -33,12 +33,15 @@ public class PLYProductActivity extends AppCompatActivity {
         );
 
         String presentationId = getIntent().getExtras().getString("presentationId");
+        String placementId = getIntent().getExtras().getString("placementId");
         String productId = getIntent().getExtras().getString("productId");
         String planId = getIntent().getExtras().getString("planId");
         String contentId = getIntent().getExtras().getString("contentId");
 
         Fragment fragment;
-        if(planId != null && !planId.isEmpty()) {
+        if(placementId != null && !placementId.isEmpty()) {
+            fragment = Purchasely.presentationFragmentForPlacement(placementId, contentId, null, listener);
+        } else if(planId != null && !planId.isEmpty()) {
             fragment = Purchasely.planFragment(planId, presentationId, contentId, null, listener);
         } else if(productId != null && !productId.isEmpty()) {
             fragment = Purchasely.productFragment(productId, presentationId, contentId, null, listener);
