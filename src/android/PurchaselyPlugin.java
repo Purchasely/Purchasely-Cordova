@@ -61,9 +61,9 @@ public class PurchaselyPlugin extends CordovaPlugin {
             switch (action) {
                 case "startWithAPIKey":
                     startWithAPIKey(
-                            args.getString(0),
+                            getStringFromJson(args.getString(0)),
                             args.getJSONArray(1),
-                            args.getString(2),
+                            getStringFromJson(args.getString(2)),
                             args.getInt(3),
                             args.getBoolean(4),
                             callbackContext);
@@ -81,19 +81,19 @@ public class PurchaselyPlugin extends CordovaPlugin {
                     getAnonymousUserId(callbackContext);
                     break;
                 case "userLogin":
-                    userLogin(args.getString(0), callbackContext);
+                    userLogin(getStringFromJson(args.getString(0)), callbackContext);
                     break;
                 case "userLogout":
                     userLogout();
                     break;
                 case "setLanguage":
-                    setLanguage(args.getString(0));
+                    setLanguage(getStringFromJson(args.getString(0)));
                     break;
                 case "setLogLevel":
                     setLogLevel(args.getInt(0));
                     break;
                 case "setAttribute":
-                    setAttribute(args.getInt(0), args.getString(1));
+                    setAttribute(args.getInt(0), getStringFromJson(args.getString(1)));
                     break;
                 case "setDefaultPresentationResultHandler":
                     setDefaultPresentationResultHandler(callbackContext);
@@ -109,24 +109,24 @@ public class PurchaselyPlugin extends CordovaPlugin {
                     break;
                 case "presentPresentationWithIdentifier":
                     presentPresentationWithIdentifier(
-                        args.getString(0),
-                        args.getString(1),
+                        getStringFromJson(args.getString(0)),
+                        getStringFromJson(args.getString(1)),
                         callbackContext
                         );
                     break;
                 case "presentProductWithIdentifier":
                     presentProductWithIdentifier(
-                        args.getString(0),
-                        args.getString(1),
-                        args.getString(2),
+                        getStringFromJson(args.getString(0)),
+                        getStringFromJson(args.getString(1)),
+                        getStringFromJson(args.getString(2)),
                         callbackContext
                     );
                     break;
                 case "presentPlanWithIdentifier":
                     presentPlanWithIdentifier(
-                        args.getString(0),
-                        args.getString(1),
-                        args.getString(2),
+                        getStringFromJson(args.getString(0)),
+                        getStringFromJson(args.getString(1)),
+                        getStringFromJson(args.getString(2)),
                         callbackContext
                     );
                     break;
@@ -143,21 +143,21 @@ public class PurchaselyPlugin extends CordovaPlugin {
                     userSubscriptions(callbackContext);
                     break;
                 case "handle":
-                    handle(args.getString(0), callbackContext);
+                    handle(getStringFromJson(args.getString(0)), callbackContext);
                     break;
                 case "allProducts":
                     allProducts(callbackContext);
                     break;
                 case "productWithIdentifier":
-                    productWithIdentifier(args.getString(0), callbackContext);
+                    productWithIdentifier(getStringFromJson(args.getString(0)), callbackContext);
                     break;
                 case "planWithIdentifier":
-                    planWithIdentifier(args.getString(0), callbackContext);
+                    planWithIdentifier(getStringFromJson(args.getString(0)), callbackContext);
                     break;
                 case "purchaseWithPlanVendorId":
                     purchaseWithPlanVendorId(
-                        args.getString(0),
-                        args.getString(1),
+                        getStringFromJson(args.getString(0)),
+                        getStringFromJson(args.getString(1)),
                         callbackContext
                     );
                     break;
@@ -181,6 +181,14 @@ public class PurchaselyPlugin extends CordovaPlugin {
         }
 
         return true;
+    }
+
+    private String getStringFromJson(String value) {
+        if(value == null || value.equals("null") || value.isEmpty()) {
+            return null;
+        }
+
+        return value;
     }
 
     public static void sendPurchaseResult(PLYProductViewResult result, PLYPlan plan) {
