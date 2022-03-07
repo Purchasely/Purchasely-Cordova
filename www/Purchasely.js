@@ -3,7 +3,11 @@ var exec = require('cordova/exec');
 var defaultError = (e) => { console.log(e); }
 
 exports.startWithAPIKey = function (apiKey, stores, userId, logLevel, runningMode, success, error) {
-    exec(success, error, 'Purchasely', 'startWithAPIKey', [apiKey, stores, userId, logLevel, runningMode]);
+    var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
+    if(!cordovaSdkVersion) {
+        cordovaSdkVersion = "2.2.0" //fallback if we cannot find version from metadata
+    }
+    exec(success, error, 'Purchasely', 'startWithAPIKey', [apiKey, stores, userId, logLevel, runningMode, cordovaSdkVersion]);
 };
 
 exports.addEventsListener = function (success, error) {

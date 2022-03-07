@@ -78,6 +78,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
                             getStringFromJson(args.getString(2)),
                             args.getInt(3),
                             args.getInt(4),
+                            getStringFromJson(args.getString(5)),
                             callbackContext);
                     break;
                 case "close":
@@ -240,6 +241,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
                                  String userId,
                                  int logLevel,
                                  int runningMode,
+                                 String cordovaSdkVersion,
                                  CallbackContext callbackContext) {
         ArrayList<String> list = new ArrayList<>();
         for (int i=0; i< stores.length(); i++) {
@@ -265,6 +267,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
                 .logLevel(LogLevel.values()[logLevel])
                 .build();
 
+        Purchasely.setSdkBridgeVersion(cordovaSdkVersion);
         Purchasely.setAppTechnology(PLYAppTechnology.CORDOVA);
 
         Purchasely.start((isConfigured, error) -> {
