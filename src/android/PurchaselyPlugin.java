@@ -602,6 +602,8 @@ public class PurchaselyPlugin extends CordovaPlugin {
             if(info.getContentId() != null) infoMap.put("contentId", info.getContentId());
             if(info.getPresentationId() != null) infoMap.put("presentationId", info.getPresentationId());
             if(info.getPlacementId() != null) infoMap.put("placementId", info.getPlacementId());
+            if(info.getAbTestId() != null) infoMap.put("abTestId", info.getAbTestId());
+            if(info.getAbTestVariantId() != null) infoMap.put("abTestVariantId", info.getAbTestVariantId());
 
             HashMap<String, Object> resultForCordova = new HashMap<>();
             resultForCordova.put("info", infoMap);
