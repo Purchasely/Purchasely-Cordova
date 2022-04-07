@@ -1,185 +1,231 @@
-var exec = require('cordova/exec');
+import { exec } from "cordova";
 
-var defaultError = (e) => { console.log(e); }
-
-exports.startWithAPIKey = function (apiKey, stores, userId, logLevel, runningMode, success, error) {
-    var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
-    if(!cordovaSdkVersion) {
-        cordovaSdkVersion = "2.2.0" //fallback if we cannot find version from metadata
-    }
-    exec(success, error, 'Purchasely', 'startWithAPIKey', [apiKey, stores, userId, logLevel, runningMode, cordovaSdkVersion]);
+const defaultError = (e) => {
+  console.log(e);
 };
 
-exports.addEventsListener = function (success, error) {
-    exec(success, error, 'Purchasely', 'addEventsListener', []);
+export const startWithAPIKey = (
+  apiKey,
+  stores,
+  userId,
+  logLevel,
+  runningMode,
+  success,
+  error
+) => {
+  let cordovaSdkVersion =
+    cordova.define.moduleMap["cordova/plugin_list"].exports["metadata"][
+      "cordova-plugin-purchasely"
+    ];
+  if (!cordovaSdkVersion) {
+    cordovaSdkVersion = "2.2.0"; //fallback if we cannot find version from metadata
+  }
+  exec(success, error, "Purchasely", "startWithAPIKey", [
+    apiKey,
+    stores,
+    userId,
+    logLevel,
+    runningMode,
+    cordovaSdkVersion,
+  ]);
 };
 
-exports.removeEventsListener = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'removeEventsListener', []);
+export const addEventsListener = (success, error) =>
+  exec(success, error, "Purchasely", "addEventsListener", []);
+
+export const removeEventsListener = () =>
+  exec(() => {}, defaultError, "Purchasely", "removeEventsListener", []);
+
+export const getAnonymousUserId = (success, error) =>
+  exec(success, error, "Purchasely", "getAnonymousUserId", []);
+
+export const userLogin = (userId, success) =>
+  exec(success, defaultError, "Purchasely", "userLogin", [userId]);
+
+export const userLogout = () =>
+  exec(() => {}, defaultError, "Purchasely", "userLogout", []);
+
+export const setLogLevel = (logLevel) =>
+  exec(() => {}, defaultError, "Purchasely", "setLogLevel", [logLevel]);
+
+export const setAttribute = (attribute, value) =>
+  exec(() => {}, defaultError, "Purchasely", "setAttribute", [
+    attribute,
+    value,
+  ]);
+
+export const isReadyToPurchase = (isReady) =>
+  exec(() => {}, defaultError, "Purchasely", "isReadyToPurchase", [isReady]);
+
+export const setDefaultPresentationResultHandler = (success, error) =>
+  exec(success, error, "Purchasely", "setDefaultPresentationResultHandler", []);
+
+export const synchronize = () =>
+  exec(() => {}, defaultError, "Purchasely", "synchronize", []);
+
+export const presentPresentationWithIdentifier = (
+  presentationId,
+  contentId,
+  isFullscreen,
+  success,
+  error
+) =>
+  exec(success, error, "Purchasely", "presentPresentationWithIdentifier", [
+    presentationId,
+    contentId,
+    isFullscreen,
+  ]);
+
+export const presentPresentationForPlacement = (
+  placementId,
+  contentId,
+  isFullscreen,
+  success,
+  error
+) =>
+  exec(success, error, "Purchasely", "presentPresentationForPlacement", [
+    placementId,
+    contentId,
+    isFullscreen,
+  ]);
+
+export const presentProductWithIdentifier = (
+  productId,
+  presentationId,
+  contentId,
+  isFullscreen,
+  success,
+  error
+) =>
+  exec(success, error, "Purchasely", "presentProductWithIdentifier", [
+    productId,
+    presentationId,
+    contentId,
+    isFullscreen,
+  ]);
+
+export const presentPlanWithIdentifier = (
+  planId,
+  presentationId,
+  contentId,
+  isFullscreen,
+  success,
+  error
+) =>
+  exec(success, error, "Purchasely", "presentPlanWithIdentifier", [
+    planId,
+    presentationId,
+    contentId,
+    isFullscreen,
+  ]);
+
+export const presentSubscriptions = () =>
+  exec(() => {}, defaultError, "Purchasely", "presentSubscriptions", []);
+
+export const purchaseWithPlanVendorId = (
+  planId,
+  contentId = null,
+  success,
+  error
+) =>
+  exec(success, error, "Purchasely", "purchaseWithPlanVendorId", [
+    planId,
+    contentId,
+  ]);
+
+export const restoreAllProducts = (success, error) =>
+  exec(success, error, "Purchasely", "restoreAllProducts", []);
+
+export const silentRestoreAllProducts = (success, error) =>
+  exec(success, error, "Purchasely", "silentRestoreAllProducts", []);
+
+export const purchasedSubscription = (success, error) =>
+  exec(success, error, "Purchasely", "purchasedSubscription", []);
+
+export const handle = (deepLink, success, error) =>
+  exec(success, error, "Purchasely", "handle", [deepLink]);
+
+export const allProducts = (success, error) =>
+  exec(success, defaultError, "Purchasely", "allProducts", []);
+
+export const planWithIdentifier = (planId, success) =>
+  exec(success, defaultError, "Purchasely", "planWithIdentifier", [planId]);
+
+export const productWithIdentifier = (productId, success) =>
+  exec(success, defaultError, "Purchasely", "productWithIdentifier", [
+    productId,
+  ]);
+
+export const setPaywallActionInterceptor = (success) =>
+  exec(success, defaultError, "Purchasely", "setPaywallActionInterceptor", []);
+
+export const onProcessAction = (processAction) =>
+  exec(() => {}, defaultError, "Purchasely", "onProcessAction", [
+    processAction,
+  ]);
+
+export const closePaywall = () =>
+  exec(() => {}, defaultError, "Purchasely", "closePaywall", []);
+
+export const userSubscriptions = (success, error) =>
+  exec(success, defaultError, "Purchasely", "userSubscriptions", []);
+
+export const setLanguage = (language) =>
+  exec(() => {}, defaultError, "Purchasely", "setLanguage", [language]);
+
+export const LogLevel = {
+  DEBUG: 0,
+  INFO: 1,
+  WARN: 2,
+  ERROR: 3,
 };
 
-exports.getAnonymousUserId = function (success, error) {
-    exec(success, error, 'Purchasely', 'getAnonymousUserId', []);
+export const Attribute = {
+  AMPLITUDE_SESSION_ID: 0,
+  FIREBASE_APP_INSTANCE_ID: 1,
+  AIRSHIP_CHANNEL_ID: 2,
+  BATCH_INSTALLATION_ID: 3,
+  ADJUST_ID: 4,
+  APPSFLYER_ID: 5,
+  ONESIGNAL_PLAYER_ID: 6,
 };
 
-exports.userLogin = function (userId, success) {
-    exec(success, defaultError, 'Purchasely', 'userLogin', [userId]);
+export const PurchaseResult = {
+  PURCHASED: 0,
+  CANCELLED: 1,
+  RESTORED: 2,
 };
 
-exports.userLogout = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'userLogout', []);
+export const SubscriptionSource = {
+  appleAppStore: 0,
+  googlePlayStore: 1,
+  amazonAppstore: 2,
+  huaweiAppGallery: 3,
+  none: 4,
 };
 
-exports.setLogLevel = function (logLevel) {
-    exec(() => {}, defaultError, 'Purchasely', 'setLogLevel', [logLevel]);
+export const PlanType = {
+  consumable: 0,
+  nonConsumable: 1,
+  autoRenewingSubscription: 2,
+  nonRenewingSubscription: 3,
+  unknown: 4,
 };
 
-exports.setAttribute = function (attribute, value) {
-    exec(() => {}, defaultError, 'Purchasely', 'setAttribute', [attribute, value]);
+export const RunningMode = {
+  transactionOnly: 0,
+  observer: 1,
+  paywallOnly: 2,
+  paywallObserver: 3,
+  full: 4,
 };
 
-exports.isReadyToPurchase = function (isReady) {
-    exec(() => {}, defaultError, 'Purchasely', 'isReadyToPurchase', [isReady]);
+export const PaywallAction = {
+  close: "close",
+  login: "login",
+  navigate: "navigate",
+  purchase: "purchase",
+  restore: "restore",
+  open_presentation: "open_presentation",
+  promo_code: "promo_code",
 };
-
-exports.setDefaultPresentationResultHandler = function (success, error) {
-    exec(success, error, 'Purchasely', 'setDefaultPresentationResultHandler', []);
-};
-
-exports.synchronize = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'synchronize', []);
-};
-
-exports.presentPresentationWithIdentifier = function (presentationId, contentId, isFullscreen, success, error) {
-    exec(success, error, 'Purchasely', 'presentPresentationWithIdentifier', [presentationId, contentId, isFullscreen]);
-};
-
-exports.presentPresentationForPlacement = function (placementId, contentId, isFullscreen, success, error) {
-    exec(success, error, 'Purchasely', 'presentPresentationForPlacement', [placementId, contentId, isFullscreen]);
-};
-
-exports.presentProductWithIdentifier = function (productId, presentationId, contentId, isFullscreen, success, error) {
-    exec(success, error, 'Purchasely', 'presentProductWithIdentifier', [productId, presentationId, contentId, isFullscreen]);
-};
-
-exports.presentPlanWithIdentifier = function (planId, presentationId, contentId, isFullscreen, success, error) {
-    exec(success, error, 'Purchasely', 'presentPlanWithIdentifier', [planId, presentationId, contentId, isFullscreen]);
-};
-
-exports.presentSubscriptions = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'presentSubscriptions', []);
-};
-
-exports.purchaseWithPlanVendorId = function (planId, contentId, success, error) {
-    exec( success, error, 'Purchasely', 'purchaseWithPlanVendorId', [planId, contentId]);
-};
-
-exports.purchaseWithPlanVendorId = function (planId, success, error) {
-    exec( success, error, 'Purchasely', 'purchaseWithPlanVendorId', [planId, null]);
-};
-
-exports.restoreAllProducts = function (success, error) {
-    exec(success, error, 'Purchasely', 'restoreAllProducts', []);
-};
-
-exports.silentRestoreAllProducts = function (success, error) {
-    exec(success, error, 'Purchasely', 'silentRestoreAllProducts', []);
-};
-
-exports.purchasedSubscription = function (success, error) {
-    exec(success, error, 'Purchasely', 'purchasedSubscription', []);
-};
-
-exports.handle = function (deepLink, success, error) {
-    exec(success, error, 'Purchasely', 'handle', [deepLink]);
-};
-
-exports.allProducts = function (success, error) {
-    exec(success, defaultError, 'Purchasely', 'allProducts', []);
-};
-
-exports.planWithIdentifier = function (planId, success) {
-    exec(success, defaultError, 'Purchasely', 'planWithIdentifier', [planId]);
-};
-
-exports.productWithIdentifier = function (productId, success) {
-    exec(success, defaultError, 'Purchasely', 'productWithIdentifier', [productId]);
-};
-
-exports.setPaywallActionInterceptor = function (success) {
-    exec(success, defaultError, 'Purchasely', 'setPaywallActionInterceptor', []);
-};
-
-exports.onProcessAction = function (processAction) {
-    exec(() => {}, defaultError, 'Purchasely', 'onProcessAction', [processAction]);
-};
-
-exports.closePaywall = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'closePaywall', []);
-};
-
-exports.userSubscriptions = function (success, error) {
-    exec(success, defaultError, 'Purchasely', 'userSubscriptions', []);
-};
-
-exports.setLanguage = function (language) {
-    exec(() => {}, defaultError, 'Purchasely', 'setLanguage', [language]);
-};
-
-exports.LogLevel = {
-	DEBUG: 0,
-	INFO: 1,
-	WARN: 2,
-	ERROR: 3,
-}
-
-exports.Attribute = {
-	AMPLITUDE_SESSION_ID: 0,
-	FIREBASE_APP_INSTANCE_ID: 1,
-	AIRSHIP_CHANNEL_ID: 2,
-    BATCH_INSTALLATION_ID: 3,
-    ADJUST_ID: 4,
-    APPSFLYER_ID: 5,
-    ONESIGNAL_PLAYER_ID: 6
-}
-
-exports.PurchaseResult = {
-	PURCHASED: 0,
-	CANCELLED: 1,
-	RESTORED: 2
-}
-
-exports.SubscriptionSource = {
-    appleAppStore: 0,
-    googlePlayStore: 1,
-    amazonAppstore: 2,
-    huaweiAppGallery: 3,
-    none: 4
-}
-
-exports.PlanType = {
-    consumable: 0,
-    nonConsumable: 1,
-    autoRenewingSubscription: 2,
-    nonRenewingSubscription: 3,
-    unknown: 4
-}
-
-
-exports.RunningMode = {
-    transactionOnly: 0,
-    observer: 1,
-    paywallOnly: 2,
-    paywallObserver: 3,
-    full: 4
-}
-
-exports.PaywallAction = {
-    close: 'close',
-    login: 'login',
-    navigate: 'navigate',
-    purchase: 'purchase',
-    restore: 'restore',
-    open_presentation: 'open_presentation',
-    promo_code: 'promo_code',
-}
