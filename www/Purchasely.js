@@ -3,7 +3,11 @@ var exec = require('cordova/exec');
 var defaultError = (e) => { console.log(e); }
 
 exports.startWithAPIKey = function (apiKey, stores, userId, logLevel, runningMode, success, error) {
-    exec(success, error, 'Purchasely', 'startWithAPIKey', [apiKey, stores, userId, logLevel, runningMode]);
+    var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
+    if(!cordovaSdkVersion) {
+        cordovaSdkVersion = "2.2.0" //fallback if we cannot find version from metadata
+    }
+    exec(success, error, 'Purchasely', 'startWithAPIKey', [apiKey, stores, userId, logLevel, runningMode, cordovaSdkVersion]);
 };
 
 exports.addEventsListener = function (success, error) {
@@ -133,7 +137,10 @@ exports.Attribute = {
 	AMPLITUDE_SESSION_ID: 0,
 	FIREBASE_APP_INSTANCE_ID: 1,
 	AIRSHIP_CHANNEL_ID: 2,
-    BATCH_INSTALLATION_ID: 3
+    BATCH_INSTALLATION_ID: 3,
+    ADJUST_ID: 4,
+    APPSFLYER_ID: 5,
+    ONESIGNAL_PLAYER_ID: 6
 }
 
 exports.PurchaseResult = {

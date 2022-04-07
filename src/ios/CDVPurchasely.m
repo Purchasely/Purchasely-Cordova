@@ -12,12 +12,13 @@
 @implementation CDVPurchasely
 
 - (void)startWithAPIKey:(CDVInvokedUrlCommand*)command {
-	NSString *apiKey = [command argumentAtIndex:0];
-	NSString *userId = [command argumentAtIndex:2];
-	NSInteger logLevel = [[command argumentAtIndex:3] intValue];
-	NSInteger runningMode = [[command argumentAtIndex:4] intValue];
+    NSString *apiKey = [command argumentAtIndex:0];
+    NSString *userId = [command argumentAtIndex:2];
+    NSInteger logLevel = [[command argumentAtIndex:3] intValue];
+    NSInteger runningMode = [[command argumentAtIndex:4] intValue];
+    NSString *sdkBridgeVersion = [command argumentAtIndex:5];
 
-	[Purchasely setAppTechnology:PLYAppTechnologyCordova];
+    [Purchasely setAppTechnology:PLYAppTechnologyCordova];
     [Purchasely startWithAPIKey:apiKey appUserId:userId runningMode:runningMode eventDelegate:nil uiDelegate:nil paywallActionsInterceptor:nil logLevel:logLevel initialized:^(BOOL initialized, NSError * _Nullable error) {
         if (error != nil) {
             [self failureFor:command resultString: error.localizedDescription];
@@ -28,50 +29,50 @@
 }
 
 - (void)setLogLevel:(CDVInvokedUrlCommand*)command {
-	NSInteger logLevel = [[command argumentAtIndex:0] intValue];
-	[Purchasely setLogLevel:logLevel];
+    NSInteger logLevel = [[command argumentAtIndex:0] intValue];
+    [Purchasely setLogLevel:logLevel];
 }
 
 - (void)userLogin:(CDVInvokedUrlCommand*)command {
-	NSString *userId = [command argumentAtIndex:0];
-	[Purchasely userLoginWith:userId shouldRefresh:^(BOOL refresh) {
-		[self successFor:command resultBool:refresh];
-	}];
+    NSString *userId = [command argumentAtIndex:0];
+    [Purchasely userLoginWith:userId shouldRefresh:^(BOOL refresh) {
+        [self successFor:command resultBool:refresh];
+    }];
 }
 
 - (void)userLogout:(CDVInvokedUrlCommand*)command {
-	[Purchasely userLogout];
+    [Purchasely userLogout];
 }
 
 - (void)setAttribute:(CDVInvokedUrlCommand*)command {
-	NSInteger attribute = [[command argumentAtIndex:0] intValue];
-	NSString *value = [command argumentAtIndex:1];
+    NSInteger attribute = [[command argumentAtIndex:0] intValue];
+    NSString *value = [command argumentAtIndex:1];
 
-	[Purchasely setAttribute:attribute value:value];
+    [Purchasely setAttribute:attribute value:value];
 }
 
 - (void)getAnonymousUserId:(CDVInvokedUrlCommand*)command {
-	NSString *anonymousId = [Purchasely anonymousUserId];
-	[self successFor:command resultString:anonymousId];
+    NSString *anonymousId = [Purchasely anonymousUserId];
+    [self successFor:command resultString:anonymousId];
 }
 
 - (void)isReadyToPurchase:(CDVInvokedUrlCommand*)command {
-	BOOL isReadyToPurchase = [[command argumentAtIndex:0] boolValue];
-	[Purchasely isReadyToPurchase: isReadyToPurchase];
+    BOOL isReadyToPurchase = [[command argumentAtIndex:0] boolValue];
+    [Purchasely isReadyToPurchase: isReadyToPurchase];
 }
 
 - (void)setDefaultPresentationResultHandler:(CDVInvokedUrlCommand*)command {
-	[Purchasely setDefaultPresentationResultHandler:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
-		NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
+    [Purchasely setDefaultPresentationResultHandler:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
+        NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
 
-		CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:resultDict];
-		[pluginResult setKeepCallbackAsBool:YES];
-		[self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-	}];
+        CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:resultDict];
+        [pluginResult setKeepCallbackAsBool:YES];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    }];
 }
 
 - (void)presentPresentationWithIdentifier:(CDVInvokedUrlCommand*)command {
-	NSString *presentationVendorId = [command argumentAtIndex:0];
+    NSString *presentationVendorId = [command argumentAtIndex:0];
     NSString *contentId = [command argumentAtIndex:1];
     BOOL isFullscreen = [[command argumentAtIndex:2] boolValue];
 
@@ -123,15 +124,15 @@
 }
 
 - (void)presentPlanWithIdentifier:(CDVInvokedUrlCommand*)command {
-	NSString *planVendorId = [command argumentAtIndex:0];
-	NSString *presentationVendorId = [command argumentAtIndex:1];
+    NSString *planVendorId = [command argumentAtIndex:0];
+    NSString *presentationVendorId = [command argumentAtIndex:1];
     NSString *contentId = [command argumentAtIndex:2];
     BOOL isFullscreen = [[command argumentAtIndex:3] boolValue];
     
     UIViewController *ctrl = [Purchasely planControllerFor:planVendorId with:presentationVendorId contentId:contentId loaded:nil completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
-		NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
-		[self successFor:command resultDict:resultDict];
-	}];
+        NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
+        [self successFor:command resultDict:resultDict];
+    }];
 
     if (ctrl != nil) {
         UINavigationController *navCtrl = [[UINavigationController alloc] initWithRootViewController:ctrl];
@@ -150,15 +151,15 @@
 }
 
 - (void)presentProductWithIdentifier:(CDVInvokedUrlCommand*)command {
-	NSString *productVendorId = [command argumentAtIndex:0];
-	NSString *presentationVendorId = [command argumentAtIndex:1];
+    NSString *productVendorId = [command argumentAtIndex:0];
+    NSString *presentationVendorId = [command argumentAtIndex:1];
     NSString *contentId = [command argumentAtIndex:2];
     BOOL isFullscreen = [[command argumentAtIndex:3] boolValue];
     
     UIViewController *ctrl = [Purchasely productControllerFor:productVendorId with:presentationVendorId contentId:contentId loaded:nil completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
-		NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
-		[self successFor:command resultDict:resultDict];
-	}];
+        NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
+        [self successFor:command resultDict:resultDict];
+    }];
 
     if (ctrl != nil) {
         UINavigationController *navCtrl = [[UINavigationController alloc] initWithRootViewController:ctrl];
@@ -177,163 +178,163 @@
 }
 
 - (void)presentSubscriptions:(CDVInvokedUrlCommand*)command {
-	UIViewController *ctrl = [Purchasely subscriptionsController];
-	UINavigationController *navCtrl = [[UINavigationController alloc] initWithRootViewController:ctrl];
-	ctrl.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem: UIBarButtonSystemItemDone target:navCtrl action:@selector(close)];
+    UIViewController *ctrl = [Purchasely subscriptionsController];
+    UINavigationController *navCtrl = [[UINavigationController alloc] initWithRootViewController:ctrl];
+    ctrl.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem: UIBarButtonSystemItemDone target:navCtrl action:@selector(close)];
 
-	[Purchasely showController:navCtrl type: PLYUIControllerTypeSubscriptionList];
+    [Purchasely showController:navCtrl type: PLYUIControllerTypeSubscriptionList];
 }
 
 - (void)purchaseWithPlanVendorId:(CDVInvokedUrlCommand*)command {
-	NSString *planVendorId = [command argumentAtIndex:0];
+    NSString *planVendorId = [command argumentAtIndex:0];
 
-	[Purchasely planWith:planVendorId
-				 success:^(PLYPlan * _Nonnull plan) {
-		[Purchasely purchaseWithPlan:plan
-							 success:^{
-			[self successFor:command resultDict: plan.asDictionary];
-		}
-							 failure:^(NSError * _Nonnull error) {
-			[self failureFor:command resultString: error.localizedDescription];
-		}];
-	}
-				 failure:^(NSError * _Nullable error) {
-		[self failureFor:command resultString: error.localizedDescription];
-	}];
+    [Purchasely planWith:planVendorId
+                 success:^(PLYPlan * _Nonnull plan) {
+        [Purchasely purchaseWithPlan:plan
+                             success:^{
+            [self successFor:command resultDict: plan.asDictionary];
+        }
+                             failure:^(NSError * _Nonnull error) {
+            [self failureFor:command resultString: error.localizedDescription];
+        }];
+    }
+                 failure:^(NSError * _Nullable error) {
+        [self failureFor:command resultString: error.localizedDescription];
+    }];
 }
 
 - (void)restoreAllProducts:(CDVInvokedUrlCommand*)command {
-	[Purchasely restoreAllProductsWithSuccess:^{
-		[self successFor:command];
-	} failure:^(NSError * _Nonnull error) {
-		[self failureFor:command resultString:error.localizedDescription];
-	}];
+    [Purchasely restoreAllProductsWithSuccess:^{
+        [self successFor:command];
+    } failure:^(NSError * _Nonnull error) {
+        [self failureFor:command resultString:error.localizedDescription];
+    }];
 }
 
 - (void)silentRestoreAllProducts:(CDVInvokedUrlCommand*)command {
-	[Purchasely silentRestoreAllProductsWithSuccess:^{
-		[self successFor:command];
-	} failure:^(NSError * _Nonnull error) {
-		[self failureFor:command resultString:error.localizedDescription];
-	}];
+    [Purchasely silentRestoreAllProductsWithSuccess:^{
+        [self successFor:command];
+    } failure:^(NSError * _Nonnull error) {
+        [self failureFor:command resultString:error.localizedDescription];
+    }];
 }
 
 - (void)purchasedSubscription:(CDVInvokedUrlCommand*)command {
-	self.purchasedCommand = command;
-	[[NSNotificationCenter defaultCenter] addObserver:self
-											 selector:@selector(reloadContent:)
-												 name: @"ply_purchasedSubscription"
-											   object:nil];
+    self.purchasedCommand = command;
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(reloadContent:)
+                                                 name: @"ply_purchasedSubscription"
+                                               object:nil];
 }
 
 - (void)allProducts:(CDVInvokedUrlCommand*)command {
-	[Purchasely allProductsWithSuccess:^(NSArray<PLYProduct *> * _Nonnull products) {
-		NSMutableArray *productsArray = [NSMutableArray array];
+    [Purchasely allProductsWithSuccess:^(NSArray<PLYProduct *> * _Nonnull products) {
+        NSMutableArray *productsArray = [NSMutableArray array];
 
-		for (PLYProduct *product in products) {
-			if (product != nil) {
-				[productsArray addObject: product.asDictionary];
-			}
-		}
+        for (PLYProduct *product in products) {
+            if (product != nil) {
+                [productsArray addObject: product.asDictionary];
+            }
+        }
 
-		[self successFor:command resultArray:productsArray];
-	} failure:^(NSError * _Nullable error) {
-		[self failureFor:command resultString:error.localizedDescription];
-	}];
+        [self successFor:command resultArray:productsArray];
+    } failure:^(NSError * _Nullable error) {
+        [self failureFor:command resultString:error.localizedDescription];
+    }];
 }
 
 - (void)productWithIdentifier:(CDVInvokedUrlCommand*)command {
-	NSString *productVendorId = [command argumentAtIndex:0];
+    NSString *productVendorId = [command argumentAtIndex:0];
 
-	[Purchasely productWith:productVendorId
-					success:^(PLYProduct * _Nonnull product) {
-		[self successFor:command resultDict:product.asDictionary];
-	}
-					failure:^(NSError * _Nullable error) {
-		[self failureFor:command resultString:error.localizedDescription];
-	}];
+    [Purchasely productWith:productVendorId
+                    success:^(PLYProduct * _Nonnull product) {
+        [self successFor:command resultDict:product.asDictionary];
+    }
+                    failure:^(NSError * _Nullable error) {
+        [self failureFor:command resultString:error.localizedDescription];
+    }];
 }
 
 - (void)planWithIdentifier:(CDVInvokedUrlCommand*)command {
-	NSString *planVendorId = [command argumentAtIndex:0];
+    NSString *planVendorId = [command argumentAtIndex:0];
 
-	[Purchasely planWith:planVendorId
-				 success:^(PLYPlan * _Nonnull plan) {
-		[self successFor:command resultDict:plan.asDictionary];
-	}
-				 failure:^(NSError * _Nullable error) {
-		[self failureFor:command resultString:error.localizedDescription];
-	}];
+    [Purchasely planWith:planVendorId
+                 success:^(PLYPlan * _Nonnull plan) {
+        [self successFor:command resultDict:plan.asDictionary];
+    }
+                 failure:^(NSError * _Nullable error) {
+        [self failureFor:command resultString:error.localizedDescription];
+    }];
 }
 
 - (void)userSubscriptions:(CDVInvokedUrlCommand*)command {
-	[Purchasely userSubscriptionsWithSuccess:^(NSArray<PLYSubscription *> * _Nullable subscriptions) {
-		NSMutableArray *result = [NSMutableArray new];
-		for (PLYSubscription *subscription in subscriptions) {
-			[result addObject:subscription.asDictionary];
-		}
-		[self successFor:command resultArray:result];
-	}
-									 failure:^(NSError * _Nonnull error) {
-		[self failureFor:command resultString:error.localizedDescription];
-	}];
+    [Purchasely userSubscriptionsWithSuccess:^(NSArray<PLYSubscription *> * _Nullable subscriptions) {
+        NSMutableArray *result = [NSMutableArray new];
+        for (PLYSubscription *subscription in subscriptions) {
+            [result addObject:subscription.asDictionary];
+        }
+        [self successFor:command resultArray:result];
+    }
+                                     failure:^(NSError * _Nonnull error) {
+        [self failureFor:command resultString:error.localizedDescription];
+    }];
 }
 
 - (void)addEventsListener:(CDVInvokedUrlCommand*)command {
-	[Purchasely setEventDelegate:self];
-	self.eventCommand = command;
+    [Purchasely setEventDelegate:self];
+    self.eventCommand = command;
 }
 
 - (void)removeEventsListener:(CDVInvokedUrlCommand*)command {
-	[Purchasely setEventDelegate:nil];
-	self.eventCommand = nil;
+    [Purchasely setEventDelegate:nil];
+    self.eventCommand = nil;
 }
 
 - (void)handle:(CDVInvokedUrlCommand*)command {
-	NSString *deeplinkString = [command argumentAtIndex:0];
-	NSURL *deeplink = [NSURL URLWithString:deeplinkString];
+    NSString *deeplinkString = [command argumentAtIndex:0];
+    NSURL *deeplink = [NSURL URLWithString:deeplinkString];
 
-	if (deeplink != nil) {
-		BOOL result = [Purchasely handleWithDeeplink:deeplink];
-		[self successFor:command resultBool:result];
-	} else {
-		[self successFor:command resultBool:NO];
-	}
+    if (deeplink != nil) {
+        BOOL result = [Purchasely handleWithDeeplink:deeplink];
+        [self successFor:command resultBool:result];
+    } else {
+        [self successFor:command resultBool:NO];
+    }
 }
 
 - (void)close:(CDVInvokedUrlCommand*)command {
 }
 
 - (void)setLanguage:(CDVInvokedUrlCommand*)command {
-	NSString *language = [command argumentAtIndex:0];
-	NSLocale *locale = [NSLocale localeWithLocaleIdentifier:language];
-	[Purchasely setLanguageFrom:locale];
+    NSString *language = [command argumentAtIndex:0];
+    NSLocale *locale = [NSLocale localeWithLocaleIdentifier:language];
+    [Purchasely setLanguageFrom:locale];
 }
 
 // Helpers
 
 - (NSDictionary<NSString *, NSObject *> *) resultDictionaryForPresentationController:(PLYProductViewControllerResult)result plan:(PLYPlan * _Nullable)plan {
-	NSMutableDictionary<NSString *, NSObject *> *productViewResult = [NSMutableDictionary new];
-	int resultString;
+    NSMutableDictionary<NSString *, NSObject *> *productViewResult = [NSMutableDictionary new];
+    int resultString;
 
-	switch (result) {
-		case PLYProductViewControllerResultPurchased:
-			resultString = PLYProductViewControllerResultPurchased;
-			break;
-		case PLYProductViewControllerResultRestored:
-			resultString = PLYProductViewControllerResultRestored;
-			break;
-		case PLYProductViewControllerResultCancelled:
-			resultString = PLYProductViewControllerResultCancelled;
-			break;
-	}
+    switch (result) {
+        case PLYProductViewControllerResultPurchased:
+            resultString = PLYProductViewControllerResultPurchased;
+            break;
+        case PLYProductViewControllerResultRestored:
+            resultString = PLYProductViewControllerResultRestored;
+            break;
+        case PLYProductViewControllerResultCancelled:
+            resultString = PLYProductViewControllerResultCancelled;
+            break;
+    }
 
-	[productViewResult setObject:[NSNumber numberWithInt:resultString] forKey:@"result"];
+    [productViewResult setObject:[NSNumber numberWithInt:resultString] forKey:@"result"];
 
-	if (plan != nil) {
-		[productViewResult setObject:[plan asDictionary] forKey:@"plan"];
-	}
-	return productViewResult;
+    if (plan != nil) {
+        [productViewResult setObject:[plan asDictionary] forKey:@"plan"];
+    }
+    return productViewResult;
 }
 
 - (NSDictionary<NSString *, NSObject *> *) resultDictionaryForActionInterceptor:(PLYPresentationAction) action
@@ -380,6 +381,13 @@
         if (infos.placementId != nil) {
             [infosResult setObject:infos.placementId forKey:@"placementId"];
         }
+        if (infos.abTestId != nil) {
+            [infosResult setObject:infos.abTestId forKey:@"abTestId"];
+        }
+        if (infos.abTestVariantId != nil) {
+            [infosResult setObject:infos.abTestVariantId forKey:@"abTestVariantId"];
+        }
+        
         [actionInterceptorResult setObject:infosResult forKey:@"info"];
     }
     if (params != nil) {
@@ -433,43 +441,43 @@
 }
 
 - (void)successFor:(CDVInvokedUrlCommand *)command {
-	CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
-	[self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
 - (void)successFor:(CDVInvokedUrlCommand *)command resultBool:(BOOL)resultBool {
-	CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsBool:resultBool];
-	[self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsBool:resultBool];
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
 - (void)successFor:(CDVInvokedUrlCommand *)command resultString:(NSString *)resultString {
-	CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:resultString];
-	[self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:resultString];
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
 - (void)failureFor:(CDVInvokedUrlCommand *)command resultString:(NSString *)resultString {
-	CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:resultString];
-	[self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:resultString];
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
 - (void)successFor:(CDVInvokedUrlCommand *)command resultArray:(NSArray *)resultArray {
-	CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArray:resultArray];
-	[self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArray:resultArray];
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
 - (void)failureFor:(CDVInvokedUrlCommand *)command resultArray:(NSArray *)resultArray {
-	CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsArray:resultArray];
-	[self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsArray:resultArray];
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
 - (void)successFor:(CDVInvokedUrlCommand *)command resultDict:(NSDictionary *)resultDict {
-	CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:resultDict];
-	[self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:resultDict];
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
 - (void)failureFor:(CDVInvokedUrlCommand *)command resultDict:(NSDictionary *)resultDict {
-	CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsDictionary:resultDict];
-	[self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsDictionary:resultDict];
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
 

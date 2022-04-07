@@ -156,10 +156,10 @@ function onPuchaselySdkReady() {
 }
 
 function openPresentation() {
-	Purchasely.presentPresentationWithIdentifier(
-		null,
-		null,
-		true,
+	Purchasely.presentPresentationForPlacement(
+		'onboarding', //placementId
+		null, //contentId
+		true, //fullscreen
 		(callback) => {
 			console.log(callback);
 			if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
