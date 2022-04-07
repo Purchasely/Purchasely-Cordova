@@ -4,7 +4,9 @@ const defaultError = (e) => {
   console.log(e);
 };
 
-export const startWithAPIKey = (
+const Purchasely = {};
+
+Purchasely.startWithAPIKey = (
   apiKey,
   stores,
   userId,
@@ -30,40 +32,40 @@ export const startWithAPIKey = (
   ]);
 };
 
-export const addEventsListener = (success, error) =>
+Purchasely.addEventsListener = (success, error) =>
   exec(success, error, "Purchasely", "addEventsListener", []);
 
-export const removeEventsListener = () =>
+Purchasely.removeEventsListener = () =>
   exec(() => {}, defaultError, "Purchasely", "removeEventsListener", []);
 
-export const getAnonymousUserId = (success, error) =>
+Purchasely.getAnonymousUserId = (success, error) =>
   exec(success, error, "Purchasely", "getAnonymousUserId", []);
 
-export const userLogin = (userId, success) =>
+Purchasely.userLogin = (userId, success) =>
   exec(success, defaultError, "Purchasely", "userLogin", [userId]);
 
-export const userLogout = () =>
+Purchasely.userLogout = () =>
   exec(() => {}, defaultError, "Purchasely", "userLogout", []);
 
-export const setLogLevel = (logLevel) =>
+Purchasely.setLogLevel = (logLevel) =>
   exec(() => {}, defaultError, "Purchasely", "setLogLevel", [logLevel]);
 
-export const setAttribute = (attribute, value) =>
+Purchasely.setAttribute = (attribute, value) =>
   exec(() => {}, defaultError, "Purchasely", "setAttribute", [
     attribute,
     value,
   ]);
 
-export const isReadyToPurchase = (isReady) =>
+Purchasely.isReadyToPurchase = (isReady) =>
   exec(() => {}, defaultError, "Purchasely", "isReadyToPurchase", [isReady]);
 
-export const setDefaultPresentationResultHandler = (success, error) =>
+Purchasely.setDefaultPresentationResultHandler = (success, error) =>
   exec(success, error, "Purchasely", "setDefaultPresentationResultHandler", []);
 
-export const synchronize = () =>
+Purchasely.synchronize = () =>
   exec(() => {}, defaultError, "Purchasely", "synchronize", []);
 
-export const presentPresentationWithIdentifier = (
+Purchasely.presentPresentationWithIdentifier = (
   presentationId,
   contentId,
   isFullscreen,
@@ -76,7 +78,7 @@ export const presentPresentationWithIdentifier = (
     isFullscreen,
   ]);
 
-export const presentPresentationForPlacement = (
+Purchasely.presentPresentationForPlacement = (
   placementId,
   contentId,
   isFullscreen,
@@ -89,7 +91,7 @@ export const presentPresentationForPlacement = (
     isFullscreen,
   ]);
 
-export const presentProductWithIdentifier = (
+Purchasely.presentProductWithIdentifier = (
   productId,
   presentationId,
   contentId,
@@ -104,7 +106,7 @@ export const presentProductWithIdentifier = (
     isFullscreen,
   ]);
 
-export const presentPlanWithIdentifier = (
+Purchasely.presentPlanWithIdentifier = (
   planId,
   presentationId,
   contentId,
@@ -119,10 +121,10 @@ export const presentPlanWithIdentifier = (
     isFullscreen,
   ]);
 
-export const presentSubscriptions = () =>
+Purchasely.presentSubscriptions = () =>
   exec(() => {}, defaultError, "Purchasely", "presentSubscriptions", []);
 
-export const purchaseWithPlanVendorId = (
+Purchasely.purchaseWithPlanVendorId = (
   planId,
   contentId = null,
   success,
@@ -133,54 +135,54 @@ export const purchaseWithPlanVendorId = (
     contentId,
   ]);
 
-export const restoreAllProducts = (success, error) =>
+Purchasely.restoreAllProducts = (success, error) =>
   exec(success, error, "Purchasely", "restoreAllProducts", []);
 
-export const silentRestoreAllProducts = (success, error) =>
+Purchasely.silentRestoreAllProducts = (success, error) =>
   exec(success, error, "Purchasely", "silentRestoreAllProducts", []);
 
-export const purchasedSubscription = (success, error) =>
+Purchasely.purchasedSubscription = (success, error) =>
   exec(success, error, "Purchasely", "purchasedSubscription", []);
 
-export const handle = (deepLink, success, error) =>
+Purchasely.handle = (deepLink, success, error) =>
   exec(success, error, "Purchasely", "handle", [deepLink]);
 
-export const allProducts = (success, error) =>
+Purchasely.allProducts = (success, error) =>
   exec(success, defaultError, "Purchasely", "allProducts", []);
 
-export const planWithIdentifier = (planId, success) =>
+Purchasely.planWithIdentifier = (planId, success) =>
   exec(success, defaultError, "Purchasely", "planWithIdentifier", [planId]);
 
-export const productWithIdentifier = (productId, success) =>
+Purchasely.productWithIdentifier = (productId, success) =>
   exec(success, defaultError, "Purchasely", "productWithIdentifier", [
     productId,
   ]);
 
-export const setPaywallActionInterceptor = (success) =>
+Purchasely.setPaywallActionInterceptor = (success) =>
   exec(success, defaultError, "Purchasely", "setPaywallActionInterceptor", []);
 
-export const onProcessAction = (processAction) =>
+Purchasely.onProcessAction = (processAction) =>
   exec(() => {}, defaultError, "Purchasely", "onProcessAction", [
     processAction,
   ]);
 
-export const closePaywall = () =>
+Purchasely.closePaywall = () =>
   exec(() => {}, defaultError, "Purchasely", "closePaywall", []);
 
-export const userSubscriptions = (success, error) =>
+Purchasely.userSubscriptions = (success, error) =>
   exec(success, defaultError, "Purchasely", "userSubscriptions", []);
 
-export const setLanguage = (language) =>
+Purchasely.setLanguage = (language) =>
   exec(() => {}, defaultError, "Purchasely", "setLanguage", [language]);
 
-export const LogLevel = {
+Purchasely.LogLevel = {
   DEBUG: 0,
   INFO: 1,
   WARN: 2,
   ERROR: 3,
 };
 
-export const Attribute = {
+Purchasely.Attribute = {
   AMPLITUDE_SESSION_ID: 0,
   FIREBASE_APP_INSTANCE_ID: 1,
   AIRSHIP_CHANNEL_ID: 2,
@@ -190,13 +192,13 @@ export const Attribute = {
   ONESIGNAL_PLAYER_ID: 6,
 };
 
-export const PurchaseResult = {
+Purchasely.PurchaseResult = {
   PURCHASED: 0,
   CANCELLED: 1,
   RESTORED: 2,
 };
 
-export const SubscriptionSource = {
+Purchasely.SubscriptionSource = {
   appleAppStore: 0,
   googlePlayStore: 1,
   amazonAppstore: 2,
@@ -204,7 +206,7 @@ export const SubscriptionSource = {
   none: 4,
 };
 
-export const PlanType = {
+Purchasely.PlanType = {
   consumable: 0,
   nonConsumable: 1,
   autoRenewingSubscription: 2,
@@ -212,7 +214,7 @@ export const PlanType = {
   unknown: 4,
 };
 
-export const RunningMode = {
+Purchasely.RunningMode = {
   transactionOnly: 0,
   observer: 1,
   paywallOnly: 2,
@@ -220,7 +222,7 @@ export const RunningMode = {
   full: 4,
 };
 
-export const PaywallAction = {
+Purchasely.PaywallAction = {
   close: "close",
   login: "login",
   navigate: "navigate",
@@ -229,3 +231,5 @@ export const PaywallAction = {
   open_presentation: "open_presentation",
   promo_code: "promo_code",
 };
+
+export default Purchasely;
