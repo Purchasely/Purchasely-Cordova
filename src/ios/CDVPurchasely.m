@@ -16,8 +16,10 @@
     NSString *userId = [command argumentAtIndex:2];
     NSInteger logLevel = [[command argumentAtIndex:3] intValue];
     NSInteger runningMode = [[command argumentAtIndex:4] intValue];
-    NSString *sdkBridgeVersion = [command argumentAtIndex:5];
+    NSString *purchaselySdkVersion = [command argumentAtIndex:5];
 
+    [Purchasely setSdkBridgeVersion:purchaselySdkVersion];
+    
     [Purchasely setAppTechnology:PLYAppTechnologyCordova];
     [Purchasely startWithAPIKey:apiKey appUserId:userId runningMode:runningMode eventDelegate:nil uiDelegate:nil paywallActionsInterceptor:nil logLevel:logLevel initialized:^(BOOL initialized, NSError * _Nullable error) {
         if (error != nil) {
