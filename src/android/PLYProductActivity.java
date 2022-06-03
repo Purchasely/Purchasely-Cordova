@@ -63,6 +63,7 @@ public class PLYProductActivity extends AppCompatActivity {
 
         PurchaselyPlugin.ProductActivity productActivity = new PurchaselyPlugin.ProductActivity();
         productActivity.presentationId = presentationId;
+        productActivity.placementId = placementId;
         productActivity.productId = productId;
         productActivity.planId = planId;
         productActivity.contentId = contentId;

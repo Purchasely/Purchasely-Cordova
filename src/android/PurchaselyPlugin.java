@@ -669,6 +669,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
 
     public static class ProductActivity {
         String presentationId = null;
+        String placementId = null;
         String productId = null;
         String planId = null;
         String contentId = null;
@@ -681,6 +682,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
                 && !backgroundActivity.isDestroyed()) {
                 Intent intent = new Intent(cordova.getActivity(), PLYProductActivity.class);
                 intent.putExtra("presentationId", presentationId);
+                intent.putExtra("placementId", placementId);
                 intent.putExtra("productId", productId);
                 intent.putExtra("planId", planId);
                 intent.putExtra("contentId", contentId);
@@ -690,6 +692,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
             } else {
                 Intent intent = PLYProductActivity.newIntent(cordova.getActivity());
                 intent.putExtra("presentationId", presentationId);
+                intent.putExtra("placementId", placementId);
                 intent.putExtra("productId", productId);
                 intent.putExtra("planId", planId);
                 intent.putExtra("contentId", contentId);
