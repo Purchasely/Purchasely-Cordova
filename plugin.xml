@@ -28,7 +28,7 @@
                 <source url="https://github.com/CocoaPods/Specs.git"/>
             </config>
             <pods use-frameworks="true">
-                <pod name="Purchasely" spec="3.2.2"/>
+                <pod name="Purchasely" spec="3.2.3"/>
             </pods>
         </podspec>
     </platform>
