@@ -13,17 +13,18 @@
   "author": "Apache Cordova Team",
   "license": "Apache-2.0",
   "devDependencies": {
+    "@purchasely/cordova-plugin-purchasely": "^2.2.2",
     "cordova-android": "^10.1.0",
     "cordova-ios": "^6.2.0",
     "cordova-plugin-purchasely": "file:.."
   },
   "cordova": {
     "plugins": {
+      "@purchasely/cordova-plugin-purchasely": {},
       "cordova-plugin-purchasely": {}
     },
     "platforms": [
-      "android",
-      "ios"
+      "android"
     ]
   }
 }
