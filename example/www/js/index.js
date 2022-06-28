@@ -126,7 +126,7 @@ function onPuchaselySdkReady() {
 				result.parameters.url
 			);
 			console.log('prevent Purchasely SDK to navigate to website');
-			setTimeout(function(){ Purchasely.onProcessAction(true); }, 2000);
+			Purchasely.onProcessAction(true);
 		} else if (result.action === Purchasely.PaywallAction.close) {
 			console.log('User wants to close paywall');
 			Purchasely.onProcessAction(true);
