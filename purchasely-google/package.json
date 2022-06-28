@@ -1,0 +1,41 @@
+{
+  "name": "@purchasely/cordova-plugin-puchasely-google",
+  "version": "2.2.3",
+  "description": "Purchasely Google plugin for Android devices",
+  "cordova": {
+    "id": "@purchasely/cordova-plugin-puchasely-google",
+    "platforms": [
+      "android"
+    ]
+  },
+  "keywords": [
+    "ecosystem:cordova",
+    "cordova-android",
+    "purchasely",
+    "in-app",
+    "ios",
+    "android",
+    "iap",
+    "purchases",
+    "subscription",
+    "storekit",
+    "billing",
+    "google",
+    "play",
+    "app",
+    "store",
+    "huawei",
+    "hms",
+    "amazon"
+  ],
+  "author": "Purchasely",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Purchasely/Purchasely-Cordova-Sources.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Purchasely/Purchasely-Cordova-Sources/issues"
+  },
+  "homepage": "https://github.com/Purchasely/Purchasely-Cordova-Sources#readme"
+}

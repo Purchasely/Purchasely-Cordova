@@ -8,11 +8,6 @@ Purchasely is a solution to ease the integration and boost your In-App Purchase 
 cordova plugin add @purchasely/cordova-plugin-purchasely
 ```
 
-### To use Google Play In-App Purchases on Android devices
-```sh
-cordova plugin add @purchasely/cordova-plugin-purchasely-google
-```
-
 ## Usage
 
 ```js
