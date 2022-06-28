@@ -59,7 +59,8 @@ public class PurchaselyPlugin extends CordovaPlugin {
     static CallbackContext eventsCallback = null;
     static ProductActivity productActivity = null;
 
-    private PLYProcessActionListener processActionListener;
+    @Nullable private PLYProcessActionListener processActionListener;
+    @Nullable private PLYPresentationAction paywallAction;
 
     private static int runningModeTransactionOnly = 0;
     private static int runningModeObserver = 1;
@@ -586,6 +587,7 @@ public class PurchaselyPlugin extends CordovaPlugin {
         Purchasely.setPaywallActionsInterceptor(
                 (info, plyPresentationAction, map, plyProcessActionListener) -> {
             processActionListener = plyProcessActionListener;
+            paywallAction = plyPresentationAction;
 
             String url = null;
             if(map.getUrl() != null) {
@@ -620,7 +622,10 @@ public class PurchaselyPlugin extends CordovaPlugin {
     }
 
     private void closePaywall(CallbackContext callbackContext) {
-        Activity purchaselyActivity = productActivity.activity.get();
+        Activity purchaselyActivity = null;
+        if(productActivity != null && productActivity.activity != null) {
+            purchaselyActivity = productActivity.activity.get();
+        }
         Activity activity =  purchaselyActivity != null ? purchaselyActivity : cordova.getActivity();
         Intent intent = new Intent(activity, cordova.getActivity().getClass());
         intent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
@@ -628,24 +633,40 @@ public class PurchaselyPlugin extends CordovaPlugin {
     }
 
     private void onProcessAction(boolean processAction) {
-        if(processActionListener != null) {
-            if(productActivity != null) {
-                boolean softRelaunched = productActivity.relaunch(cordova);
-                if(softRelaunched) {
-                    cordova.getActivity().runOnUiThread(() -> processActionListener.processAction(processAction));
-                } else {
-                    new Thread(() -> {
-                        try {
-                            Thread.sleep(500);
-                        } catch (InterruptedException e) {
-                            Log.e("Purchasely", "process action error", e);
-                        } finally {
-                            cordova.getActivity().runOnUiThread(() -> processActionListener.processAction(processAction));
-                        }
-                    }).start();
-                }
+        if(processActionListener == null) return;
 
-            }
+        PLYPresentationAction action = PLYPresentationAction.CLOSE;
+        if(paywallAction != null) action = paywallAction;
+
+        switch (action) {
+            case PROMO_CODE:
+            case RESTORE:
+            case PURCHASE:
+            case LOGIN:
+            case OPEN_PRESENTATION:
+                processActionWithPaywallActivity(processAction);
+                break;
+            default:
+                cordova.getActivity().runOnUiThread(() -> processActionListener.processAction(processAction));
+        }
+    }
+
+    private void processActionWithPaywallActivity(boolean processAction) {
+        if(processActionListener == null) return;
+
+        boolean softRelaunched = productActivity != null && productActivity.relaunch(cordova);
+        if(softRelaunched) {
+            cordova.getActivity().runOnUiThread(() -> processActionListener.processAction(processAction));
+        } else {
+            new Thread(() -> {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    Log.e("Purchasely", "process action error", e);
+                } finally {
+                    cordova.getActivity().runOnUiThread(() -> processActionListener.processAction(processAction));
+                }
+            }).start();
         }
     }
 
@@ -673,10 +694,15 @@ public class PurchaselyPlugin extends CordovaPlugin {
         String productId = null;
         String planId = null;
         String contentId = null;
-        WeakReference<PLYProductActivity> activity = null;
+        @Nullable WeakReference<PLYProductActivity> activity = null;
 
         public boolean relaunch(CordovaInterface cordova) {
-            PLYProductActivity backgroundActivity = activity.get();
+            PLYProductActivity backgroundActivity = null;
+
+            if(activity != null) {
+                backgroundActivity = activity.get();
+            }
+
             if(backgroundActivity != null
                 && !backgroundActivity.isFinishing()
                 && !backgroundActivity.isDestroyed()) {
