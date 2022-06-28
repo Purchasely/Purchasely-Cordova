@@ -1,0 +1,18 @@
+<?xml version='1.0' encoding='utf-8'?>
+<plugin id="@purchasely/cordova-plugin-puchasely-google" version="2.2.3" xmlns="http://apache.org/cordova/ns/plugins/1.0" xmlns:android="http://schemas.android.com/apk/res/android">
+    <name>PurchaselyGoogle</name>
+    <js-module name="PurchaselyGoogle" src="www/PurchaselyGoogle.js">
+        <clobbers target="cordova.plugins.PurchaselyGoogle" />
+    </js-module>
+    <platform name="android">
+        <config-file parent="/*" target="res/xml/config.xml">
+            <feature name="PurchaselyGoogle">
+                <param name="android-package" value="cordova-plugin-puchasely-google.PurchaselyGoogle" />
+            </feature>
+        </config-file>
+        <config-file parent="/*" target="AndroidManifest.xml">
+        </config-file>
+        <framework src="io.purchasely:google-play:3.2.2" />
+        <source-file src="src/android/PurchaselyGoogle.java" target-dir="src/cordova-plugin-puchasely-google/PurchaselyGoogle" />
+    </platform>
+</plugin>
