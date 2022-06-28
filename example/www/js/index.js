@@ -30,7 +30,7 @@ function onDeviceReady() {
 	Purchasely.setLanguage('en')
 
 	Purchasely.startWithAPIKey(
-		'afa96c76-1d8e-4e3c-a48f-204a3cd93a15',
+		'fcb39be4-2ba4-4db7-bde3-2a5a1e20745d',
 		['Google'],
 		null,
 		Purchasely.LogLevel.DEBUG,
@@ -126,7 +126,7 @@ function onPuchaselySdkReady() {
 				result.parameters.url
 			);
 			console.log('prevent Purchasely SDK to navigate to website');
-			Purchasely.onProcessAction(false);
+			Purchasely.onProcessAction(true);
 		} else if (result.action === Purchasely.PaywallAction.close) {
 			console.log('User wants to close paywall');
 			Purchasely.onProcessAction(true);
@@ -144,7 +144,6 @@ function onPuchaselySdkReady() {
 			console.log('User wants to purchase');
 			//If you want to intercept it, close paywall and display your screen
 			Purchasely.closePaywall();
-			Purchasely.onProcessAction(true);
 		} else if (result.action === Purchasely.PaywallAction.restore) {
 			console.log('User wants to restore his purchases');
 			Purchasely.onProcessAction(true);
