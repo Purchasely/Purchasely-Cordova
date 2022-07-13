@@ -98,6 +98,7 @@ function onPuchaselySdkReady() {
 		console.log(plan.introPrice);
 		console.log(plan.introAmount);
 		console.log(plan.introDuration);
+		console.log('Eligible for intro offer ? ' + plan.isEligibleForIntroOffer);
 	}, (error) => {
 		console.log(error);
 	});

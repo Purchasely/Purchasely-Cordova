@@ -1,6 +1,6 @@
 {
   "name": "@purchasely/cordova-plugin-puchasely-google",
-  "version": "2.2.4",
+  "version": "2.3.0",
   "description": "Purchasely Google plugin for Android devices",
   "cordova": {
     "id": "@purchasely/cordova-plugin-puchasely-google",
