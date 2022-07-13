@@ -685,6 +685,8 @@ public class PurchaselyPlugin extends CordovaPlugin {
         } else if(plan.getType() == DistributionType.UNKNOWN) {
             map.put("type", DistributionType.UNKNOWN.ordinal());
         }
+
+        map.put("isEligibleForIntroOffer", plan.isEligibleToIntroOffer());
         return map;
     }
 
