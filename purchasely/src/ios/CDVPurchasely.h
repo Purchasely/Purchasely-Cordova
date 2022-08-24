@@ -47,5 +47,6 @@
 - (void)setPaywallActionInterceptor:(CDVInvokedUrlCommand*)command;
 - (void)onProcessAction:(CDVInvokedUrlCommand*)command;
 - (void)closePaywall:(CDVInvokedUrlCommand*)command;
+- (void)userDidConsumeSubscriptionContent:(CDVInvokedUrlCommand*)command;
 
 @end

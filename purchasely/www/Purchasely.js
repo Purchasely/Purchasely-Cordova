@@ -118,6 +118,10 @@ exports.closePaywall = function () {
     exec(() => {}, defaultError, 'Purchasely', 'closePaywall', []);
 };
 
+exports.userDidConsumeSubscriptionContent = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'userDidConsumeSubscriptionContent', []);
+};
+
 exports.userSubscriptions = function (success, error) {
     exec(success, defaultError, 'Purchasely', 'userSubscriptions', []);
 };
