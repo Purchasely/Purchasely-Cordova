@@ -5,7 +5,7 @@ var defaultError = (e) => { console.log(e); }
 exports.startWithAPIKey = function (apiKey, stores, userId, logLevel, runningMode, success, error) {
     var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
     if(!cordovaSdkVersion) {
-        cordovaSdkVersion = "2.2.0" //fallback if we cannot find version from metadata
+        cordovaSdkVersion = "2.3.0" //fallback if we cannot find version from metadata
     }
     exec(success, error, 'Purchasely', 'startWithAPIKey', [apiKey, stores, userId, logLevel, runningMode, cordovaSdkVersion]);
 };
@@ -118,6 +118,10 @@ exports.closePaywall = function () {
     exec(() => {}, defaultError, 'Purchasely', 'closePaywall', []);
 };
 
+exports.userDidConsumeSubscriptionContent = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'userDidConsumeSubscriptionContent', []);
+};
+
 exports.userSubscriptions = function (success, error) {
     exec(success, defaultError, 'Purchasely', 'userSubscriptions', []);
 };
@@ -134,15 +138,19 @@ exports.LogLevel = {
 }
 
 exports.Attribute = {
-	AMPLITUDE_SESSION_ID: 0,
-	FIREBASE_APP_INSTANCE_ID: 1,
-	AIRSHIP_CHANNEL_ID: 2,
+  AMPLITUDE_SESSION_ID: 0,
+  FIREBASE_APP_INSTANCE_ID: 1,
+  AIRSHIP_CHANNEL_ID: 2,
   BATCH_INSTALLATION_ID: 3,
   ADJUST_ID: 4,
   APPSFLYER_ID: 5,
   ONESIGNAL_PLAYER_ID: 6,
   MIXPANEL_DISTINCT_ID: 7,
-  CLEVER_TAP_ID: 8
+  CLEVER_TAP_ID: 8,
+  SENDINBLUE_USER_EMAIL: 9,
+  ITERABLE_USER_ID: 10,
+  ITERABLE_USER_EMAIL: 11,
+  AT_INTERNET_ID_CLIENT: 12
 }
 
 exports.PurchaseResult = {
