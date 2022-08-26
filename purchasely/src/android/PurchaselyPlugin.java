@@ -195,6 +195,9 @@ public class PurchaselyPlugin extends CordovaPlugin {
                 case "closePaywall":
                     closePaywall(callbackContext);
                     break;
+                case "userDidConsumeSubscriptionContent":
+                    userDidConsumeSubscriptionContent();
+                    break;
                 default:
                     return false;
             }
@@ -396,6 +399,10 @@ public class PurchaselyPlugin extends CordovaPlugin {
 
     private void synchronize() {
         Purchasely.synchronize();
+    }
+
+    private void userDidConsumeSubscriptionContent() {
+        Purchasely.userDidConsumeSubscriptionContent();
     }
 
     private void presentPresentationWithIdentifier(String presentationVendorId,

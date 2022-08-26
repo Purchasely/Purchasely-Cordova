@@ -22,8 +22,7 @@
   "cordova": {
     "plugins": {
       "cordova-plugin-puchasely-google": {},
-      "@purchasely/cordova-plugin-puchasely-google": {},
-      "cordova-plugin-purchasely": {}
+      "@purchasely/cordova-plugin-puchasely-google": {}
     },
     "platforms": [
       "android",
