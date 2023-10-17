@@ -27,13 +27,10 @@ function onDeviceReady() {
 	console.log('Running cordova-' + cordova.platformId + '@' + cordova.version);
 	document.getElementById('deviceready').classList.add('ready');
 
-	Purchasely.setLanguage('en');
-
-	Purchasely.userDidConsumeSubscriptionContent();
-
-	Purchasely.startWithAPIKey(
+	Purchasely.start(
 		'fcb39be4-2ba4-4db7-bde3-2a5a1e20745d',
 		['Google'],
+		false,
 		null,
 		Purchasely.LogLevel.DEBUG,
 		Purchasely.RunningMode.full,
@@ -43,6 +40,8 @@ function onDeviceReady() {
 		(error) => {
 			console.log(error);
 		});
+
+	Purchasely.setLanguage('en');
 
 	document.getElementById("openPresentation").addEventListener("click", openPresentation);
 	document.getElementById("presentSubscriptions").addEventListener("click", presentSubscriptions);

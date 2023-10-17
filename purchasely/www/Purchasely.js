@@ -2,12 +2,12 @@ var exec = require('cordova/exec');
 
 var defaultError = (e) => { console.log(e); }
 
-exports.startWithAPIKey = function (apiKey, stores, userId, logLevel, runningMode, success, error) {
+exports.start = function (apiKey, stores, storekit1, userId, logLevel, runningMode, success, error) {
     var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
     if(!cordovaSdkVersion) {
-        cordovaSdkVersion = "2.3.0" //fallback if we cannot find version from metadata
+        cordovaSdkVersion = "4.1.0" //fallback if we cannot find version from metadata
     }
-    exec(success, error, 'Purchasely', 'startWithAPIKey', [apiKey, stores, userId, logLevel, runningMode, cordovaSdkVersion]);
+    exec(success, error, 'Purchasely', 'start', [apiKey, stores, storekit1, userId, logLevel, runningMode, cordovaSdkVersion]);
 };
 
 exports.addEventsListener = function (success, error) {
@@ -38,8 +38,8 @@ exports.setAttribute = function (attribute, value) {
     exec(() => {}, defaultError, 'Purchasely', 'setAttribute', [attribute, value]);
 };
 
-exports.isReadyToPurchase = function (isReady) {
-    exec(() => {}, defaultError, 'Purchasely', 'isReadyToPurchase', [isReady]);
+exports.readyToOpenDeeplink = function (isReady) {
+    exec(() => {}, defaultError, 'Purchasely', 'readyToOpenDeeplink', [isReady]);
 };
 
 exports.setDefaultPresentationResultHandler = function (success, error) {
@@ -90,8 +90,8 @@ exports.purchasedSubscription = function (success, error) {
     exec(success, error, 'Purchasely', 'purchasedSubscription', []);
 };
 
-exports.handle = function (deepLink, success, error) {
-    exec(success, error, 'Purchasely', 'handle', [deepLink]);
+exports.isDeeplinkHandled = function (deepLink, success, error) {
+    exec(success, error, 'Purchasely', 'isDeeplinkHandled', [deepLink]);
 };
 
 exports.allProducts = function (success, error) {

@@ -17,7 +17,7 @@
     <allow-intent href="geo:*" />
     <platform name="android">
         <allow-intent href="market:*" />
-        <preference name="AndroidXEnabled" value="true" />
+        <preference name="GradlePluginKotlinEnabled" value="true" />
         <!--<edit-config
             file="AndroidManifest.xml"
             target="/manifest/application/activity[@android:name='cordova.plugin.purchasely.PLYProductActivity']"
