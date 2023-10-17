@@ -146,9 +146,26 @@ class PLYProductActivity : AppCompatActivity() {
 
     companion object {
         @JvmStatic
-        fun newIntent(activity: Activity?): Intent {
-            //intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
-            return Intent(activity, PLYProductActivity::class.java)
+        fun newIntent(activity: Activity?,
+                      properties: PLYPresentationViewProperties = PLYPresentationViewProperties(),
+                      isFullScreen: Boolean = false,
+                      backgroundColor: String? = null) = Intent(activity, PLYProductActivity::class.java).apply {
+            //remove old activity if still referenced to avoid issues
+            val oldActivity = PurchaselyPlugin.productActivity?.activity?.get()
+            oldActivity?.finish()
+            PurchaselyPlugin.productActivity?.activity = null
+            PurchaselyPlugin.productActivity = null
+            //flags = Intent.FLAG_ACTIVITY_NEW_TASK xor Intent.FLAG_ACTIVITY_MULTIPLE_TASK
+
+            putExtra("background_color", backgroundColor)
+            putExtra("isFullScreen", isFullScreen)
+
+            putExtra("presentationId", properties.presentationId)
+            putExtra("contentId", properties.contentId)
+            putExtra("placementId", properties.placementId)
+            putExtra("productId", properties.productId)
+            putExtra("planId", properties.planId)
         }
     }
+
 }

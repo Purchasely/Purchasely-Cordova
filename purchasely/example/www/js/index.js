@@ -44,6 +44,7 @@ function onDeviceReady() {
 	Purchasely.setLanguage('en');
 
 	document.getElementById("openPresentation").addEventListener("click", openPresentation);
+	document.getElementById("fetchPresentation").addEventListener("click", fetchPresentation);
 	document.getElementById("presentSubscriptions").addEventListener("click", presentSubscriptions);
 	document.getElementById("purchaseWithPlanVendorId").addEventListener("click", purchaseWithPlanVendorId);
 	document.getElementById("restore").addEventListener("click", restore);
@@ -168,6 +169,23 @@ function openPresentation() {
 			} else {
 				console.log("User purchased " + callback.plan.name);
 			}
+		},
+		(error) => {
+			console.log("Error with purchase : " + error);
+		}
+	);
+}
+
+function fetchPresentation() {
+	Purchasely.fetchPresentationForPlacement(
+		'onboarding', //placementId
+		null, //contentId
+		(presentation) => {
+			console.log(presentation);
+			Purchasely.presentPresentation(presentation, false, null,
+				(callback) => {}, (error) => {
+					console.log("Error with present : " + error);
+				});
 		},
 		(error) => {
 			console.log("Error with purchase : " + error);

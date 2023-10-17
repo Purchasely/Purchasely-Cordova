@@ -14,6 +14,8 @@ import io.purchasely.ext.PLYCompletionHandler
 import io.purchasely.ext.PLYEvent
 import io.purchasely.ext.PLYPresentation
 import io.purchasely.ext.PLYPresentationAction
+import io.purchasely.ext.PLYPresentationType
+import io.purchasely.ext.PLYPresentationViewProperties
 import io.purchasely.ext.PLYProductViewResult
 import io.purchasely.ext.PLYRunningMode
 import io.purchasely.ext.PLYRunningMode.Full
@@ -110,7 +112,18 @@ class PurchaselyPlugin : CordovaPlugin() {
                     args.getBoolean(3),
                     callbackContext
                 )
-
+                "fetchPresentation" -> fetchPresentation(
+                    getStringFromJson(args.getString(0)),
+                    getStringFromJson(args.getString(1)),
+                    getStringFromJson(args.getString(2)),
+                    callbackContext
+                )
+                "presentPresentation" -> presentPresentation(
+                    args.getJSONObject(0),
+                    args.getBoolean(1),
+                    getStringFromJson(args.getString(2)),
+                    callbackContext
+                )
                 "presentSubscriptions" -> presentSubscriptions()
                 "restoreAllProducts" -> restoreAllProducts(callbackContext)
                 "silentRestoreAllProducts" -> restoreAllProducts(callbackContext)
@@ -234,7 +247,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         presentationCallback = null
         paywallActionHandler = null
         productActivity = null
-        close()
+        Purchasely.close()
     }
 
     private fun addEventsListener(callbackContext: CallbackContext) {
@@ -272,7 +285,7 @@ class PurchaselyPlugin : CordovaPlugin() {
     }
 
     private fun userLogout() {
-        userLogout()
+        Purchasely.userLogout()
     }
 
     private fun setLogLevel(logLevel: Int) {
@@ -321,11 +334,11 @@ class PurchaselyPlugin : CordovaPlugin() {
     }
 
     private fun synchronize() {
-        synchronize()
+        Purchasely.synchronize()
     }
 
     private fun userDidConsumeSubscriptionContent() {
-        userDidConsumeSubscriptionContent()
+        Purchasely.userDidConsumeSubscriptionContent()
     }
 
     private fun presentPresentationWithIdentifier(
@@ -386,6 +399,65 @@ class PurchaselyPlugin : CordovaPlugin() {
         intent.putExtra("contentId", contentId)
         intent.putExtra("isFullScreen", isFullScreen)
         cordova.activity.startActivity(intent)
+    }
+
+    private fun fetchPresentation(
+        placementId: String?,
+        presentationId: String?,
+        contentId: String?,
+        callbackContext: CallbackContext) {
+        val properties = PLYPresentationViewProperties(
+            placementId = placementId,
+            presentationId = presentationId,
+            contentId = contentId)
+
+        Purchasely.fetchPresentation(properties = properties) { presentation: PLYPresentation?, error: PLYError? ->
+            if(presentation != null) {
+                presentationsLoaded.removeAll { it.id == presentation.id && it.placementId == presentation.placementId }
+                presentationsLoaded.add(presentation)
+                val map = presentation.toMap().mapValues {
+                    val value = it.value
+                    if(value is PLYPresentationType) value.ordinal
+                    else value
+                }
+
+                /*val mutableMap = map.toMutableMap().apply {
+                    this["metadata"] = presentation.metadata?.toMap()
+                    this["plans"] = (this["plans"] as List<PLYPresentationPlan>).map { it.toMap() }
+                }*/
+                callbackContext.success(JSONObject(map))
+            }
+            if(error != null) callbackContext.error(error.message ?: "Unable to fetch presentation")
+        }
+    }
+
+    private fun presentPresentation(presentationMap: JSONObject?,
+                            isFullScreen: Boolean,
+                            loadingBackgroundColor: String?,
+                            callbackContext: CallbackContext) {
+        if (presentationMap == null) {
+            callbackContext.error("presentation cannot be null")
+            return
+        }
+
+        val presentation = presentationsLoaded.lastOrNull {
+            it.id == presentationMap.getString("id")
+                    && it.placementId == presentationMap.getString("placementId")
+        }
+        if(presentation == null) {
+            callbackContext.error("presentation cannot be found")
+            return
+        }
+
+        purchaseCallback = callbackContext
+
+        cordova.activity.let { activity ->
+            val intent = PLYProductActivity.newIntent(activity, PLYPresentationViewProperties(), isFullScreen, loadingBackgroundColor).apply {
+                putExtra("presentation", presentation)
+            }
+            activity.startActivity(intent)
+        }
+
     }
 
     private fun presentSubscriptions() {
@@ -671,6 +743,10 @@ class PurchaselyPlugin : CordovaPlugin() {
         var productActivity: ProductActivity? = null
 
         var interceptorActivity: WeakReference<Activity>? = null
+
+        val presentationsLoaded = mutableListOf<PLYPresentation>()
+
+        var purchaseCallback: CallbackContext? = null
 
         private const val runningModePaywallObserver = 0
         private const val runningModeFull = 1

@@ -66,6 +66,18 @@ exports.presentPlanWithIdentifier = function (planId, presentationId, contentId,
     exec(success, error, 'Purchasely', 'presentPlanWithIdentifier', [planId, presentationId, contentId, isFullscreen]);
 };
 
+exports.fetchPresentation = function (presentationId, contentId, success, error) {
+    exec(success, error, 'Purchasely', 'fetchPresentation', [null, presentationId, contentId]);
+};
+
+exports.fetchPresentationForPlacement = function (placementId, contentId, success, error) {
+    exec(success, error, 'Purchasely', 'fetchPresentation', [placementId, null, contentId]);
+};
+
+exports.presentPresentation = function (presentation, isFullscreen, backgroundColor,success, error) {
+    exec(success, error, 'Purchasely', 'presentPresentation', [presentation, isFullscreen, backgroundColor]);
+};
+
 exports.presentSubscriptions = function () {
     exec(() => {}, defaultError, 'Purchasely', 'presentSubscriptions', []);
 };
