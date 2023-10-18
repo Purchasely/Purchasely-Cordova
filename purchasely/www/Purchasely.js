@@ -150,6 +150,38 @@ exports.closePresentation = function () {
     exec(() => {}, defaultError, 'Purchasely', 'closePresentation', []);
 };
 
+exports.setUserAttributeWithString(key, value) = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithString', [key, value]);
+};
+
+exports.setUserAttributeWithBoolean = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithBoolean', [key, value]);
+};
+
+exports.setUserAttributeWithInt = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithInt', [key, value]);
+};
+
+exports.setUserAttributeWithDouble = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDouble', [key, value]);
+};
+
+exports.setUserAttributeWithDate = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDate', [key, value]);
+};
+
+exports.userAttribute = function (key, success, error) {
+    exec(success, error, 'Purchasely', 'userAttribute', [key]);
+};
+
+exports.clearUserAttribute = function (key) {
+    exec(() => {}, defaultError, 'Purchasely', 'clearUserAttribute', [key]);
+};
+
+exports.clearUserAttributes = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'clearUserAttributes', []);
+};
+
 exports.LogLevel = {
 	DEBUG: 0,
 	INFO: 1,
@@ -158,9 +190,9 @@ exports.LogLevel = {
 }
 
 exports.Attribute = {
-  AMPLITUDE_SESSION_ID: 0,
-  FIREBASE_APP_INSTANCE_ID: 1,
-  AIRSHIP_CHANNEL_ID: 2,
+  FIREBASE_APP_INSTANCE_ID: 0,
+  AIRSHIP_CHANNEL_ID: 1,
+  AIRSHIP_USER_ID: 2,
   BATCH_INSTALLATION_ID: 3,
   ADJUST_ID: 4,
   APPSFLYER_ID: 5,
@@ -168,9 +200,17 @@ exports.Attribute = {
   MIXPANEL_DISTINCT_ID: 7,
   CLEVER_TAP_ID: 8,
   SENDINBLUE_USER_EMAIL: 9,
-  ITERABLE_USER_ID: 10,
-  ITERABLE_USER_EMAIL: 11,
-  AT_INTERNET_ID_CLIENT: 12
+  ITERABLE_USER_EMAIL: 10,
+  ITERABLE_USER_ID: 11,
+  AT_INTERNET_ID_CLIENT: 12,
+  MPARTICLE_USER_ID: 13,
+  CUSTOMERIO_USER_ID: 14,
+  CUSTOMERIO_USER_EMAIL: 15,
+  BRANCH_USER_DEVELOPER_IDENTITY: 16,
+  AMPLITUDE_USER_ID: 17,
+  AMPLITUDE_DEVICE_ID: 18,
+  MOENGAGE_UNIQUE_ID: 19,
+  ONESIGNAL_EXTERNAL_ID: 20
 }
 
 exports.PurchaseResult = {
@@ -211,5 +251,6 @@ exports.PaywallAction = {
     purchase: 'purchase',
     restore: 'restore',
     open_presentation: 'open_presentation',
+    open_presentation: 'open_placement',
     promo_code: 'promo_code',
 }

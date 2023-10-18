@@ -3,6 +3,7 @@ package cordova.plugin.purchasely
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.util.Log
 import io.purchasely.billing.Store
 import io.purchasely.ext.Attribute
@@ -41,7 +42,11 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import java.lang.ref.WeakReference
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 /**
  * This class echoes a string called from JavaScript.
@@ -157,6 +162,14 @@ class PurchaselyPlugin : CordovaPlugin() {
                 "hidePresentation" -> hidePresentation()
                 "showPresentation" -> showPresentation()
                 "userDidConsumeSubscriptionContent" -> userDidConsumeSubscriptionContent()
+                "setUserAttributeWithString" -> setUserAttributeWithString(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)))
+                "setUserAttributeWithBoolean" -> setUserAttributeWithBoolean(getStringFromJson(args.getString(0)), args.getBoolean(1))
+                "setUserAttributeWithInt" -> setUserAttributeWithInt(getStringFromJson(args.getString(0)), args.getInt(1))
+                "setUserAttributeWithDouble" -> setUserAttributeWithDouble(getStringFromJson(args.getString(0)), args.getDouble(1))
+                "setUserAttributeWithDate" -> setUserAttributeWithDate(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)))
+                "userAttribute" -> userAttribute(getStringFromJson(args.getString(0)), callbackContext)
+                "clearUserAttribute" -> clearUserAttribute(getStringFromJson(args.getString(0)))
+                "clearUserAttributes" -> clearUserAttributes()
                 else -> return false
             }
         } catch (e: JSONException) {
@@ -699,6 +712,88 @@ class PurchaselyPlugin : CordovaPlugin() {
                 flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
             }
         )
+    }
+
+    fun setUserAttributeWithString(key: String?, value: String?) {
+        if(key == null || value == null) return
+        Purchasely.setUserAttribute(key, value)
+    }
+
+    fun setUserAttributeWithInt(key: String?, value: Long?) {
+        if(key == null || value == null) return
+        Purchasely.setUserAttribute(key, value.toInt())
+    }
+
+    fun setUserAttributeWithDouble(key: String?, value: Double?) {
+        if(key == null || value == null) return
+        Purchasely.setUserAttribute(key, value.toFloat())
+    }
+
+    fun setUserAttributeWithBoolean(key: String?, value: Boolean?) {
+        if(key == null || value == null) return
+        Purchasely.setUserAttribute(key, value)
+    }
+
+    fun setUserAttributeWithDate(key: String?, value: String?) {
+        if(key == null || value == null) return
+        val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", Locale.getDefault())
+        } else {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault())
+        }
+        format.timeZone = TimeZone.getTimeZone("GMT")
+        val calendar = Calendar.getInstance()
+        try {
+            format.parse(value)?.let {
+                calendar.time = it
+            }
+            Purchasely.setUserAttribute(key, calendar.time)
+        } catch (e: Exception) {
+            Log.e("Purchasely", "Cannot save date attribute $key", e)
+        }
+    }
+
+    fun userAttribute(key: String?, callbackContext: CallbackContext) {
+        if(key == null) return
+        val result = getUserAttributeValueForCordova(Purchasely.userAttribute(key))
+        if(result != null) {
+            callbackContext.success(getUserAttributeValueForCordova(result))
+        } else {
+            callbackContext.error("No user attribute found with $key")
+        }
+    }
+
+    private fun getUserAttributeValueForCordova(value: Any?): String? {
+        return when (value) {
+            is Date -> {
+                val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", Locale.getDefault())
+                } else {
+                    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault())
+                }
+                format.timeZone = TimeZone.getTimeZone("GMT")
+                try {
+                    format.format(value)
+                } catch (e: Exception) {
+                    ""
+                }
+            }
+            is Int -> value.toString()
+            //awful but to keep same precision so 1.2f = 1.2 double and not 1.20000056
+            is Float -> value.toString().toDouble().toString()
+            is String -> value
+            is Boolean -> value.toString()
+            else -> null
+        }
+    }
+
+    fun clearUserAttribute(key: String?) {
+        if(key == null) return
+        Purchasely.clearUserAttribute(key)
+    }
+
+    fun clearUserAttributes() {
+        Purchasely.clearUserAttributes()
     }
 
     class ProductActivity {
