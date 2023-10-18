@@ -126,10 +126,6 @@ exports.onProcessAction = function (processAction) {
     exec(() => {}, defaultError, 'Purchasely', 'onProcessAction', [processAction]);
 };
 
-exports.closePaywall = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'closePaywall', []);
-};
-
 exports.userDidConsumeSubscriptionContent = function () {
     exec(() => {}, defaultError, 'Purchasely', 'userDidConsumeSubscriptionContent', []);
 };
@@ -140,6 +136,18 @@ exports.userSubscriptions = function (success, error) {
 
 exports.setLanguage = function (language) {
     exec(() => {}, defaultError, 'Purchasely', 'setLanguage', [language]);
+};
+
+exports.showPresentation = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'showPresentation', []);
+};
+
+exports.hidePresentation = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'hidePresentation', []);
+};
+
+exports.closePresentation = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'closePresentation', []);
 };
 
 exports.LogLevel = {

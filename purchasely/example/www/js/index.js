@@ -46,6 +46,9 @@ function onDeviceReady() {
 	document.getElementById("openPresentation").addEventListener("click", openPresentation);
 	document.getElementById("fetchPresentation").addEventListener("click", fetchPresentation);
 	document.getElementById("presentSubscriptions").addEventListener("click", presentSubscriptions);
+	document.getElementById("showPresentation").addEventListener("click", showPresentation);
+	document.getElementById("hidePresentation").addEventListener("click", hidePresentation);
+	document.getElementById("closePresentation").addEventListener("click", closePresentation);
 	document.getElementById("purchaseWithPlanVendorId").addEventListener("click", purchaseWithPlanVendorId);
 	document.getElementById("restore").addEventListener("click", restore);
 	document.getElementById("silentRestore").addEventListener("click", silentRestore);
@@ -86,7 +89,7 @@ function onPuchaselySdkReady() {
 	Purchasely.setAttribute(Purchasely.Attribute.FIREBASE_APP_INSTANCE_ID, "1");
 	Purchasely.setAttribute(Purchasely.Attribute.BATCH_INSTALLATION_ID, "testBatch1");
 
-	Purchasely.isReadyToPurchase(true);
+	Purchasely.readyToOpenDeeplink(true);
 
 	Purchasely.planWithIdentifier('PURCHASELY_PLUS_MONTHLY', (plan) => {
 		console.log(' ==> Plan');
@@ -146,7 +149,7 @@ function onPuchaselySdkReady() {
 		} else if (result.action === Purchasely.PaywallAction.purchase) {
 			console.log('User wants to purchase');
 			//If you want to intercept it, close paywall and display your screen
-			Purchasely.closePaywall();
+			Purchasely.hidePresentation();
 		} else if (result.action === Purchasely.PaywallAction.restore) {
 			console.log('User wants to restore his purchases');
 			Purchasely.onProcessAction(true);
@@ -183,7 +186,14 @@ function fetchPresentation() {
 		(presentation) => {
 			console.log(presentation);
 			Purchasely.presentPresentation(presentation, false, null,
-				(callback) => {}, (error) => {
+				(callback) => {
+					console.log(callback);
+					if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
+						console.log("User cancelled purchased");
+					} else {
+						console.log("User purchased " + callback.plan.name);
+					}
+				}, (error) => {
 					console.log("Error with present : " + error);
 				});
 		},
@@ -202,8 +212,23 @@ function purchaseWithPlanVendorId() {
 }
 
 function processToPayment() {
+	// Call this method open paywall again
+	Purchasely.showPresentation();
+
 	// Call this method to process to payment
 	Purchasely.onProcessAction(true);
+}
+
+function showPresentation() {
+	Purchasely.showPresentation();
+}
+
+function hidePresentation() {
+	Purchasely.hidePresentation();
+}
+
+function closePresentation() {
+	Purchasely.closePresentation();
 }
 
 function restore() {
