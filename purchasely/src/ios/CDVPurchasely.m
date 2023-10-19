@@ -8,8 +8,18 @@
 #import "CDVPurchasely.h"
 #import "Purchasely_Hybrid.h"
 #import "CDVPurchasely+Events.h"
+#import "UIColor+PLYHelper.h"
 
 @implementation CDVPurchasely
+
+- (instancetype)init {
+    self = [super init];
+
+    self.presentationsLoaded = [NSMutableArray new];
+    self.shouldReopenPaywall = NO;
+
+    return self;
+}
 
 - (void)start:(CDVInvokedUrlCommand*)command {
     NSString *apiKey = [command argumentAtIndex:0];
@@ -524,6 +534,209 @@
 
 - (void)clearUserAttributes:(CDVInvokedUrlCommand*)command {
     [Purchasely clearUserAttributes];
+}
+
+- (void)fetchPresentation:(CDVInvokedUrlCommand*)command {
+    NSString *placementId = [command argumentAtIndex:0];
+    NSString *presentationId = [command argumentAtIndex:1];
+    NSString *contentId = [command argumentAtIndex:2];
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+           if (placementId != nil) {
+               [Purchasely fetchPresentationFor:placementId contentId: contentId fetchCompletion:^(PLYPresentation * _Nullable presentation, NSError * _Nullable error) {
+                   if (error != nil) {
+                       [self failureFor:command resultString: error.localizedDescription];
+                   } else if (presentation != nil) {
+                       [self.presentationsLoaded addObject:presentation];
+                       [self successFor:command resultDict:[self resultDictionaryForFetchPresentation:presentation]];
+                   }
+               } completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
+                   if (self.purchaseResolve != nil){
+                       [self successFor:self.purchaseResolve resultDict:[self resultDictionaryForPresentationController:result plan:plan]];
+                   }
+               }];
+           } else {
+               [Purchasely fetchPresentationWith:presentationId contentId: contentId fetchCompletion:^(PLYPresentation * _Nullable presentation, NSError * _Nullable error) {
+                   if (error != nil) {
+                       [self failureFor:command resultString: error.localizedDescription];
+                   } else if (presentation != nil) {
+                       [self.presentationsLoaded addObject:presentation];
+                       [self successFor:command resultDict:[self resultDictionaryForFetchPresentation:presentation]];
+                   }
+               } completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
+                   if (self.purchaseResolve != nil) {
+                       [self successFor:self.purchaseResolve resultDict:[self resultDictionaryForPresentationController:result plan:plan]];
+                   }
+               }];
+           }
+       });
+}
+
+- (void)presentPresentation:(CDVInvokedUrlCommand *)command {
+    NSDictionary<NSString *, id> *presentationDictionary = [command argumentAtIndex:0];
+    BOOL isFullscreen = [[command argumentAtIndex:1] boolValue];
+    NSString *loadingBackgroundColor = [command argumentAtIndex:2];
+
+    if (presentationDictionary == nil) {
+            [self failureFor:command resultString: @"Presentation cannot be null"];
+            return;
+        }
+
+        self.purchaseResolve = command;
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+
+            PLYPresentation *presentationLoaded = [self findPresentationLoadedFor:(NSString *)[presentationDictionary objectForKey:@"id"]];
+
+            if (presentationLoaded == nil || presentationLoaded.controller == nil) {
+                [self failureFor:command resultString: @"Presentation not loaded"];
+                return;
+            }
+
+            [self.presentationsLoaded removeObjectAtIndex:[self findIndexPresentationLoadedFor:(NSString *)[presentationDictionary objectForKey:@"id"]]];
+
+            if (presentationLoaded.controller != nil) {
+                if (loadingBackgroundColor != nil) {
+                    UIColor *backColor = [UIColor ply_fromHex:loadingBackgroundColor];
+                    if (backColor != nil) {
+                        [presentationLoaded.controller.view setBackgroundColor:backColor];
+                    }
+                }
+
+                if (isFullscreen) {
+                    presentationLoaded.controller.modalPresentationStyle = UIModalPresentationFullScreen;
+                }
+
+                self.shouldReopenPaywall = NO;
+
+                if (self.presentedPresentationViewController != nil) {
+                    [Purchasely closeDisplayedPresentation];
+                    self.presentedPresentationViewController = presentationLoaded.controller;
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                        [Purchasely showController:presentationLoaded.controller type: PLYUIControllerTypeProductPage];
+                    });
+                } else {
+                    self.presentedPresentationViewController = presentationLoaded.controller;
+                    [Purchasely showController:presentationLoaded.controller type: PLYUIControllerTypeProductPage];
+                }
+            }
+        });
+}
+
+- (PLYPresentation *) findPresentationLoadedFor:(NSString * _Nullable) presentationId {
+    for (PLYPresentation *presentationLoaded in self.presentationsLoaded) {
+        if ([presentationLoaded.id isEqualToString: presentationId]) {
+            return presentationLoaded;
+        }
+    }
+    return nil;
+}
+
+- (NSInteger) findIndexPresentationLoadedFor:(NSString * _Nullable) presentationId {
+    NSInteger index = 0;
+    for (PLYPresentation *presentationLoaded in self.presentationsLoaded) {
+        if ([presentationLoaded.id isEqualToString: presentationId]) {
+            return index;
+        }
+        index++;
+    }
+    return -1;
+}
+
+- (NSDictionary<NSString *, NSObject *> *) resultDictionaryForFetchPresentation:(PLYPresentation * _Nullable) presentation {
+    NSMutableDictionary<NSString *, NSObject *> *presentationResult = [NSMutableDictionary new];
+
+    // TODO: fill all parameters.
+    if (presentation != nil) {
+
+        if (presentation.id != nil) {
+            [presentationResult setObject:presentation.id forKey:@"id"];
+        }
+
+        if (presentation.placementId != nil) {
+            [presentationResult setObject:presentation.placementId forKey:@"placementId"];
+        }
+
+        if (presentation.audienceId != nil) {
+            [presentationResult setObject:presentation.audienceId forKey:@"audienceId"];
+        }
+
+        if (presentation.abTestId != nil) {
+            [presentationResult setObject:presentation.abTestId forKey:@"abTestId"];
+        }
+
+        if (presentation.abTestVariantId != nil) {
+            [presentationResult setObject:presentation.abTestVariantId forKey:@"abTestVariantId"];
+        }
+
+        if (presentation.language != nil) {
+            [presentationResult setObject:presentation.language forKey:@"language"];
+        }
+
+        if (presentation.plans != nil) {
+            NSMutableArray *plans = [NSMutableArray new];
+
+            for (PLYPresentationPlan *plan in presentation.plans) {
+                [plans addObject:plan.asDictionary];
+            }
+            [presentationResult setObject:plans forKey:@"plans"];
+        }
+
+        /*if (presentation.metadata != nil) {
+
+            NSDictionary<NSString *,id> *rawMetadata = [presentation.metadata getRawMetadata];
+            NSMutableDictionary<NSString *,id> *resultDict = [NSMutableDictionary dictionary];
+
+            dispatch_group_t group = dispatch_group_create();
+            dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
+            dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+
+            for (NSString *key in rawMetadata)  {
+                id value = rawMetadata[key];
+
+                if ([value isKindOfClass: [NSString class]]) {
+                    dispatch_group_enter(group); // Enter the dispatch group before making the async call
+                    [presentation.metadata getStringWith:key completion:^(NSString * _Nullable result) {
+                        [resultDict setObject:result forKey:key];
+                        dispatch_group_leave(group); // Leave the dispatch group after the async call is completed
+                    }];
+                } else {
+                    [resultDict setObject:value forKey:key];
+                }
+            }
+
+            dispatch_group_notify(group, queue, ^{
+                // Code to execute after all async calls are completed
+                [presentationResult setObject:resultDict forKey:@"metadata"];
+                dispatch_semaphore_signal(semaphore);
+            });
+
+            // Wait until all async calls are completed
+            dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+        }*/
+
+        int resultString;
+
+        switch (presentation.type) {
+            case PLYPresentationTypeNormal:
+                resultString = PLYPresentationTypeNormal;
+                break;
+            case PLYPresentationTypeClient:
+                resultString = PLYPresentationTypeClient;
+                break;
+            case PLYPresentationTypeFallback:
+                resultString = PLYPresentationTypeFallback;
+                break;
+            case PLYPresentationTypeDeactivated:
+                resultString = PLYPresentationTypeDeactivated;
+                break;
+        }
+
+        [presentationResult setObject:[NSNumber numberWithInt:resultString] forKey:@"type"];
+
+    }
+
+    return presentationResult;
 }
 
 - (void)successFor:(CDVInvokedUrlCommand *)command {

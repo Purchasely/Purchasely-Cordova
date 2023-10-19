@@ -16,6 +16,11 @@
 @property CDVInvokedUrlCommand* purchasedCommand;
 @property CDVInvokedUrlCommand* eventCommand;
 
+@property (nonatomic) NSMutableArray<PLYPresentation *> *presentationsLoaded;
+@property (nonatomic, assign) Boolean shouldReopenPaywall;
+
+@property (nonatomic) CDVInvokedUrlCommand* purchaseResolve;
+
 @property CDVInvokedUrlCommand* paywallActionInterceptorCommand;
 @property void (^onProcessActionHandler)(BOOL proceed);
 
@@ -55,5 +60,7 @@
 - (void)userAttribute:(CDVInvokedUrlCommand*)command;
 - (void)clearUserAttribute:(CDVInvokedUrlCommand*)command;
 - (void)clearUserAttributes:(CDVInvokedUrlCommand*)command;
+- (void)fetchPresentation:(CDVInvokedUrlCommand*)command;
+- (void)presentPresentation:(CDVInvokedUrlCommand*)command;
 
 @end
