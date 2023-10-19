@@ -2,5 +2,5 @@
 
 cordova plugin remove @purchasely/cordova-plugin-purchasely
 cordova platform remove ios
-cordova platform add android@7.0.1
+cordova platform add ios@7.0.1
 cordova plugin add ../ --link

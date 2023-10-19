@@ -21,7 +21,15 @@
     [Purchasely setSdkBridgeVersion:purchaselySdkVersion];
     
     [Purchasely setAppTechnology:PLYAppTechnologyCordova];
-    [Purchasely startWithAPIKey:apiKey appUserId:userId runningMode:runningMode eventDelegate:nil uiDelegate:nil paywallActionsInterceptor:nil logLevel:logLevel initialized:^(BOOL initialized, NSError * _Nullable error) {
+    
+    [Purchasely startWithAPIKey:apiKey
+                      appUserId:userId
+                    runningMode:runningMode
+                    paywallActionsInterceptor:nil
+               storekitSettings: storeKit1 ? [StorekitSettings storeKit1] : [StorekitSettings storeKit2]
+                       logLevel:logLevel
+                    initialized:^(BOOL initialized, NSError * _Nullable error) {
+        
         if (error != nil) {
             [self failureFor:command resultString: error.localizedDescription];
         } else {
@@ -60,7 +68,7 @@
 
 - (void)isReadyToPurchase:(CDVInvokedUrlCommand*)command {
     BOOL isReadyToPurchase = [[command argumentAtIndex:0] boolValue];
-    [Purchasely isReadyToPurchase: isReadyToPurchase];
+    [Purchasely readyToOpenDeeplink: isReadyToPurchase];
 }
 
 - (void)setDefaultPresentationResultHandler:(CDVInvokedUrlCommand*)command {
@@ -297,7 +305,7 @@
     NSURL *deeplink = [NSURL URLWithString:deeplinkString];
 
     if (deeplink != nil) {
-        BOOL result = [Purchasely handleWithDeeplink:deeplink];
+        BOOL result = [Purchasely isDeeplinkHandledWithDeeplink:deeplink];
         [self successFor:command resultBool:result];
     } else {
         [self successFor:command resultBool:NO];
