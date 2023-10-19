@@ -11,17 +11,18 @@
 
 @implementation CDVPurchasely
 
-- (void)startWithAPIKey:(CDVInvokedUrlCommand*)command {
+- (void)start:(CDVInvokedUrlCommand*)command {
     NSString *apiKey = [command argumentAtIndex:0];
-    NSString *userId = [command argumentAtIndex:2];
-    NSInteger logLevel = [[command argumentAtIndex:3] intValue];
-    NSInteger runningMode = [[command argumentAtIndex:4] intValue];
-    NSString *purchaselySdkVersion = [command argumentAtIndex:5];
+    BOOL storeKit1 = [[command argumentAtIndex:2] boolValue];
+    NSString *userId = [command argumentAtIndex:3];
+    NSInteger logLevel = [[command argumentAtIndex:4] intValue];
+    NSInteger runningMode = [[command argumentAtIndex:5] intValue];
+    NSString *purchaselySdkVersion = [command argumentAtIndex:6];
 
     [Purchasely setSdkBridgeVersion:purchaselySdkVersion];
-    
+
     [Purchasely setAppTechnology:PLYAppTechnologyCordova];
-    
+
     [Purchasely startWithAPIKey:apiKey
                       appUserId:userId
                     runningMode:runningMode
@@ -29,7 +30,7 @@
                storekitSettings: storeKit1 ? [StorekitSettings storeKit1] : [StorekitSettings storeKit2]
                        logLevel:logLevel
                     initialized:^(BOOL initialized, NSError * _Nullable error) {
-        
+
         if (error != nil) {
             [self failureFor:command resultString: error.localizedDescription];
         } else {
@@ -66,7 +67,7 @@
     [self successFor:command resultString:anonymousId];
 }
 
-- (void)isReadyToPurchase:(CDVInvokedUrlCommand*)command {
+- (void)readyToOpenDeeplink:(CDVInvokedUrlCommand*)command {
     BOOL isReadyToPurchase = [[command argumentAtIndex:0] boolValue];
     [Purchasely readyToOpenDeeplink: isReadyToPurchase];
 }
@@ -99,7 +100,7 @@
         [navCtrl.navigationBar setTintColor: [UIColor whiteColor]];
 
         self.presentedPresentationViewController = navCtrl;
-        
+
         if (isFullscreen) {
             navCtrl.modalPresentationStyle = UIModalPresentationFullScreen;
         }
@@ -125,7 +126,7 @@
         [navCtrl.navigationBar setTintColor: [UIColor whiteColor]];
 
         self.presentedPresentationViewController = navCtrl;
-        
+
         if (isFullscreen) {
             navCtrl.modalPresentationStyle = UIModalPresentationFullScreen;
         }
@@ -138,7 +139,7 @@
     NSString *presentationVendorId = [command argumentAtIndex:1];
     NSString *contentId = [command argumentAtIndex:2];
     BOOL isFullscreen = [[command argumentAtIndex:3] boolValue];
-    
+
     UIViewController *ctrl = [Purchasely planControllerFor:planVendorId with:presentationVendorId contentId:contentId loaded:nil completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
         NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
         [self successFor:command resultDict:resultDict];
@@ -150,9 +151,9 @@
         [navCtrl.navigationBar setBackgroundImage:[UIImage new] forBarMetrics:UIBarMetricsDefault];
         [navCtrl.navigationBar setShadowImage: [UIImage new]];
         [navCtrl.navigationBar setTintColor: [UIColor whiteColor]];
-        
+
         self.presentedPresentationViewController = navCtrl;
-        
+
         if (isFullscreen) {
             navCtrl.modalPresentationStyle = UIModalPresentationFullScreen;
         }
@@ -165,7 +166,7 @@
     NSString *presentationVendorId = [command argumentAtIndex:1];
     NSString *contentId = [command argumentAtIndex:2];
     BOOL isFullscreen = [[command argumentAtIndex:3] boolValue];
-    
+
     UIViewController *ctrl = [Purchasely productControllerFor:productVendorId with:presentationVendorId contentId:contentId loaded:nil completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
         NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
         [self successFor:command resultDict:resultDict];
@@ -177,9 +178,9 @@
         [navCtrl.navigationBar setBackgroundImage:[UIImage new] forBarMetrics:UIBarMetricsDefault];
         [navCtrl.navigationBar setShadowImage: [UIImage new]];
         [navCtrl.navigationBar setTintColor: [UIColor whiteColor]];
-        
+
         self.presentedPresentationViewController = navCtrl;
-        
+
         if (isFullscreen) {
             navCtrl.modalPresentationStyle = UIModalPresentationFullScreen;
         }
@@ -222,7 +223,7 @@
 }
 
 - (void)silentRestoreAllProducts:(CDVInvokedUrlCommand*)command {
-    [Purchasely silentRestoreAllProductsWithSuccess:^{
+    [Purchasely synchronizeWithSuccess:^{
         [self successFor:command];
     } failure:^(NSError * _Nonnull error) {
         [self failureFor:command resultString:error.localizedDescription];
@@ -300,7 +301,7 @@
     self.eventCommand = nil;
 }
 
-- (void)handle:(CDVInvokedUrlCommand*)command {
+- (void)isDeeplinkHandled:(CDVInvokedUrlCommand*)command {
     NSString *deeplinkString = [command argumentAtIndex:0];
     NSURL *deeplink = [NSURL URLWithString:deeplinkString];
 
@@ -397,7 +398,7 @@
         if (infos.abTestVariantId != nil) {
             [infosResult setObject:infos.abTestVariantId forKey:@"abTestVariantId"];
         }
-        
+
         [actionInterceptorResult setObject:infosResult forKey:@"info"];
     }
     if (params != nil) {
@@ -416,7 +417,7 @@
         }
         [actionInterceptorResult setObject:paramsResult forKey:@"parameters"];
     }
-    
+
     return actionInterceptorResult;
 }
 
@@ -452,6 +453,77 @@
 
 - (void)userDidConsumeSubscriptionContent:(CDVInvokedUrlCommand*)command {
     [Purchasely userDidConsumeSubscriptionContent];
+}
+
+- (void)setUserAttributeWithString:(CDVInvokedUrlCommand*)command {
+    NSString *key = [command argumentAtIndex:0];
+    NSString *value = [command argumentAtIndex:1];
+    [Purchasely setUserAttributeWithStringValue:value forKey:key];
+}
+
+- (void)setUserAttributeWithBoolean:(CDVInvokedUrlCommand*)command {
+    NSString *key = [command argumentAtIndex:0];
+    BOOL value = [[command argumentAtIndex:1] boolValue];
+    [Purchasely setUserAttributeWithBoolValue:value forKey:key];
+}
+
+- (void)setUserAttributeWithInt:(CDVInvokedUrlCommand*)command {
+    NSString *key = [command argumentAtIndex:0];
+    NSInteger value = [[command argumentAtIndex:1] intValue];
+    [Purchasely setUserAttributeWithIntValue:value forKey:key];
+}
+
+- (void)setUserAttributeWithDouble:(CDVInvokedUrlCommand*)command {
+    NSString *key = [command argumentAtIndex:0];
+    double value = [[command argumentAtIndex:1] doubleValue];
+    [Purchasely setUserAttributeWithDoubleValue:value forKey:key];
+}
+
+- (void)setUserAttributeWithDate:(CDVInvokedUrlCommand*)command {
+    NSString *key = [command argumentAtIndex:0];
+    NSString *value = [command argumentAtIndex:1];
+
+    NSDateFormatter * dateFormatter = [NSDateFormatter new];
+    dateFormatter.timeZone = [NSTimeZone timeZoneWithName:@"GMT"];
+    [dateFormatter setDateFormat:@"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"];
+    NSDate *date = [dateFormatter dateFromString:value];
+    if (date != nil) {
+        [Purchasely setUserAttributeWithDateValue:date forKey:key];
+    } else {
+        NSLog(@"[Purchasely] Cannot save date attribute %@", key);
+    }
+}
+
+- (void)userAttribute:(CDVInvokedUrlCommand*)command {
+    NSString *key = [command argumentAtIndex:0];
+
+    id _Nullable result = [self getUserAttributeValueForCordova:[Purchasely getUserAttributeFor:key]];
+    if (result != nil) {
+        [self successFor:command resultDict:result];
+    } else {
+        [self failureFor:command resultString:@"Cannot get user attribute"];
+    }
+}
+
+- (id _Nullable) getUserAttributeValueForCordova:(id _Nullable) value {
+    if ([value isKindOfClass:[NSDate class]]) {
+        NSDateFormatter * dateFormatter = [NSDateFormatter new];
+        dateFormatter.timeZone = [NSTimeZone timeZoneWithName:@"GMT"];
+        [dateFormatter setDateFormat:@"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"];
+        NSString *dateStr = [dateFormatter stringFromDate:value];
+        return dateStr;
+    }
+
+    return value;
+}
+
+- (void)clearUserAttribute:(CDVInvokedUrlCommand*)command {
+    NSString *key = [command argumentAtIndex:0];
+    [Purchasely clearUserAttributeForKey:key];
+}
+
+- (void)clearUserAttributes:(CDVInvokedUrlCommand*)command {
+    [Purchasely clearUserAttributes];
 }
 
 - (void)successFor:(CDVInvokedUrlCommand *)command {

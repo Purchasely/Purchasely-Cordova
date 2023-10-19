@@ -14,7 +14,7 @@ public class PLYSubscriptionsActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         String package_name = getApplication().getPackageName();
         setContentView(getApplication().getResources()
-                .getIdentifier("activity_ply_product_activity",
+                .getIdentifier("activity_ply_subscriptions_activity",
                         "layout",
                         package_name)
         );

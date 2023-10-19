@@ -120,6 +120,42 @@ function onPuchaselySdkReady() {
 		console.log("Error with purchase : " + error);
 	});
 
+	Purchasely.setUserAttributeWithString("key_string", "value_string");
+	Purchasely.setUserAttributeWithBoolean("key_boolean", true);
+	Purchasely.setUserAttributeWithInt("key_int", 7);
+	Purchasely.setUserAttributeWithDouble("key_double", 4.5);
+	Purchasely.setUserAttributeWithDate("key_date", new Date().toISOString());
+
+	Purchasely.userAttribute("key_string", value => {
+		console.log("User attribute string " + value);
+	});
+
+	Purchasely.userAttribute("key_boolean", value => {
+		console.log("User attribute boolean " + value);
+	});
+
+	Purchasely.userAttribute("key_int", value => {
+		console.log("User attribute int " + value);
+	});
+
+	Purchasely.userAttribute("key_double", value => {
+		console.log("User attribute double " + value);
+	});
+
+	Purchasely.userAttribute("key_date", value => {
+		console.log("User attribute date " + value);
+
+		Purchasely.clearUserAttribute("key_string");
+		Purchasely.userAttribute("key_string",{}, error => {
+			console.log("User attribute string cleared ? " + error);
+
+			Purchasely.clearUserAttributes();
+			Purchasely.userAttribute("key_double", {}, error => {
+				console.log("User attribute double empty? " + error);
+			});
+		});
+	});
+
 	Purchasely.setPaywallActionInterceptor((result) => {
 		console.log(result);
 		console.log('Received action from paywall ' + result.info.presentationId);

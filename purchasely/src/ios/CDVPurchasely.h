@@ -19,13 +19,13 @@
 @property CDVInvokedUrlCommand* paywallActionInterceptorCommand;
 @property void (^onProcessActionHandler)(BOOL proceed);
 
-- (void)startWithAPIKey:(CDVInvokedUrlCommand*)command;
+- (void)start:(CDVInvokedUrlCommand*)command;
 - (void)setLogLevel:(CDVInvokedUrlCommand*)command;
 - (void)userLogin:(CDVInvokedUrlCommand*)command;
 - (void)userLogout:(CDVInvokedUrlCommand*)command;
 - (void)setAttribute:(CDVInvokedUrlCommand*)command;
 - (void)getAnonymousUserId:(CDVInvokedUrlCommand*)command;
-- (void)isReadyToPurchase:(CDVInvokedUrlCommand*)command;
+- (void)readyToOpenDeeplink:(CDVInvokedUrlCommand*)command;
 - (void)setDefaultPresentationResultHandler:(CDVInvokedUrlCommand*)command;
 - (void)presentPresentationWithIdentifier:(CDVInvokedUrlCommand*)command;
 - (void)presentPresentationForPlacement:(CDVInvokedUrlCommand*)command;
@@ -42,11 +42,18 @@
 - (void)userSubscriptions:(CDVInvokedUrlCommand*)command;
 - (void)addEventsListener:(CDVInvokedUrlCommand*)command;
 - (void)removeEventsListener:(CDVInvokedUrlCommand*)command;
-- (void)handle:(CDVInvokedUrlCommand*)command;
+- (void)isDeeplinkHandled:(CDVInvokedUrlCommand*)command;
 - (void)close:(CDVInvokedUrlCommand*)command;
 - (void)setPaywallActionInterceptor:(CDVInvokedUrlCommand*)command;
 - (void)onProcessAction:(CDVInvokedUrlCommand*)command;
 - (void)closePaywall:(CDVInvokedUrlCommand*)command;
 - (void)userDidConsumeSubscriptionContent:(CDVInvokedUrlCommand*)command;
+- (void)setUserAttributeWithString:(CDVInvokedUrlCommand*)command;
+- (void)setUserAttributeWithBoolean:(CDVInvokedUrlCommand*)command;
+- (void)setUserAttributeWithInt:(CDVInvokedUrlCommand*)command;
+- (void)setUserAttributeWithDate:(CDVInvokedUrlCommand*)command;
+- (void)userAttribute:(CDVInvokedUrlCommand*)command;
+- (void)clearUserAttribute:(CDVInvokedUrlCommand*)command;
+- (void)clearUserAttributes:(CDVInvokedUrlCommand*)command;
 
 @end

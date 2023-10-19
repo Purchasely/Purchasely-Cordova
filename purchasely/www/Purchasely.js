@@ -150,7 +150,7 @@ exports.closePresentation = function () {
     exec(() => {}, defaultError, 'Purchasely', 'closePresentation', []);
 };
 
-exports.setUserAttributeWithString(key, value) = function () {
+exports.setUserAttributeWithString = function (key, value) {
     exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithString', [key, value]);
 };
 
@@ -237,11 +237,8 @@ exports.PlanType = {
 
 
 exports.RunningMode = {
-    transactionOnly: 0,
-    observer: 1,
-    paywallOnly: 2,
-    paywallObserver: 3,
-    full: 4
+    paywallObserver: 2,
+    full: 3
 }
 
 exports.PaywallAction = {
