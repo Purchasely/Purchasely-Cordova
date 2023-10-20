@@ -16,18 +16,18 @@
     "@purchasely/cordova-plugin-puchasely-google": "file:../../purchasely-google",
     "@purchasely/cordova-plugin-purchasely": "file:..",
     "cordova-android": "^12.0.1",
-    "cordova-ios": "^6.2.0",
+    "cordova-ios": "^7.0.1",
     "cordova-plugin-puchasely-google": "file:../../purchasely-google",
     "cordova-plugin-purchasely": "file:.."
   },
   "cordova": {
     "plugins": {
-      "@purchasely/cordova-plugin-purchasely": {},
-      "@purchasely/cordova-plugin-puchasely-google": {}
+      "@purchasely/cordova-plugin-puchasely-google": {},
+      "@purchasely/cordova-plugin-purchasely": {}
     },
     "platforms": [
-      "ios",
-      "android"
+      "android",
+      "ios"
     ]
   }
 }

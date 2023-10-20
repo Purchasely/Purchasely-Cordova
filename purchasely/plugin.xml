@@ -27,6 +27,10 @@
         <source-file src="src/ios/Hybrid/PLYPlan+Hybrid.m" />
         <header-file src="src/ios/Hybrid/PLYSubscription+Hybrid.h" />
         <source-file src="src/ios/Hybrid/PLYSubscription+Hybrid.m" />
+        <header-file src="src/ios/Hybrid/PLYPresentationPlan+Hybrid.h" />
+        <source-file src="src/ios/Hybrid/PLYPresentationPlan+Hybrid.m" />
+        <header-file src="src/ios/Hybrid/UIColor+PLYHelper.h" />
+        <source-file src="src/ios/Hybrid/UIColor+PLYHelper.m" />
         <podspec>
             <config>
                 <source url="https://github.com/CocoaPods/Specs.git"/>
@@ -62,6 +66,7 @@
         <source-file src="src/android/PLYProductActivity.kt" target-dir="java/cordova/plugin/purchasely" />
         <source-file src="src/android/PLYSubscriptionsActivity.java" target-dir="src/cordova/plugin/purchasely" />
         <source-file src="src/android/activity_ply_product_activity.xml" target-dir="res/layout"/>
+        <source-file src="src/android/activity_ply_subscriptions_activity.xml" target-dir="res/layout"/>
         <source-file src="src/android/theme_purchasely_fullscreen.xml" target-dir="res/values"/>
         <source-file src="src/android/theme_purchasely_fullscreen_v23_light_status_bar.xml" target-dir="res/values-v23"/>
         <source-file src="src/android/theme_purchasely_fullscreen_v23.xml" target-dir="res/values-v23"/>

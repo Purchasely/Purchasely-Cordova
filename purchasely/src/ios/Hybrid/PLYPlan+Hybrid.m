@@ -15,7 +15,6 @@
 	[dict setObject:self.vendorId forKey:@"vendorId"];
 	[dict setObject:@(self.hasIntroductoryPrice) forKey:@"hasIntroductoryPrice"];
 	[dict setObject:@([self type]) forKey:@"type"];
-	[dict setObject:@([self isEligibleForIntroOffer]) forKey:@"isEligibleForIntroOffer"];
 
 	if (self.hasIntroductoryPrice && [[self introAmount] intValue] == 0) {
 		[dict setObject:@(YES) forKey:@"hasFreeTrial"];

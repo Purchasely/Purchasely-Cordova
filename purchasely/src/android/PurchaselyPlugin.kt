@@ -719,9 +719,9 @@ class PurchaselyPlugin : CordovaPlugin() {
         Purchasely.setUserAttribute(key, value)
     }
 
-    fun setUserAttributeWithInt(key: String?, value: Long?) {
+    fun setUserAttributeWithInt(key: String?, value: Int?) {
         if(key == null || value == null) return
-        Purchasely.setUserAttribute(key, value.toInt())
+        Purchasely.setUserAttribute(key, value)
     }
 
     fun setUserAttributeWithDouble(key: String?, value: Double?) {
@@ -852,8 +852,8 @@ class PurchaselyPlugin : CordovaPlugin() {
 
         val presentationsLoaded = mutableListOf<PLYPresentation>()
 
-        private const val runningModePaywallObserver = 0
-        private const val runningModeFull = 1
+        private const val runningModePaywallObserver = 2
+        private const val runningModeFull = 3
 
         fun sendPurchaseResult(result: PLYProductViewResult, plan: PLYPlan?) {
             var productViewResult = 0
