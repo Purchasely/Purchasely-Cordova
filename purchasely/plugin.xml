@@ -1,9 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
-<plugin id="@purchasely/cordova-plugin-purchasely" version="2.3.2" xmlns="http://apache.org/cordova/ns/plugins/1.0" xmlns:android="http://schemas.android.com/apk/res/android">
+<plugin id="@purchasely/cordova-plugin-purchasely" version="4.1.0" xmlns="http://apache.org/cordova/ns/plugins/1.0" xmlns:android="http://schemas.android.com/apk/res/android">
     <name>Purchasely</name>
     <js-module name="Purchasely" src="www/Purchasely.js">
         <clobbers target="Purchasely" />
     </js-module>
+    <engines>
+        <engine name="cordova" version=">=11.0.0"/>
+        <engine name="cordova-android" version=">=12.0.0"/>
+   </engines>
     <platform name="ios">
         <config-file parent="/*" target="config.xml">
             <feature name="Purchasely">
@@ -23,12 +27,16 @@
         <source-file src="src/ios/Hybrid/PLYPlan+Hybrid.m" />
         <header-file src="src/ios/Hybrid/PLYSubscription+Hybrid.h" />
         <source-file src="src/ios/Hybrid/PLYSubscription+Hybrid.m" />
+        <header-file src="src/ios/Hybrid/PLYPresentationPlan+Hybrid.h" />
+        <source-file src="src/ios/Hybrid/PLYPresentationPlan+Hybrid.m" />
+        <header-file src="src/ios/Hybrid/UIColor+PLYHelper.h" />
+        <source-file src="src/ios/Hybrid/UIColor+PLYHelper.m" />
         <podspec>
             <config>
                 <source url="https://github.com/CocoaPods/Specs.git"/>
             </config>
             <pods use-frameworks="true">
-                <pod name="Purchasely" spec="3.3.3"/>
+                <pod name="Purchasely" spec="4.1.4"/>
             </pods>
         </podspec>
     </platform>
@@ -38,6 +46,8 @@
                 <param name="android-package" value="cordova.plugin.purchasely.PurchaselyPlugin" />
             </feature>
             <preference name="AndroidXEnabled" value="true" />
+            <preference name="GradlePluginKotlinEnabled" value="true" />
+            <preference name="GradlePluginKotlinCodeStyle" value="official" />
         </config-file>
         <config-file parent="/manifest/application" target="AndroidManifest.xml">
             <activity
@@ -51,11 +61,12 @@
                 android:theme="@style/Theme.AppCompat.Light.NoActionBar">
             </activity>
         </config-file>
-        <framework src="io.purchasely:core:3.3.3" />
-        <source-file src="src/android/PurchaselyPlugin.java" target-dir="src/cordova/plugin/purchasely" />
-        <source-file src="src/android/PLYProductActivity.java" target-dir="src/cordova/plugin/purchasely" />
+        <framework src="io.purchasely:core:4.1.1" />
+        <source-file src="src/android/PurchaselyPlugin.kt" target-dir="java/cordova/plugin/purchasely" />
+        <source-file src="src/android/PLYProductActivity.kt" target-dir="java/cordova/plugin/purchasely" />
         <source-file src="src/android/PLYSubscriptionsActivity.java" target-dir="src/cordova/plugin/purchasely" />
         <source-file src="src/android/activity_ply_product_activity.xml" target-dir="res/layout"/>
+        <source-file src="src/android/activity_ply_subscriptions_activity.xml" target-dir="res/layout"/>
         <source-file src="src/android/theme_purchasely_fullscreen.xml" target-dir="res/values"/>
         <source-file src="src/android/theme_purchasely_fullscreen_v23_light_status_bar.xml" target-dir="res/values-v23"/>
         <source-file src="src/android/theme_purchasely_fullscreen_v23.xml" target-dir="res/values-v23"/>

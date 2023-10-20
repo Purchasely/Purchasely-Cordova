@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/Cordova_SDK.iml" filepath="$PROJECT_DIR$/.idea/Cordova_SDK.iml" />
+      <module fileurl="file://$PROJECT_DIR$/purchasely/purchasely.iml" filepath="$PROJECT_DIR$/purchasely/purchasely.iml" />
+      <module fileurl="file://$PROJECT_DIR$/purchasely-google/purchasely-google.iml" filepath="$PROJECT_DIR$/purchasely-google/purchasely-google.iml" />
+    </modules>
+  </component>
+</project>

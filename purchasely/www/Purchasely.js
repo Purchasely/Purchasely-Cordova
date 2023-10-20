@@ -2,12 +2,12 @@ var exec = require('cordova/exec');
 
 var defaultError = (e) => { console.log(e); }
 
-exports.startWithAPIKey = function (apiKey, stores, userId, logLevel, runningMode, success, error) {
+exports.start = function (apiKey, stores, storekit1, userId, logLevel, runningMode, success, error) {
     var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
     if(!cordovaSdkVersion) {
-        cordovaSdkVersion = "2.3.0" //fallback if we cannot find version from metadata
+        cordovaSdkVersion = "4.1.0" //fallback if we cannot find version from metadata
     }
-    exec(success, error, 'Purchasely', 'startWithAPIKey', [apiKey, stores, userId, logLevel, runningMode, cordovaSdkVersion]);
+    exec(success, error, 'Purchasely', 'start', [apiKey, stores, storekit1, userId, logLevel, runningMode, cordovaSdkVersion]);
 };
 
 exports.addEventsListener = function (success, error) {
@@ -38,8 +38,8 @@ exports.setAttribute = function (attribute, value) {
     exec(() => {}, defaultError, 'Purchasely', 'setAttribute', [attribute, value]);
 };
 
-exports.isReadyToPurchase = function (isReady) {
-    exec(() => {}, defaultError, 'Purchasely', 'isReadyToPurchase', [isReady]);
+exports.readyToOpenDeeplink = function (isReady) {
+    exec(() => {}, defaultError, 'Purchasely', 'readyToOpenDeeplink', [isReady]);
 };
 
 exports.setDefaultPresentationResultHandler = function (success, error) {
@@ -66,16 +66,24 @@ exports.presentPlanWithIdentifier = function (planId, presentationId, contentId,
     exec(success, error, 'Purchasely', 'presentPlanWithIdentifier', [planId, presentationId, contentId, isFullscreen]);
 };
 
+exports.fetchPresentation = function (presentationId, contentId, success, error) {
+    exec(success, error, 'Purchasely', 'fetchPresentation', [null, presentationId, contentId]);
+};
+
+exports.fetchPresentationForPlacement = function (placementId, contentId, success, error) {
+    exec(success, error, 'Purchasely', 'fetchPresentation', [placementId, null, contentId]);
+};
+
+exports.presentPresentation = function (presentation, isFullscreen, backgroundColor,success, error) {
+    exec(success, error, 'Purchasely', 'presentPresentation', [presentation, isFullscreen, backgroundColor]);
+};
+
 exports.presentSubscriptions = function () {
     exec(() => {}, defaultError, 'Purchasely', 'presentSubscriptions', []);
 };
 
-exports.purchaseWithPlanVendorId = function (planId, contentId, success, error) {
-    exec( success, error, 'Purchasely', 'purchaseWithPlanVendorId', [planId, contentId]);
-};
-
-exports.purchaseWithPlanVendorId = function (planId, success, error) {
-    exec( success, error, 'Purchasely', 'purchaseWithPlanVendorId', [planId, null]);
+exports.purchaseWithPlanVendorId = function (planId, offerId, contentId, success, error) {
+    exec( success, error, 'Purchasely', 'purchaseWithPlanVendorId', [planId, offerId, contentId]);
 };
 
 exports.restoreAllProducts = function (success, error) {
@@ -90,8 +98,8 @@ exports.purchasedSubscription = function (success, error) {
     exec(success, error, 'Purchasely', 'purchasedSubscription', []);
 };
 
-exports.handle = function (deepLink, success, error) {
-    exec(success, error, 'Purchasely', 'handle', [deepLink]);
+exports.isDeeplinkHandled = function (deepLink, success, error) {
+    exec(success, error, 'Purchasely', 'isDeeplinkHandled', [deepLink]);
 };
 
 exports.allProducts = function (success, error) {
@@ -114,10 +122,6 @@ exports.onProcessAction = function (processAction) {
     exec(() => {}, defaultError, 'Purchasely', 'onProcessAction', [processAction]);
 };
 
-exports.closePaywall = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'closePaywall', []);
-};
-
 exports.userDidConsumeSubscriptionContent = function () {
     exec(() => {}, defaultError, 'Purchasely', 'userDidConsumeSubscriptionContent', []);
 };
@@ -130,6 +134,58 @@ exports.setLanguage = function (language) {
     exec(() => {}, defaultError, 'Purchasely', 'setLanguage', [language]);
 };
 
+exports.showPresentation = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'showPresentation', []);
+};
+
+exports.hidePresentation = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'hidePresentation', []);
+};
+
+exports.closePresentation = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'closePresentation', []);
+};
+
+exports.setUserAttributeWithString = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithString', [key, value]);
+};
+
+exports.setUserAttributeWithBoolean = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithBoolean', [key, value]);
+};
+
+exports.setUserAttributeWithInt = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithInt', [key, value]);
+};
+
+exports.setUserAttributeWithDouble = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDouble', [key, value]);
+};
+
+exports.setUserAttributeWithDate = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDate', [key, value]);
+};
+
+exports.userAttribute = function (key, success, error) {
+    exec(success, error, 'Purchasely', 'userAttribute', [key]);
+};
+
+exports.clearUserAttribute = function (key) {
+    exec(() => {}, defaultError, 'Purchasely', 'clearUserAttribute', [key]);
+};
+
+exports.clearUserAttributes = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'clearUserAttributes', []);
+};
+
+exports.isEligibleForIntroOffer = function (planId, success, error) {
+    exec(success, error, 'Purchasely', 'isEligibleForIntroOffer', [planId]);
+};
+
+exports.signPromotionalOffer = function (storeProductId, storeOfferId, success, error) {
+    exec(success, error, 'Purchasely', 'signPromotionalOffer', [storeProductId, storeOfferId]);
+};
+
 exports.LogLevel = {
 	DEBUG: 0,
 	INFO: 1,
@@ -138,9 +194,9 @@ exports.LogLevel = {
 }
 
 exports.Attribute = {
-  AMPLITUDE_SESSION_ID: 0,
-  FIREBASE_APP_INSTANCE_ID: 1,
-  AIRSHIP_CHANNEL_ID: 2,
+  FIREBASE_APP_INSTANCE_ID: 0,
+  AIRSHIP_CHANNEL_ID: 1,
+  AIRSHIP_USER_ID: 2,
   BATCH_INSTALLATION_ID: 3,
   ADJUST_ID: 4,
   APPSFLYER_ID: 5,
@@ -148,9 +204,17 @@ exports.Attribute = {
   MIXPANEL_DISTINCT_ID: 7,
   CLEVER_TAP_ID: 8,
   SENDINBLUE_USER_EMAIL: 9,
-  ITERABLE_USER_ID: 10,
-  ITERABLE_USER_EMAIL: 11,
-  AT_INTERNET_ID_CLIENT: 12
+  ITERABLE_USER_EMAIL: 10,
+  ITERABLE_USER_ID: 11,
+  AT_INTERNET_ID_CLIENT: 12,
+  MPARTICLE_USER_ID: 13,
+  CUSTOMERIO_USER_ID: 14,
+  CUSTOMERIO_USER_EMAIL: 15,
+  BRANCH_USER_DEVELOPER_IDENTITY: 16,
+  AMPLITUDE_USER_ID: 17,
+  AMPLITUDE_DEVICE_ID: 18,
+  MOENGAGE_UNIQUE_ID: 19,
+  ONESIGNAL_EXTERNAL_ID: 20
 }
 
 exports.PurchaseResult = {
@@ -177,11 +241,8 @@ exports.PlanType = {
 
 
 exports.RunningMode = {
-    transactionOnly: 0,
-    observer: 1,
-    paywallOnly: 2,
-    paywallObserver: 3,
-    full: 4
+    paywallObserver: 2,
+    full: 3
 }
 
 exports.PaywallAction = {
@@ -191,5 +252,6 @@ exports.PaywallAction = {
     purchase: 'purchase',
     restore: 'restore',
     open_presentation: 'open_presentation',
+    open_presentation: 'open_placement',
     promo_code: 'promo_code',
 }
