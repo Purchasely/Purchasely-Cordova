@@ -150,7 +150,7 @@ exports.closePresentation = function () {
     exec(() => {}, defaultError, 'Purchasely', 'closePresentation', []);
 };
 
-exports.setUserAttributeWithString(key, value) = function () {
+exports.setUserAttributeWithString = function (key, value) {
     exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithString', [key, value]);
 };
 
@@ -180,6 +180,14 @@ exports.clearUserAttribute = function (key) {
 
 exports.clearUserAttributes = function () {
     exec(() => {}, defaultError, 'Purchasely', 'clearUserAttributes', []);
+};
+
+exports.isEligibleForIntroOffer = function (planId, success, error) {
+    exec(success, error, 'Purchasely', 'isEligibleForIntroOffer', [planId]);
+};
+
+exports.signPromotionalOffer = function (storeProductId, storeOfferId, success, error) {
+    exec(success, error, 'Purchasely', 'signPromotionalOffer', [storeProductId, storeOfferId]);
 };
 
 exports.LogLevel = {
@@ -237,11 +245,8 @@ exports.PlanType = {
 
 
 exports.RunningMode = {
-    transactionOnly: 0,
-    observer: 1,
-    paywallOnly: 2,
-    paywallObserver: 3,
-    full: 4
+    paywallObserver: 2,
+    full: 3
 }
 
 exports.PaywallAction = {

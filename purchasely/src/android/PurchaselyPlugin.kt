@@ -170,6 +170,8 @@ class PurchaselyPlugin : CordovaPlugin() {
                 "userAttribute" -> userAttribute(getStringFromJson(args.getString(0)), callbackContext)
                 "clearUserAttribute" -> clearUserAttribute(getStringFromJson(args.getString(0)))
                 "clearUserAttributes" -> clearUserAttributes()
+                "isEligibleForIntroOffer" -> isEligibleForIntroOffer(getStringFromJson(args.getString(0)), callbackContext)
+                "signPromotionalOffer" -> signPromotionalOffer(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), callbackContext)
                 else -> return false
             }
         } catch (e: JSONException) {
@@ -719,9 +721,9 @@ class PurchaselyPlugin : CordovaPlugin() {
         Purchasely.setUserAttribute(key, value)
     }
 
-    fun setUserAttributeWithInt(key: String?, value: Long?) {
+    fun setUserAttributeWithInt(key: String?, value: Int?) {
         if(key == null || value == null) return
-        Purchasely.setUserAttribute(key, value.toInt())
+        Purchasely.setUserAttribute(key, value)
     }
 
     fun setUserAttributeWithDouble(key: String?, value: Double?) {
@@ -796,6 +798,22 @@ class PurchaselyPlugin : CordovaPlugin() {
         Purchasely.clearUserAttributes()
     }
 
+    private fun isEligibleForIntroOffer(planId: String?, callbackContext: CallbackContext) {
+        Purchasely.plan(planId,
+            onSuccess = { plan ->
+                callbackContext.sendPluginResult(PluginResult(PluginResult.Status.OK, plan?.isEligibleToIntroOffer(null) ?: false))
+            },
+            onError = { error ->
+                callbackContext.error(error.message ?: "Unable to fetch plan")
+            }
+        )
+    }
+
+    private fun signPromotionalOffer(storeProductId: String?, storeOfferId: String?, callbackContext: CallbackContext) {
+        callbackContext.error("No signing required on Android")
+    }
+
+
     class ProductActivity {
         var presentationId: String? = null
         var placementId: String? = null
@@ -852,8 +870,8 @@ class PurchaselyPlugin : CordovaPlugin() {
 
         val presentationsLoaded = mutableListOf<PLYPresentation>()
 
-        private const val runningModePaywallObserver = 0
-        private const val runningModeFull = 1
+        private const val runningModePaywallObserver = 2
+        private const val runningModeFull = 3
 
         fun sendPurchaseResult(result: PLYProductViewResult, plan: PLYPlan?) {
             var productViewResult = 0
