@@ -208,18 +208,50 @@
 
 - (void)purchaseWithPlanVendorId:(CDVInvokedUrlCommand*)command {
     NSString *planVendorId = [command argumentAtIndex:0];
-
+    NSString *offerId = [command argumentAtIndex:1];
+    NSString *contentId = [command argumentAtIndex:2];
+    
     [Purchasely planWith:planVendorId
                  success:^(PLYPlan * _Nonnull plan) {
-        [Purchasely purchaseWithPlan:plan
-                             success:^{
-            [self successFor:command resultDict: plan.asDictionary];
+        
+        if (@available(iOS 12.2, macOS 12.0, tvOS 15.0, watchOS 8.0, *)) {
+            
+            NSString *storeOfferId = nil;
+            for (PLYPromoOffer *promoOffer in plan.promoOffers) {
+                if ([promoOffer.vendorId isEqualToString:offerId]) {
+                    storeOfferId = promoOffer.storeOfferId;
+                    break;
+                }
+            }
+            
+            if (storeOfferId) {
+                [Purchasely purchaseWithPromotionalOfferWithPlan:plan
+                                                       contentId:contentId
+                                                    storeOfferId:storeOfferId
+                                                         success:^{
+                    [self successFor:command resultDict: plan.asDictionary];
+                } failure:^(NSError * _Nonnull error) {
+                    [self failureFor:command resultString: error.localizedDescription];
+                }];
+            } else {
+                [Purchasely purchaseWithPlan:plan
+                                   contentId:contentId
+                                     success:^{
+                    [self successFor:command resultDict: plan.asDictionary];
+                } failure:^(NSError * _Nonnull error) {
+                    [self failureFor:command resultString: error.localizedDescription];
+                }];
+            }
+        } else {
+            [Purchasely purchaseWithPlan:plan
+                               contentId:contentId
+                                 success:^{
+                [self successFor:command resultDict: plan.asDictionary];
+            } failure:^(NSError * _Nonnull error) {
+                [self failureFor:command resultString: error.localizedDescription];
+            }];
         }
-                             failure:^(NSError * _Nonnull error) {
-            [self failureFor:command resultString: error.localizedDescription];
-        }];
-    }
-                 failure:^(NSError * _Nullable error) {
+    } failure:^(NSError * _Nullable error) {
         [self failureFor:command resultString: error.localizedDescription];
     }];
 }

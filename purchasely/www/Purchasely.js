@@ -82,12 +82,8 @@ exports.presentSubscriptions = function () {
     exec(() => {}, defaultError, 'Purchasely', 'presentSubscriptions', []);
 };
 
-exports.purchaseWithPlanVendorId = function (planId, contentId, success, error) {
-    exec( success, error, 'Purchasely', 'purchaseWithPlanVendorId', [planId, contentId]);
-};
-
-exports.purchaseWithPlanVendorId = function (planId, success, error) {
-    exec( success, error, 'Purchasely', 'purchaseWithPlanVendorId', [planId, null]);
+exports.purchaseWithPlanVendorId = function (planId, offerId, contentId, success, error) {
+    exec( success, error, 'Purchasely', 'purchaseWithPlanVendorId', [planId, offerId, contentId]);
 };
 
 exports.restoreAllProducts = function (success, error) {
