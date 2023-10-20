@@ -170,6 +170,8 @@ class PurchaselyPlugin : CordovaPlugin() {
                 "userAttribute" -> userAttribute(getStringFromJson(args.getString(0)), callbackContext)
                 "clearUserAttribute" -> clearUserAttribute(getStringFromJson(args.getString(0)))
                 "clearUserAttributes" -> clearUserAttributes()
+                "isEligibleForIntroOffer" -> isEligibleForIntroOffer(getStringFromJson(args.getString(0)), callbackContext)
+                "signPromotionalOffer" -> signPromotionalOffer(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), callbackContext)
                 else -> return false
             }
         } catch (e: JSONException) {
@@ -795,6 +797,22 @@ class PurchaselyPlugin : CordovaPlugin() {
     fun clearUserAttributes() {
         Purchasely.clearUserAttributes()
     }
+
+    private fun isEligibleForIntroOffer(planId: String?, callbackContext: CallbackContext) {
+        Purchasely.plan(planId,
+            onSuccess = { plan ->
+                callbackContext.sendPluginResult(PluginResult(PluginResult.Status.OK, plan?.isEligibleToIntroOffer(null) ?: false))
+            },
+            onError = { error ->
+                callbackContext.error(error.message ?: "Unable to fetch plan")
+            }
+        )
+    }
+
+    private fun signPromotionalOffer(storeProductId: String?, storeOfferId: String?, callbackContext: CallbackContext) {
+        callbackContext.error("No signing required on Android")
+    }
+
 
     class ProductActivity {
         var presentationId: String? = null
