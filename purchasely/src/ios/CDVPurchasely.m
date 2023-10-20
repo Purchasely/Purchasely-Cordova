@@ -453,6 +453,12 @@
         if (params.presentation != nil) {
             [paramsResult setObject:params.presentation forKey:@"presentation"];
         }
+        if (params.promoOffer != nil) {
+            NSMutableDictionary<NSString *, NSObject *> *promoOffer = [NSMutableDictionary new];
+            [promoOffer setObject:params.promoOffer.vendorId forKey:@"vendorId"];
+            [promoOffer setObject:params.promoOffer.storeOfferId forKey:@"storeOfferId"];
+            [paramsResult setObject:promoOffer forKey:@"offer"];
+        }
         [actionInterceptorResult setObject:paramsResult forKey:@"parameters"];
     }
 
