@@ -11,7 +11,7 @@
 @interface CDVPurchasely<PLYEventDelegate> : CDVPlugin {
 }
 
-@property (nonatomic, assign) UIViewController* presentedPresentationViewController;
+@property (nonatomic, retain) UIViewController* presentedPresentationViewController;
 
 @property CDVInvokedUrlCommand* purchasedCommand;
 @property CDVInvokedUrlCommand* eventCommand;
@@ -48,10 +48,11 @@
 - (void)addEventsListener:(CDVInvokedUrlCommand*)command;
 - (void)removeEventsListener:(CDVInvokedUrlCommand*)command;
 - (void)isDeeplinkHandled:(CDVInvokedUrlCommand*)command;
-- (void)close:(CDVInvokedUrlCommand*)command;
 - (void)setPaywallActionInterceptor:(CDVInvokedUrlCommand*)command;
 - (void)onProcessAction:(CDVInvokedUrlCommand*)command;
-- (void)closePaywall:(CDVInvokedUrlCommand*)command;
+- (void)closePresentation:(CDVInvokedUrlCommand*)command;
+- (void)hidePresentation:(CDVInvokedUrlCommand*)command;
+- (void)showPresentation:(CDVInvokedUrlCommand*)command;
 - (void)userDidConsumeSubscriptionContent:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithString:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithBoolean:(CDVInvokedUrlCommand*)command;

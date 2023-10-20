@@ -323,9 +323,6 @@
     }
 }
 
-- (void)close:(CDVInvokedUrlCommand*)command {
-}
-
 - (void)setLanguage:(CDVInvokedUrlCommand*)command {
     NSString *language = [command argumentAtIndex:0];
     NSLocale *locale = [NSLocale localeWithLocaleIdentifier:language];
@@ -451,14 +448,35 @@
     }
 }
 
-- (void)closePaywall:(CDVInvokedUrlCommand*)command {
+- (void)closePresentation:(CDVInvokedUrlCommand*)command {
     if (self.presentedPresentationViewController != nil) {
         dispatch_async(dispatch_get_main_queue(), ^{
             [self.presentedPresentationViewController dismissViewControllerAnimated:true completion:^{
                 self.presentedPresentationViewController = nil;
+                self.shouldReopenPaywall = NO;
             }];
         });
     }
+}
+
+- (void)hidePresentation:(CDVInvokedUrlCommand*)command {
+    if (self.presentedPresentationViewController != nil) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self.presentedPresentationViewController dismissViewControllerAnimated:true completion:^{ }];
+            self.shouldReopenPaywall = YES;
+        });
+    }
+}
+
+- (void)showPresentation:(CDVInvokedUrlCommand*)command {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self.presentedPresentationViewController && self.shouldReopenPaywall) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                self.shouldReopenPaywall = NO;
+                [Purchasely showController:self.presentedPresentationViewController type:PLYUIControllerTypeProductPage];
+            });
+        }
+    });
 }
 
 - (void)userDidConsumeSubscriptionContent:(CDVInvokedUrlCommand*)command {
@@ -608,17 +626,12 @@
                 }
 
                 self.shouldReopenPaywall = NO;
-
-                if (self.presentedPresentationViewController != nil) {
-                    [Purchasely closeDisplayedPresentation];
-                    self.presentedPresentationViewController = presentationLoaded.controller;
-                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                        [Purchasely showController:presentationLoaded.controller type: PLYUIControllerTypeProductPage];
-                    });
-                } else {
-                    self.presentedPresentationViewController = presentationLoaded.controller;
+                
+                [Purchasely closeDisplayedPresentation];
+                self.presentedPresentationViewController = presentationLoaded.controller;
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
                     [Purchasely showController:presentationLoaded.controller type: PLYUIControllerTypeProductPage];
-                }
+                });
             }
         });
 }
