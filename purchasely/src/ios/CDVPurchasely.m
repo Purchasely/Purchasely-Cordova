@@ -329,6 +329,37 @@
     [Purchasely setLanguageFrom:locale];
 }
 
+- (void)signPromotionalOffer:(CDVInvokedUrlCommand*)command {
+    NSString *storeProductId = [command argumentAtIndex:0];
+    NSString *storeOfferId = [command argumentAtIndex:1];
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (@available(iOS 12.2, *)) {
+            [Purchasely signPromotionalOfferWithStoreProductId:storeProductId storeOfferId:storeOfferId success:^(PLYOfferSignature * _Nonnull signature) {
+                NSDictionary* result = [self resultSignatureForSignPromoOffer:signature];
+                [self successFor:command resultBool:result];
+            } failure:^(NSError * _Nullable error) {
+                [self failureFor:command resultString:error.localizedDescription];
+            }];
+        } else {
+            [self failureFor:command resultString:@"This fonctionality is unavailable before ios 12.2"];
+        }
+    });
+}
+
+- (void)isEligibleForIntroOffer:(CDVInvokedUrlCommand*)command {
+    NSString *planVendorId = [command argumentAtIndex:0];
+    
+    [Purchasely planWith:planVendorId
+                 success:^(PLYPlan * _Nonnull plan) {
+        [plan isUserEligibleForIntroductoryOfferWithCompletion:^(BOOL isEligible) {
+            [self successFor:command resultBool:isEligible];
+        }];
+    } failure:^(NSError * _Nullable error) {
+        [self failureFor:command resultString:error.localizedDescription];
+    }];
+}
+
 // Helpers
 
 - (NSDictionary<NSString *, NSObject *> *) resultDictionaryForPresentationController:(PLYProductViewControllerResult)result plan:(PLYPlan * _Nullable)plan {
@@ -654,6 +685,28 @@
         index++;
     }
     return -1;
+}
+
+- (NSDictionary *)resultSignatureForSignPromoOffer:(PLYOfferSignature * _Nullable) signature  {
+    NSMutableDictionary<NSString *, NSObject *> *dict = [NSMutableDictionary new];
+
+    [dict setObject:signature.planVendorId forKey:@"planVendorId"];
+    [dict setObject:signature.identifier forKey:@"identifier"];
+    [dict setObject:signature.signature forKey:@"signature"];
+    [dict setObject:signature.keyIdentifier forKey:@"keyIdentifier"];
+    
+    NSString *nonceString = [signature.nonce UUIDString];
+    NSObject *nonce = (NSObject *)nonceString;
+    if (nonce != nil) {
+        [dict setObject:nonce forKey:@"nonce"];
+    }
+    
+    NSNumber *timestamp = [NSNumber numberWithDouble:signature.timestamp];
+    if (timestamp != nil) {
+        [dict setObject:timestamp forKey:@"timestamp"];
+    }
+
+    return dict;
 }
 
 - (NSDictionary<NSString *, NSObject *> *) resultDictionaryForFetchPresentation:(PLYPresentation * _Nullable) presentation {

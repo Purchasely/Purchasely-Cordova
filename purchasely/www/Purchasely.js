@@ -182,6 +182,14 @@ exports.clearUserAttributes = function () {
     exec(() => {}, defaultError, 'Purchasely', 'clearUserAttributes', []);
 };
 
+exports.isEligibleForIntroOffer = function (planId, success, error) {
+    exec(success, error, 'Purchasely', 'isEligibleForIntroOffer', [planId]);
+};
+
+exports.signPromotionalOffer = function (storeProductId, storeOfferId, success, error) {
+    exec(success, error, 'Purchasely', 'signPromotionalOffer', [storeProductId, storeOfferId]);
+};
+
 exports.LogLevel = {
 	DEBUG: 0,
 	INFO: 1,

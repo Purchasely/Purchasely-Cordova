@@ -103,7 +103,6 @@ function onPuchaselySdkReady() {
 		console.log(plan.introPrice);
 		console.log(plan.introAmount);
 		console.log(plan.introDuration);
-		console.log('Eligible for intro offer ? ' + plan.isEligibleForIntroOffer);
 	}, (error) => {
 		console.log(error);
 	});
@@ -291,8 +290,35 @@ function silentRestore() {
 	);
 }
 
+function isEligibleForIntroOffer() {
+	console.log("isEligibleForIntroOffer");
+	Purchasely.isEligibleForIntroOffer(
+		'PURCHASELY_PLUS_YEARLY', // planVendorId
+		(isEligible) => {
+			console.log("isEligibleForIntroOffer result: " + isEligible);
+		},
+		(error) => {
+			console.log("Error with isEligibleForIntroOffer : " + error);
+		}
+	);
+}
+
+function signPromotionalOffer() {
+	console.log("signPromotionalOffer");
+	Purchasely.signPromotionalOffer(
+		'com.purchasely.plus.yearly', // storeProductId
+		'com.purchasely.plus.yearly.winback.test', // storeOfferId
+		(signature) => {
+			console.log("signPromotionalOffer result: " + signature);
+		},
+		(error) => {
+			console.log("Error with signPromotionalOffer : " + error);
+		}
+	);
+}
+
 function openDeeplink() {
-	Purchasely.handle(
+	Purchasely.isDeeplinkHandled(
 		"purchasely://ply/presentations/CAROUSEL",
 		isHandled => {
 			console.log("Deeplink is handled ? " + isHandled)

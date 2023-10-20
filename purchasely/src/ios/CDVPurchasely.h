@@ -63,5 +63,7 @@
 - (void)clearUserAttributes:(CDVInvokedUrlCommand*)command;
 - (void)fetchPresentation:(CDVInvokedUrlCommand*)command;
 - (void)presentPresentation:(CDVInvokedUrlCommand*)command;
+- (void)signPromotionalOffer:(CDVInvokedUrlCommand*)command;
+- (void)isEligibleForIntroOffer:(CDVInvokedUrlCommand*)command;
 
 @end
