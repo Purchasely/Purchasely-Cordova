@@ -186,10 +186,6 @@ exports.signPromotionalOffer = function (storeProductId, storeOfferId, success, 
     exec(success, error, 'Purchasely', 'signPromotionalOffer', [storeProductId, storeOfferId]);
 };
 
-exports.signPromotionalOffer = function (storeProductId, storeOfferId, success, error) {
-    exec(success, error, 'Purchasely', 'signPromotionalOffer', [storeProductId, storeOfferId]);
-};
-
 exports.setThemeMode = function (mode) {
     exec(() => {}, defaultError, 'Purchasely', 'setThemeMode', [mode]);
 };
