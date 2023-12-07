@@ -36,7 +36,7 @@
                 <source url="https://github.com/CocoaPods/Specs.git"/>
             </config>
             <pods use-frameworks="true">
-                <pod name="Purchasely" spec="4.1.4"/>
+                <pod name="Purchasely" spec="4.2.0"/>
             </pods>
         </podspec>
     </platform>
@@ -61,7 +61,7 @@
                 android:theme="@style/Theme.AppCompat.Light.NoActionBar">
             </activity>
         </config-file>
-        <framework src="io.purchasely:core:4.1.1" />
+        <framework src="io.purchasely:core:4.2.0" />
         <source-file src="src/android/PurchaselyPlugin.kt" target-dir="java/cordova/plugin/purchasely" />
         <source-file src="src/android/PLYProductActivity.kt" target-dir="java/cordova/plugin/purchasely" />
         <source-file src="src/android/PLYSubscriptionsActivity.java" target-dir="src/cordova/plugin/purchasely" />

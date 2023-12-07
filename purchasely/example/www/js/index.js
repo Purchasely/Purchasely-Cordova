@@ -197,7 +197,7 @@ function onPuchaselySdkReady() {
 
 function openPresentation() {
 	Purchasely.presentPresentationForPlacement(
-		'onboarding', //placementId
+		'ONBOARDING', //placementId
 		null, //contentId
 		true, //fullscreen
 		(callback) => {

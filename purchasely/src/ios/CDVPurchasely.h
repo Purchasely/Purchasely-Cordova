@@ -65,5 +65,6 @@
 - (void)presentPresentation:(CDVInvokedUrlCommand*)command;
 - (void)signPromotionalOffer:(CDVInvokedUrlCommand*)command;
 - (void)isEligibleForIntroOffer:(CDVInvokedUrlCommand*)command;
+- (void)setThemeMode:(CDVInvokedUrlCommand*)command;
 
 @end

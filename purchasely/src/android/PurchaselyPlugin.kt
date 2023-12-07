@@ -34,6 +34,7 @@ import io.purchasely.models.PLYPlan
 import io.purchasely.models.PLYPresentationPlan
 import io.purchasely.models.PLYProduct
 import io.purchasely.models.PLYSubscriptionData
+import io.purchasely.views.presentation.PLYThemeMode
 import org.apache.cordova.CallbackContext
 import org.apache.cordova.CordovaInterface
 import org.apache.cordova.CordovaPlugin
@@ -81,6 +82,7 @@ class PurchaselyPlugin : CordovaPlugin() {
                 "userLogout" -> userLogout()
                 "setLanguage" -> setLanguage(getStringFromJson(args.getString(0)))
                 "setLogLevel" -> setLogLevel(args.getInt(0))
+                "setThemeMode" -> setThemeMode(args.getInt(0))
                 "setAttribute" -> setAttribute(args.getInt(0), getStringFromJson(args.getString(1)))
                 "setDefaultPresentationResultHandler" -> setDefaultPresentationResultHandler(
                     callbackContext
@@ -321,6 +323,10 @@ class PurchaselyPlugin : CordovaPlugin() {
         Purchasely.readyToOpenDeeplink = isReadyToPurchase
     }
 
+    private fun setThemeMode(mode: Int) {
+        Purchasely.setThemeMode(PLYThemeMode.values()[mode])
+    }
+
     private fun setAttribute(attribute: Int, value: String?) {
         if(value == null) return
 
@@ -502,32 +508,35 @@ class PurchaselyPlugin : CordovaPlugin() {
     }
 
     private fun userSubscriptions(callbackContext: CallbackContext) {
-        Purchasely.userSubscriptions(object : SubscriptionsListener {
-            override fun onSuccess(list: List<PLYSubscriptionData>) {
-                val result = JSONArray()
-                for (i in list.indices) {
-                    val data = list[i]
-                    val map = HashMap(data.toMap())
-                    map["plan"] = transformPlanToMap(data.plan)
-                    map["product"] = data.product.toMap()
-                    if (data.data.storeType == StoreType.GOOGLE_PLAY_STORE) {
-                        map["subscriptionSource"] = StoreType.GOOGLE_PLAY_STORE.ordinal
-                    } else if (data.data.storeType == StoreType.AMAZON_APP_STORE) {
-                        map["subscriptionSource"] = StoreType.AMAZON_APP_STORE.ordinal
-                    } else if (data.data.storeType == StoreType.HUAWEI_APP_GALLERY) {
-                        map["subscriptionSource"] = StoreType.HUAWEI_APP_GALLERY.ordinal
-                    } else if (data.data.storeType == StoreType.APPLE_APP_STORE) {
-                        map["subscriptionSource"] = StoreType.APPLE_APP_STORE.ordinal
+        Purchasely.userSubscriptions(
+            false,
+            object : SubscriptionsListener {
+                override fun onSuccess(list: List<PLYSubscriptionData>) {
+                    val result = JSONArray()
+                    for (i in list.indices) {
+                        val data = list[i]
+                        val map = HashMap(data.toMap())
+                        map["plan"] = transformPlanToMap(data.plan)
+                        map["product"] = data.product.toMap()
+                        if (data.data.storeType == StoreType.GOOGLE_PLAY_STORE) {
+                            map["subscriptionSource"] = StoreType.GOOGLE_PLAY_STORE.ordinal
+                        } else if (data.data.storeType == StoreType.AMAZON_APP_STORE) {
+                            map["subscriptionSource"] = StoreType.AMAZON_APP_STORE.ordinal
+                        } else if (data.data.storeType == StoreType.HUAWEI_APP_GALLERY) {
+                            map["subscriptionSource"] = StoreType.HUAWEI_APP_GALLERY.ordinal
+                        } else if (data.data.storeType == StoreType.APPLE_APP_STORE) {
+                            map["subscriptionSource"] = StoreType.APPLE_APP_STORE.ordinal
+                        }
+                        result.put(JSONObject(map))
                     }
-                    result.put(JSONObject(map))
+                    callbackContext.success(result)
                 }
-                callbackContext.success(result)
-            }
 
-            override fun onFailure(throwable: Throwable) {
-                callbackContext.error(throwable.message)
+                override fun onFailure(throwable: Throwable) {
+                    callbackContext.error(throwable.message)
+                }
             }
-        })
+        )
     }
 
     private fun isDeeplinkHandled(deeplink: String?, callbackContext: CallbackContext) {
