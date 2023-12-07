@@ -5,7 +5,7 @@ var defaultError = (e) => { console.log(e); }
 exports.start = function (apiKey, stores, storekit1, userId, logLevel, runningMode, success, error) {
     var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
     if(!cordovaSdkVersion) {
-        cordovaSdkVersion = "4.1.0" //fallback if we cannot find version from metadata
+        cordovaSdkVersion = "4.2.0";
     }
     exec(success, error, 'Purchasely', 'start', [apiKey, stores, storekit1, userId, logLevel, runningMode, cordovaSdkVersion]);
 };
@@ -186,6 +186,10 @@ exports.signPromotionalOffer = function (storeProductId, storeOfferId, success, 
     exec(success, error, 'Purchasely', 'signPromotionalOffer', [storeProductId, storeOfferId]);
 };
 
+exports.setThemeMode = function (mode) {
+    exec(() => {}, defaultError, 'Purchasely', 'setThemeMode', [mode]);
+};
+
 exports.LogLevel = {
 	DEBUG: 0,
 	INFO: 1,
@@ -214,7 +218,8 @@ exports.Attribute = {
   AMPLITUDE_USER_ID: 17,
   AMPLITUDE_DEVICE_ID: 18,
   MOENGAGE_UNIQUE_ID: 19,
-  ONESIGNAL_EXTERNAL_ID: 20
+  ONESIGNAL_EXTERNAL_ID: 20,
+  BATCH_CUSTOM_USER_ID: 21,
 }
 
 exports.PurchaseResult = {
@@ -254,4 +259,10 @@ exports.PaywallAction = {
     open_presentation: 'open_presentation',
     open_presentation: 'open_placement',
     promo_code: 'promo_code',
+}
+
+exports.ThemeMode = {
+	light: 0,
+	dark: 1,
+	system: 2
 }

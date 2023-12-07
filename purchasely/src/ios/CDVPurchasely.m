@@ -65,6 +65,12 @@
     [Purchasely userLogout];
 }
 
+- (void)setThemeMode:(CDVInvokedUrlCommand *)command {
+    NSInteger mode = [[command argumentAtIndex:0] intValue];
+
+    [Purchasely setThemeMode:(enum PLYThemeMode) mode];
+}
+
 - (void)setAttribute:(CDVInvokedUrlCommand*)command {
     NSInteger attribute = [[command argumentAtIndex:0] intValue];
     NSString *value = [command argumentAtIndex:1];
@@ -321,14 +327,15 @@
 }
 
 - (void)userSubscriptions:(CDVInvokedUrlCommand*)command {
-    [Purchasely userSubscriptionsWithSuccess:^(NSArray<PLYSubscription *> * _Nullable subscriptions) {
+    [Purchasely userSubscriptions:false
+                          success:^(NSArray<PLYSubscription *> * _Nullable subscriptions) {
         NSMutableArray *result = [NSMutableArray new];
         for (PLYSubscription *subscription in subscriptions) {
             [result addObject:subscription.asDictionary];
         }
         [self successFor:command resultArray:result];
     }
-                                     failure:^(NSError * _Nonnull error) {
+                          failure:^(NSError * _Nonnull error) {
         [self failureFor:command resultString:error.localizedDescription];
     }];
 }
