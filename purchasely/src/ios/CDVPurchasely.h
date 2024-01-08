@@ -40,6 +40,7 @@
 - (void)purchaseWithPlanVendorId:(CDVInvokedUrlCommand*)command;
 - (void)restoreAllProducts:(CDVInvokedUrlCommand*)command;
 - (void)silentRestoreAllProducts:(CDVInvokedUrlCommand*)command;
+- (void)synchronize:(CDVInvokedUrlCommand*)command;
 - (void)purchasedSubscription:(CDVInvokedUrlCommand*)command;
 - (void)allProducts:(CDVInvokedUrlCommand*)command;
 - (void)productWithIdentifier:(CDVInvokedUrlCommand*)command;

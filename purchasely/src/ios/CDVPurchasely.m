@@ -278,6 +278,14 @@
     }];
 }
 
+- (void)synchronize:(CDVInvokedUrlCommand*)command {
+    [Purchasely synchronizeWithSuccess:^{
+        [self successFor:command];
+    } failure:^(NSError * _Nonnull error) {
+        [self failureFor:command resultString:error.localizedDescription];
+    }];
+}
+
 - (void)purchasedSubscription:(CDVInvokedUrlCommand*)command {
     self.purchasedCommand = command;
     [[NSNotificationCenter defaultCenter] addObserver:self

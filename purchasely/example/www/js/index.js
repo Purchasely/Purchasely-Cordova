@@ -266,6 +266,10 @@ function closePresentation() {
 	Purchasely.closePresentation();
 }
 
+function synchronize() {
+	Purchasely.synchronize();
+}
+
 function restore() {
 	Purchasely.restoreAllProducts(
 		(plan) => {

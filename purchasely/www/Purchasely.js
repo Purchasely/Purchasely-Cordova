@@ -94,6 +94,10 @@ exports.silentRestoreAllProducts = function (success, error) {
     exec(success, error, 'Purchasely', 'silentRestoreAllProducts', []);
 };
 
+exports.synchronize = function (success, error) {
+    exec(success, error, 'Purchasely', 'synchronize', []);
+};
+
 exports.purchasedSubscription = function (success, error) {
     exec(success, error, 'Purchasely', 'purchasedSubscription', []);
 };
