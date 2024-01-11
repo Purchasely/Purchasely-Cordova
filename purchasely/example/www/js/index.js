@@ -250,7 +250,10 @@ function processToPayment() {
 	// Call this method open paywall again
 	Purchasely.showPresentation();
 
-	// Call this method to process to payment
+	// Call this method in paywallObserver mode to synchronize purchases with Purchasely
+	// Purchasely.synchronize();
+
+	// Call this method to process to payment or false if you handled it
 	Purchasely.onProcessAction(true);
 }
 
@@ -264,10 +267,6 @@ function hidePresentation() {
 
 function closePresentation() {
 	Purchasely.closePresentation();
-}
-
-function synchronize() {
-	Purchasely.synchronize();
 }
 
 function restore() {

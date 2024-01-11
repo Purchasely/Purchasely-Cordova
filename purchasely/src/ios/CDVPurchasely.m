@@ -216,12 +216,12 @@
     NSString *planVendorId = [command argumentAtIndex:0];
     NSString *offerId = [command argumentAtIndex:1];
     NSString *contentId = [command argumentAtIndex:2];
-    
+
     [Purchasely planWith:planVendorId
                  success:^(PLYPlan * _Nonnull plan) {
-        
+
         if (@available(iOS 12.2, macOS 12.0, tvOS 15.0, watchOS 8.0, *)) {
-            
+
             NSString *storeOfferId = nil;
             for (PLYPromoOffer *promoOffer in plan.promoOffers) {
                 if ([promoOffer.vendorId isEqualToString:offerId]) {
@@ -229,7 +229,7 @@
                     break;
                 }
             }
-            
+
             if (storeOfferId) {
                 [Purchasely purchaseWithPromotionalOfferWithPlan:plan
                                                        contentId:contentId
@@ -280,9 +280,7 @@
 
 - (void)synchronize:(CDVInvokedUrlCommand*)command {
     [Purchasely synchronizeWithSuccess:^{
-        [self successFor:command];
     } failure:^(NSError * _Nonnull error) {
-        [self failureFor:command resultString:error.localizedDescription];
     }];
 }
 
@@ -379,7 +377,7 @@
 - (void)signPromotionalOffer:(CDVInvokedUrlCommand*)command {
     NSString *storeProductId = [command argumentAtIndex:0];
     NSString *storeOfferId = [command argumentAtIndex:1];
-    
+
     dispatch_async(dispatch_get_main_queue(), ^{
         if (@available(iOS 12.2, *)) {
             [Purchasely signPromotionalOfferWithStoreProductId:storeProductId storeOfferId:storeOfferId success:^(PLYOfferSignature * _Nonnull signature) {
@@ -396,7 +394,7 @@
 
 - (void)isEligibleForIntroOffer:(CDVInvokedUrlCommand*)command {
     NSString *planVendorId = [command argumentAtIndex:0];
-    
+
     [Purchasely planWith:planVendorId
                  success:^(PLYPlan * _Nonnull plan) {
         [plan isUserEligibleForIntroductoryOfferWithCompletion:^(BOOL isEligible) {
@@ -710,7 +708,7 @@
                 }
 
                 self.shouldReopenPaywall = NO;
-                
+
                 [Purchasely closeDisplayedPresentation];
                 self.presentedPresentationViewController = presentationLoaded.controller;
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
@@ -747,13 +745,13 @@
     [dict setObject:signature.identifier forKey:@"identifier"];
     [dict setObject:signature.signature forKey:@"signature"];
     [dict setObject:signature.keyIdentifier forKey:@"keyIdentifier"];
-    
+
     NSString *nonceString = [signature.nonce UUIDString];
     NSObject *nonce = (NSObject *)nonceString;
     if (nonce != nil) {
         [dict setObject:nonce forKey:@"nonce"];
     }
-    
+
     NSNumber *timestamp = [NSNumber numberWithDouble:signature.timestamp];
     if (timestamp != nil) {
         [dict setObject:timestamp forKey:@"timestamp"];
