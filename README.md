@@ -16,14 +16,15 @@ cordova plugin add @purchasely/cordova-plugin-purchasely-google
 ## Usage
 
 ```js
-Purchasely.startWithAPIKey(
-    'API_KEY',
-    ['Google'], // list of stores for Android, accepted values: Google, Huawei and Amazon
-    null, // your user id
-    Purchasely.LogLevel.DEBUG, // log level, should be warning or error in production
-    Purchasely.RunningMode.full, // running mode
+Purchasely.start(
+    'API_KEY',                     // set your own api key
+    ['Google'],                    // list of stores for Android, accepted values: Google, Huawei and Amazon
+    false,                         // set to false to use StoreKit2, true to use StoreKit1
+    null,                          // set your user id
+    Purchasely.LogLevel.DEBUG,     // log level, should be warning or error in production
+    Purchasely.RunningMode.full,   // running mode, can be paywallObserver or full
     (isConfigured) => {
-        if(isConfigured) // you can use the SDK like display a paywall or make a purchase
+        if(isConfigured) onPuchaselySdkReady();
     },
     (error) => {
         console.log(error);
