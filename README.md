@@ -15,6 +15,8 @@ cordova plugin add @purchasely/cordova-plugin-purchasely-google
 
 ## Usage
 
+More details in our [documentation](https://docs.purchasely.com/quick-start/sdk-implementation) 
+
 ```js
 Purchasely.start(
     'API_KEY',                     // set your own api key
@@ -24,15 +26,18 @@ Purchasely.start(
     Purchasely.LogLevel.DEBUG,     // log level, should be warning or error in production
     Purchasely.RunningMode.full,   // running mode, can be paywallObserver or full
     (isConfigured) => {
-        if(isConfigured) onPuchaselySdkReady();
+        if(isConfigured) {
+            // Purchasely is ready, you can display paywalls, set user attributes, start a purchase flow etc.
+        }
     },
     (error) => {
         console.log(error);
     }
 );
 
-Purchasely.presentPresentationWithIdentifier(
-    'my_presentation_id', // may be null
+// display a paywall from a placement
+Purchasely.presentPresentationForPlacement(
+    'placementId',
     'my_content_id', // may be null
     false, //display in fullscreen mode
     (callback) => {
