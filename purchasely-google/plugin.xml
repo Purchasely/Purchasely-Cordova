@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<plugin id="@purchasely/cordova-plugin-puchasely-google" version="4.2.4" xmlns="http://apache.org/cordova/ns/plugins/1.0" xmlns:android="http://schemas.android.com/apk/res/android">
+<plugin id="@purchasely/cordova-plugin-puchasely-google" version="4.3.1" xmlns="http://apache.org/cordova/ns/plugins/1.0" xmlns:android="http://schemas.android.com/apk/res/android">
     <name>PurchaselyGoogle</name>
     <js-module name="PurchaselyGoogle" src="www/PurchaselyGoogle.js">
         <clobbers target="cordova.plugins.PurchaselyGoogle" />
@@ -12,7 +12,7 @@
         </config-file>
         <config-file parent="/*" target="AndroidManifest.xml">
         </config-file>
-        <framework src="io.purchasely:google-play:4.2.3" />
+        <framework src="io.purchasely:google-play:4.3.1" />
         <source-file src="src/android/PurchaselyGoogle.java" target-dir="src/cordova-plugin-puchasely-google/PurchaselyGoogle" />
     </platform>
 </plugin>
