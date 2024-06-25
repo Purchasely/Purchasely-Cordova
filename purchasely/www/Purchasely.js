@@ -130,6 +130,10 @@ exports.userSubscriptions = function (success, error) {
     exec(success, defaultError, 'Purchasely', 'userSubscriptions', []);
 };
 
+exports.userSubscriptionsHistory = function (success, error) {
+    exec(success, defaultError, 'Purchasely', 'userSubscriptionsHistory', []);
+};
+
 exports.setLanguage = function (language) {
     exec(() => {}, defaultError, 'Purchasely', 'setLanguage', [language]);
 };

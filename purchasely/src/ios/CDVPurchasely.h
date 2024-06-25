@@ -46,6 +46,7 @@
 - (void)productWithIdentifier:(CDVInvokedUrlCommand*)command;
 - (void)planWithIdentifier:(CDVInvokedUrlCommand*)command;
 - (void)userSubscriptions:(CDVInvokedUrlCommand*)command;
+- (void)userSubscriptionsHistory:(CDVInvokedUrlCommand*)command;
 - (void)addEventsListener:(CDVInvokedUrlCommand*)command;
 - (void)removeEventsListener:(CDVInvokedUrlCommand*)command;
 - (void)isDeeplinkHandled:(CDVInvokedUrlCommand*)command;
