@@ -11,7 +11,7 @@
 
 `cd example/`
 
-`cordova platform add android`
+`cordova platform add android@13.0.0`
 
 `cordova run android`
 
@@ -30,4 +30,4 @@ dependencies {
 
 `cordova platform remove android`
 
-`cordova plugin remove cordova-plugin-purchasely`
+`cordova plugin remove @purchasely/cordova-plugin-purchasely`

@@ -131,11 +131,6 @@ class PLYProductActivity : AppCompatActivity() {
         PurchaselyPlugin.productActivity = productActivity
     }
 
-    override fun onDestroy() {
-        PurchaselyPlugin.productActivity?.activity = null
-        super.onDestroy()
-    }
-
     private val callback: (PLYProductViewResult, PLYPlan?) -> Unit = { result, plan ->
         PurchaselyPlugin.sendPurchaseResult(
             result,

@@ -120,7 +120,7 @@
         if (isFullscreen) {
             navCtrl.modalPresentationStyle = UIModalPresentationFullScreen;
         }
-        [Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage];
+        [Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage from:nil];
     }
 }
 
@@ -146,7 +146,7 @@
         if (isFullscreen) {
             navCtrl.modalPresentationStyle = UIModalPresentationFullScreen;
         }
-        [Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage];
+        [Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage from:nil];
     }
 }
 
@@ -173,7 +173,7 @@
         if (isFullscreen) {
             navCtrl.modalPresentationStyle = UIModalPresentationFullScreen;
         }
-        [Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage];
+        [Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage from:nil];
     }
 }
 
@@ -200,7 +200,7 @@
         if (isFullscreen) {
             navCtrl.modalPresentationStyle = UIModalPresentationFullScreen;
         }
-        [Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage];
+        [Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage from:nil];
     }
 }
 
@@ -209,7 +209,7 @@
     UINavigationController *navCtrl = [[UINavigationController alloc] initWithRootViewController:ctrl];
     ctrl.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem: UIBarButtonSystemItemDone target:navCtrl action:@selector(close)];
 
-    [Purchasely showController:navCtrl type: PLYUIControllerTypeSubscriptionList];
+    [Purchasely showController:navCtrl type: PLYUIControllerTypeSubscriptionList from:nil];
 }
 
 - (void)purchaseWithPlanVendorId:(CDVInvokedUrlCommand*)command {
@@ -334,6 +334,20 @@
 
 - (void)userSubscriptions:(CDVInvokedUrlCommand*)command {
     [Purchasely userSubscriptions:false
+                          success:^(NSArray<PLYSubscription *> * _Nullable subscriptions) {
+        NSMutableArray *result = [NSMutableArray new];
+        for (PLYSubscription *subscription in subscriptions) {
+            [result addObject:subscription.asDictionary];
+        }
+        [self successFor:command resultArray:result];
+    }
+                          failure:^(NSError * _Nonnull error) {
+        [self failureFor:command resultString:error.localizedDescription];
+    }];
+}
+
+- (void)userSubscriptionsHistory:(CDVInvokedUrlCommand*)command {
+    [Purchasely userSubscriptionsHistory:false
                           success:^(NSArray<PLYSubscription *> * _Nullable subscriptions) {
         NSMutableArray *result = [NSMutableArray new];
         for (PLYSubscription *subscription in subscriptions) {
@@ -555,7 +569,7 @@
         if (self.presentedPresentationViewController && self.shouldReopenPaywall) {
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
                 self.shouldReopenPaywall = NO;
-                [Purchasely showController:self.presentedPresentationViewController type:PLYUIControllerTypeProductPage];
+                [Purchasely showController:self.presentedPresentationViewController type:PLYUIControllerTypeProductPage from:nil];
             });
         }
     });
@@ -712,7 +726,7 @@
                 [Purchasely closeDisplayedPresentation];
                 self.presentedPresentationViewController = presentationLoaded.controller;
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                    [Purchasely showController:presentationLoaded.controller type: PLYUIControllerTypeProductPage];
+                    [Purchasely showController:presentationLoaded.controller type: PLYUIControllerTypeProductPage from:nil];
                 });
             }
         });

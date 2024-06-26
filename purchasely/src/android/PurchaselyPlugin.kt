@@ -136,6 +136,7 @@ class PurchaselyPlugin : CordovaPlugin() {
                 "restoreAllProducts" -> restoreAllProducts(callbackContext)
                 "silentRestoreAllProducts" -> restoreAllProducts(callbackContext)
                 "userSubscriptions" -> userSubscriptions(callbackContext)
+                "userSubscriptionsHistory" -> userSubscriptionsHistory(callbackContext)
                 "isDeeplinkHandled" -> isDeeplinkHandled(
                     getStringFromJson(args.getString(0)),
                     callbackContext
@@ -509,6 +510,38 @@ class PurchaselyPlugin : CordovaPlugin() {
 
     private fun userSubscriptions(callbackContext: CallbackContext) {
         Purchasely.userSubscriptions(
+            false,
+            object : SubscriptionsListener {
+                override fun onSuccess(list: List<PLYSubscriptionData>) {
+                    val result = JSONArray()
+                    for (i in list.indices) {
+                        val data = list[i]
+                        val map = HashMap(data.toMap())
+                        map["plan"] = transformPlanToMap(data.plan)
+                        map["product"] = data.product.toMap()
+                        if (data.data.storeType == StoreType.GOOGLE_PLAY_STORE) {
+                            map["subscriptionSource"] = StoreType.GOOGLE_PLAY_STORE.ordinal
+                        } else if (data.data.storeType == StoreType.AMAZON_APP_STORE) {
+                            map["subscriptionSource"] = StoreType.AMAZON_APP_STORE.ordinal
+                        } else if (data.data.storeType == StoreType.HUAWEI_APP_GALLERY) {
+                            map["subscriptionSource"] = StoreType.HUAWEI_APP_GALLERY.ordinal
+                        } else if (data.data.storeType == StoreType.APPLE_APP_STORE) {
+                            map["subscriptionSource"] = StoreType.APPLE_APP_STORE.ordinal
+                        }
+                        result.put(JSONObject(map))
+                    }
+                    callbackContext.success(result)
+                }
+
+                override fun onFailure(throwable: Throwable) {
+                    callbackContext.error(throwable.message)
+                }
+            }
+        )
+    }
+
+    private fun userSubscriptionsHistory(callbackContext: CallbackContext) {
+        Purchasely.userSubscriptionsHistory(
             false,
             object : SubscriptionsListener {
                 override fun onSuccess(list: List<PLYSubscriptionData>) {
