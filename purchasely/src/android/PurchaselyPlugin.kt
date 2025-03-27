@@ -336,7 +336,34 @@ class PurchaselyPlugin : CordovaPlugin() {
     private fun setAttribute(attribute: Int, value: String?) {
         if(value == null) return
 
-        Purchasely.setAttribute(Attribute.values()[attribute], value)
+        val attributeKey = when (attribute) {
+            FlutterPLYAttribute.firebase_app_instance_id.ordinal -> Attribute.FIREBASE_APP_INSTANCE_ID
+            FlutterPLYAttribute.airship_channel_id.ordinal -> Attribute.AIRSHIP_CHANNEL_ID
+            FlutterPLYAttribute.airship_user_id.ordinal -> Attribute.AIRSHIP_USER_ID
+            FlutterPLYAttribute.batch_installation_id.ordinal -> Attribute.BATCH_INSTALLATION_ID
+            FlutterPLYAttribute.adjust_id.ordinal -> Attribute.ADJUST_ID
+            FlutterPLYAttribute.appsflyer_id.ordinal -> Attribute.APPSFLYER_ID
+            FlutterPLYAttribute.mixpanel_distinct_id.ordinal -> Attribute.MIXPANEL_DISTINCT_ID
+            FlutterPLYAttribute.clever_tap_id.ordinal -> Attribute.CLEVER_TAP_ID
+            FlutterPLYAttribute.sendinblueUserEmail.ordinal -> Attribute.SENDINBLUE_USER_EMAIL
+            FlutterPLYAttribute.iterableUserEmail.ordinal -> Attribute.ITERABLE_USER_EMAIL
+            FlutterPLYAttribute.iterableUserId.ordinal -> Attribute.ITERABLE_USER_ID
+            FlutterPLYAttribute.atInternetIdClient.ordinal -> Attribute.AT_INTERNET_ID_CLIENT
+            FlutterPLYAttribute.mParticleUserId.ordinal -> Attribute.MPARTICLE_USER_ID
+            FlutterPLYAttribute.customerioUserId.ordinal -> Attribute.CUSTOMERIO_USER_ID
+            FlutterPLYAttribute.customerioUserEmail.ordinal -> Attribute.CUSTOMERIO_USER_EMAIL
+            FlutterPLYAttribute.branchUserDeveloperIdentity.ordinal -> Attribute.BRANCH_USER_DEVELOPER_IDENTITY
+            FlutterPLYAttribute.amplitudeUserId.ordinal -> Attribute.AMPLITUDE_USER_ID
+            FlutterPLYAttribute.amplitudeDeviceId.ordinal -> Attribute.AMPLITUDE_DEVICE_ID
+            FlutterPLYAttribute.moengageUniqueId.ordinal -> Attribute.MOENGAGE_UNIQUE_ID
+            FlutterPLYAttribute.oneSignalExternalId.ordinal -> Attribute.ONESIGNAL_EXTERNAL_ID
+            FlutterPLYAttribute.batchCustomUserId.ordinal -> Attribute.BATCH_CUSTOM_USER_ID
+            else -> null
+        }
+
+        attributeKey?.let {
+            Purchasely.setAttribute(attribute = it, value = value)
+        }
     }
 
     private fun setDefaultPresentationResultHandler(callbackContext: CallbackContext) {
@@ -1024,5 +1051,30 @@ class PurchaselyPlugin : CordovaPlugin() {
             map["isEligibleForIntroOffer"] = plan.isEligibleToIntroOffer(null)
             return map
         }
+    }
+
+    // WARNING: This enum must be strictly identical to the one in the JS side (Purchasely.js).
+    enum class FlutterPLYAttribute {
+        firebase_app_instance_id,
+        airship_channel_id,
+        airship_user_id,
+        batch_installation_id,
+        adjust_id,
+        appsflyer_id,
+        mixpanel_distinct_id,
+        clever_tap_id,
+        sendinblueUserEmail,
+        iterableUserEmail,
+        iterableUserId,
+        atInternetIdClient,
+        mParticleUserId,
+        customerioUserId,
+        customerioUserEmail,
+        branchUserDeveloperIdentity,
+        amplitudeUserId,
+        amplitudeDeviceId,
+        moengageUniqueId,
+        oneSignalExternalId,
+        batchCustomUserId,
     }
 }

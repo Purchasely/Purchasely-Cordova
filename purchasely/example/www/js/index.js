@@ -86,7 +86,27 @@ function onPuchaselySdkReady() {
 
 	Purchasely.setLogLevel(Purchasely.LogLevel.DEBUG);
 
-	Purchasely.setAttribute(Purchasely.Attribute.FIREBASE_APP_INSTANCE_ID, "1");
+	Purchasely.setAttribute(Purchasely.Attribute.FIREBASE_APP_INSTANCE_ID, "firebase_instance_id");
+	Purchasely.setAttribute(Purchasely.Attribute.AIRSHIP_CHANNEL_ID, "airship_channel_id");
+	Purchasely.setAttribute(Purchasely.Attribute.AIRSHIP_USER_ID, "airship_user_id");
+	Purchasely.setAttribute(Purchasely.Attribute.BATCH_INSTALLATION_ID, "batch_installation_id");
+	Purchasely.setAttribute(Purchasely.Attribute.ADJUST_ID, "adjust_id");
+	Purchasely.setAttribute(Purchasely.Attribute.APPSFLYER_ID, "appsflyer_id");
+	Purchasely.setAttribute(Purchasely.Attribute.MIXPANEL_DISTINCT_ID, "mixpanel_distinct_id");
+	Purchasely.setAttribute(Purchasely.Attribute.CLEVER_TAP_ID, "clever_tap_id");
+	Purchasely.setAttribute(Purchasely.Attribute.SENDINBLUE_USER_EMAIL, "sendinblue_user_email");
+	Purchasely.setAttribute(Purchasely.Attribute.ITERABLE_USER_EMAIL, "iterable_user_email");
+	Purchasely.setAttribute(Purchasely.Attribute.ITERABLE_USER_ID, "iterable_user_id");
+	Purchasely.setAttribute(Purchasely.Attribute.AT_INTERNET_ID_CLIENT, "at_internet_id_client");
+	Purchasely.setAttribute(Purchasely.Attribute.MPARTICLE_USER_ID, "mparticle_user_id");
+	Purchasely.setAttribute(Purchasely.Attribute.CUSTOMERIO_USER_ID, "customerio_user_id");
+	Purchasely.setAttribute(Purchasely.Attribute.CUSTOMERIO_USER_EMAIL, "customerio_user_email");
+	Purchasely.setAttribute(Purchasely.Attribute.BRANCH_USER_DEVELOPER_IDENTITY, "branch_user_developer_identity");
+	Purchasely.setAttribute(Purchasely.Attribute.AMPLITUDE_USER_ID, "amplitude_user_id");
+	Purchasely.setAttribute(Purchasely.Attribute.AMPLITUDE_DEVICE_ID, "amplitude_device_id");
+	Purchasely.setAttribute(Purchasely.Attribute.MOENGAGE_UNIQUE_ID, "moengage_unique_id");
+	Purchasely.setAttribute(Purchasely.Attribute.ONESIGNAL_EXTERNAL_ID, "onesignal_external_id");
+	Purchasely.setAttribute(Purchasely.Attribute.BATCH_CUSTOM_USER_ID, "batch_custom_user_id");
 	Purchasely.setAttribute(Purchasely.Attribute.BATCH_INSTALLATION_ID, "testBatch1");
 
 	Purchasely.readyToOpenDeeplink(true);
