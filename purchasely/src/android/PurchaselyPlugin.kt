@@ -182,6 +182,7 @@ class PurchaselyPlugin : CordovaPlugin() {
                 "userAttribute" -> userAttribute(getStringFromJson(args.getString(0)), callbackContext)
                 "clearUserAttribute" -> clearUserAttribute(getStringFromJson(args.getString(0)))
                 "clearUserAttributes" -> clearUserAttributes()
+                "clearBuiltInAttributes" -> clearBuiltInAttributes()
                 "isEligibleForIntroOffer" -> isEligibleForIntroOffer(getStringFromJson(args.getString(0)), callbackContext)
                 "signPromotionalOffer" -> signPromotionalOffer(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), callbackContext)
                 else -> return false
@@ -947,6 +948,10 @@ class PurchaselyPlugin : CordovaPlugin() {
 
     fun clearUserAttributes() {
         Purchasely.clearUserAttributes()
+    }
+
+    fun clearBuiltInAttributes() {
+        Purchasely.clearBuiltInAttributes()
     }
 
     private fun isEligibleForIntroOffer(planId: String?, callbackContext: CallbackContext) {
