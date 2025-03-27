@@ -692,6 +692,10 @@
     [Purchasely clearUserAttributes];
 }
 
+- (void)clearBuiltInAttributes:(CDVInvokedUrlCommand*)command {
+    [Purchasely clearBuiltInAttributes];
+}
+
 - (void)fetchPresentation:(CDVInvokedUrlCommand*)command {
     NSString *placementId = [command argumentAtIndex:0];
     NSString *presentationId = [command argumentAtIndex:1];

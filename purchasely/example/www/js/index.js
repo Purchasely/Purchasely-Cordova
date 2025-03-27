@@ -214,6 +214,8 @@ function onPuchaselySdkReady() {
 			Purchasely.onProcessAction(true);
 		}
 	});
+
+	Purchasely.clearBuiltInAttributes();
 }
 
 function openPresentation() {

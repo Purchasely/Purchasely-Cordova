@@ -198,6 +198,10 @@ exports.clearUserAttributes = function () {
     exec(() => {}, defaultError, 'Purchasely', 'clearUserAttributes', []);
 };
 
+exports.clearBuiltInAttributes = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'clearBuiltInAttributes', []);
+}
+
 exports.isEligibleForIntroOffer = function (planId, success, error) {
     exec(success, error, 'Purchasely', 'isEligibleForIntroOffer', [planId]);
 };
