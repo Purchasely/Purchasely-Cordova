@@ -17,6 +17,7 @@
  * under the License.
  */
 
+
 // Wait for the deviceready event before using any of Cordova's device APIs.
 // See https://cordova.apache.org/docs/en/latest/cordova/events/events.html#deviceready
 document.addEventListener('deviceready', onDeviceReady, false);
@@ -74,6 +75,45 @@ function onPuchaselySdkReady() {
 		console.log(error);
 	});
 
+	Purchasely.addUserAttributeListener((attribute) => {
+
+		if (attribute.action == "add") {
+			console.log("ADD Attribute: " + attribute.key)
+			console.log("ADD Attribute: " + attribute.value)
+			console.log("ADD Attribute: " + attribute.source)
+			console.log("ADD Attribute: " + attribute.type)
+		} else if (attribute.action == "remove") {
+			console.log("REMOVE Attribute: " + attribute.key)
+			console.log("REMOVE Attribute: " + attribute.source)
+		}
+
+		// WHY IS IT NOT WORKING ????
+		/*
+		if (attribute.action === PurchaselyUserAttributeAction.ADD) {
+			console.log("TOTO Attribute: " + attribute.key)
+			console.log("TOTO Attribute: " + attribute.value)
+			console.log("TOTO Attribute: " + attribute.source)
+			console.log("TOTO Attribute: " + attribute.type)
+		} else if (attribute.action === PurchaselyUserAttributeAction.REMOVE) {
+			console.log("TOTO Attribute: " + attribute.key)
+			console.log("TOTO Attribute: " + attribute.source)
+		}
+
+		switch (attribute.action) {
+			case PurchaselyUserAttributeAction.ADD:				
+				console.log("TOTO Attribute: " + attribute.key)
+				console.log("TOTO Attribute: " + attribute.value)
+				console.log("TOTO Attribute: " + attribute.source)
+				console.log("TOTO Attribute: " + attribute.type)
+			case PurchaselyUserAttributeAction.REMOVE:
+				console.log("TOTO Attribute: " + attribute.key)
+				console.log("TOTO Attribute: " + attribute.source)
+		}
+		*/
+	}, (error) => {
+		console.log("Error: " + error)
+	})
+
 	Purchasely.purchasedSubscription(() => {
 		console.log("Purchased performed, reload content to unlock.");
 	});
@@ -118,6 +158,14 @@ function onPuchaselySdkReady() {
 		(error) => {
 		console.log("Error with purchase : " + error);
 	});
+
+	Purchasely.setUserAttributeWithString("key_string", "value_string");
+	Purchasely.setUserAttributeWithBoolean("key_boolean", true);
+	Purchasely.setUserAttributeWithInt("key_int", 7);
+	Purchasely.setUserAttributeWithDouble("key_double", 4.5);
+	Purchasely.setUserAttributeWithDate("key_date", new Date().toISOString());
+	
+	Purchasely.clearUserAttributes();
 
 	Purchasely.setUserAttributeWithString("key_string", "value_string");
 	Purchasely.setUserAttributeWithBoolean("key_boolean", true);

@@ -76,6 +76,7 @@ class PurchaselyPlugin : CordovaPlugin() {
 
                 "close" -> close()
                 "addEventsListener" -> addEventsListener(callbackContext)
+                "addUserAttributesListener" -> addUserAttributesListener(callbackContext)
                 "removeEventsListener" -> removeEventsListener()
                 "getAnonymousUserId" -> getAnonymousUserId(callbackContext)
                 "userLogin" -> userLogin(getStringFromJson(args.getString(0)), callbackContext)
@@ -268,6 +269,40 @@ class PurchaselyPlugin : CordovaPlugin() {
         paywallActionHandler = null
         productActivity = null
         Purchasely.close()
+    }
+
+    private fun addUserAttributesListener(callbackContext: CallbackContext) {
+        attributesCallback = callbackContext
+        Purchasely.userAttributeListener = object: UserAttributeListener {
+            override fun onUserAttributeSet(
+                key: String, 
+                type: PLYUserAttributeType, 
+                value: Any, 
+                source: PLYUserAttributeSource
+            ) {
+                val map = HashMap<String, Any?>()
+                map["action"] = "add"
+                map["key"] = key
+                map["type"] = type.name
+                map["value"] = value
+                map["source"] = source.name
+
+                val pluginResult = PluginResult(PluginResult.Status.OK, JSONObject(map))
+                pluginResult.keepCallback = true
+                eventsCallback?.sendPluginResult(pluginResult)
+            }
+
+            override fun onUserAttributeRemoved(key: String, source: PLYUserAttributeSource) {
+                val map = HashMap<String, Any?>()
+                map["action"] = "remove"
+                map["key"] = key
+                map["source"] = source.name
+
+                val pluginResult = PluginResult(PluginResult.Status.OK, JSONObject(map))
+                pluginResult.keepCallback = true
+                eventsCallback?.sendPluginResult(pluginResult)
+            }
+        }
     }
 
     private fun addEventsListener(callbackContext: CallbackContext) {
@@ -906,6 +941,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         var defaultCallback: CallbackContext? = null
         var purchaseCallback: CallbackContext? = null
         var eventsCallback: CallbackContext? = null
+        var attributesCallback: CallbackContext? = null
         var productActivity: ProductActivity? = null
 
         var interceptorActivity: WeakReference<Activity>? = null

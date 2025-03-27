@@ -14,6 +14,10 @@ exports.addEventsListener = function (success, error) {
     exec(success, error, 'Purchasely', 'addEventsListener', []);
 };
 
+exports.addUserAttributeListener = function(success, error) {
+    exec(success, error, 'Purchasely', 'addUserAttributeListener', []);
+}
+
 exports.removeEventsListener = function () {
     exec(() => {}, defaultError, 'Purchasely', 'removeEventsListener', []);
 };
@@ -269,4 +273,9 @@ exports.ThemeMode = {
 	light: 0,
 	dark: 1,
 	system: 2
+}
+
+exports.PurchaselyUserAttributeAction = {
+    ADD: 'add',
+    REMOVE: 'remove'
 }
