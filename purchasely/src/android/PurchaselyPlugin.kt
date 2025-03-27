@@ -16,7 +16,7 @@ import io.purchasely.ext.PLYEvent
 import io.purchasely.ext.PLYPresentation
 import io.purchasely.ext.PLYPresentationAction
 import io.purchasely.ext.PLYPresentationType
-import io.purchasely.ext.PLYPresentationViewProperties
+import io.purchasely.ext.PLYPresentationProperties
 import io.purchasely.ext.PLYProductViewResult
 import io.purchasely.ext.PLYRunningMode
 import io.purchasely.ext.PLYRunningMode.Full
@@ -170,6 +170,10 @@ class PurchaselyPlugin : CordovaPlugin() {
                 "setUserAttributeWithInt" -> setUserAttributeWithInt(getStringFromJson(args.getString(0)), args.getInt(1))
                 "setUserAttributeWithDouble" -> setUserAttributeWithDouble(getStringFromJson(args.getString(0)), args.getDouble(1))
                 "setUserAttributeWithDate" -> setUserAttributeWithDate(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)))
+                "setUserAttributeWithStringArray" -> setUserAttributeWithStringArray(getStringFromJson(args.getString(0)), args.getJSONArray(1))
+                "setUserAttributeWithIntArray" -> setUserAttributeWithIntArray(getStringFromJson(args.getString(0)), args.getJSONArray(1))
+                "setUserAttributeWithDoubleArray" -> setUserAttributeWithDoubleArray(getStringFromJson(args.getString(0)), args.getJSONArray(1))
+                "setUserAttributeWithBooleanArray" -> setUserAttributeWithBooleanArray(getStringFromJson(args.getString(0)), args.getJSONArray(1))
                 "userAttribute" -> userAttribute(getStringFromJson(args.getString(0)), callbackContext)
                 "clearUserAttribute" -> clearUserAttribute(getStringFromJson(args.getString(0)))
                 "clearUserAttributes" -> clearUserAttributes()
@@ -430,7 +434,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         presentationId: String?,
         contentId: String?,
         callbackContext: CallbackContext) {
-        val properties = PLYPresentationViewProperties(
+        val properties = PLYPresentationProperties(
             placementId = placementId,
             presentationId = presentationId,
             contentId = contentId)
@@ -461,7 +465,7 @@ class PurchaselyPlugin : CordovaPlugin() {
             Pair("planVendorId", planVendorId),
             Pair("storeProductId", storeProductId),
             Pair("basePlanId", basePlanId),
-            Pair("offerId", offerId)
+            //Pair("offerId", offerId)
         )
     }
 
@@ -486,7 +490,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         purchaseCallback = callbackContext
 
         cordova.activity.let { activity ->
-            val intent = PLYProductActivity.newIntent(activity, PLYPresentationViewProperties(), isFullScreen, loadingBackgroundColor).apply {
+            val intent = PLYProductActivity.newIntent(activity, PLYPresentationProperties(), isFullScreen, loadingBackgroundColor).apply {
                 putExtra("presentation", presentation)
             }
             activity.startActivity(intent)
@@ -758,6 +762,58 @@ class PurchaselyPlugin : CordovaPlugin() {
         )
     }
 
+    fun setUserAttributeWithStringArray(key: String?, value: JSONArray?) {
+        if(key == null || value == null) return
+        val list = mutableListOf<String>()
+        for (i in 0 until value.length()) {
+            try {
+                list.add(value.getString(i))
+            } catch (e: JSONException) {
+                Log.e("Purchasely", "Error in string array" + e.message, e)
+            }
+        }
+        Purchasely.setUserAttribute(key, list.toTypedArray())
+    }
+
+    fun setUserAttributeWithIntArray(key: String?, value: JSONArray?) {
+        if(key == null || value == null) return
+        val list = mutableListOf<Int>()
+        for (i in 0 until value.length()) {
+            try {
+                list.add(value.getInt(i))
+            } catch (e: JSONException) {
+                Log.e("Purchasely", "Error in int array" + e.message, e)
+            }
+        }
+        Purchasely.setUserAttribute(key, list.toTypedArray())
+    }
+
+    fun setUserAttributeWithDoubleArray(key: String?, value: JSONArray?) {
+        if (key == null || value == null) return
+        val list = mutableListOf<Float>()
+        for (i in 0 until value.length()) {
+            try {
+                list.add(value.getDouble(i).toFloat())
+            } catch (e: JSONException) {
+                Log.e("Purchasely", "Error in double array: ${e.message}", e)
+            }
+        }
+        Purchasely.setUserAttribute(key, list.toTypedArray())
+    }
+
+    fun setUserAttributeWithBooleanArray(key: String?, value: JSONArray?) {
+        if(key == null || value == null) return
+        val list = mutableListOf<Boolean>()
+        for (i in 0 until value.length()) {
+            try {
+                list.add(value.getBoolean(i))
+            } catch (e: JSONException) {
+                Log.e("Purchasely", "Error in boolean array" + e.message, e)
+            }
+        }
+        Purchasely.setUserAttribute(key, list.toTypedArray())
+    }
+
     fun setUserAttributeWithString(key: String?, value: String?) {
         if(key == null || value == null) return
         Purchasely.setUserAttribute(key, value)
@@ -800,14 +856,16 @@ class PurchaselyPlugin : CordovaPlugin() {
     fun userAttribute(key: String?, callbackContext: CallbackContext) {
         if(key == null) return
         val result = getUserAttributeValueForCordova(Purchasely.userAttribute(key))
-        if(result != null) {
-            callbackContext.success(getUserAttributeValueForCordova(result))
-        } else {
-            callbackContext.error("No user attribute found with $key")
+        when (result) {
+            is JSONArray -> callbackContext.success(result)
+            is String -> callbackContext.success(result)
+            is Int -> callbackContext.success(result)
+            is Boolean -> callbackContext.success(if (result) 1 else 0)
+            else -> callbackContext.error("No user attribute found with $key")
         }
     }
 
-    private fun getUserAttributeValueForCordova(value: Any?): String? {
+    private fun getUserAttributeValueForCordova(value: Any?): Any? {
         return when (value) {
             is Date -> {
                 val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -822,11 +880,18 @@ class PurchaselyPlugin : CordovaPlugin() {
                     ""
                 }
             }
-            is Int -> value.toString()
+            is Int -> value
             //awful but to keep same precision so 1.2f = 1.2 double and not 1.20000056
-            is Float -> value.toString().toDouble().toString()
+            is Float -> value.toString().toDouble()
             is String -> value
-            is Boolean -> value.toString()
+            is Boolean -> value
+            is Array<*> -> {
+                val jsonArray = JSONArray()
+                value.forEach {
+                    jsonArray.put(getUserAttributeValueForCordova(it))
+                }
+                jsonArray
+            }
             else -> null
         }
     }

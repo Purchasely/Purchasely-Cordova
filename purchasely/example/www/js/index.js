@@ -125,20 +125,41 @@ function onPuchaselySdkReady() {
 	Purchasely.setUserAttributeWithDouble("key_double", 4.5);
 	Purchasely.setUserAttributeWithDate("key_date", new Date().toISOString());
 
+	Purchasely.setUserAttributeWithStringArray("key_string_array", ["value1", "value2"]);
+	Purchasely.setUserAttributeWithIntArray("key_int_array", [1, 2, 3]);
+	Purchasely.setUserAttributeWithDoubleArray("key_double_array", [1.1, 2.2, 3.3]);
+	Purchasely.setUserAttributeWithBooleanArray("key_boolean_array", [true, false, true]);
+
 	Purchasely.userAttribute("key_string", value => {
-		console.log("User attribute string " + value);
+		console.log("User attribute string: " + value);
 	});
 
 	Purchasely.userAttribute("key_boolean", value => {
-		console.log("User attribute boolean " + value);
+		console.log("User attribute boolean: " + value);
 	});
 
 	Purchasely.userAttribute("key_int", value => {
-		console.log("User attribute int " + value);
+		console.log("User attribute int: " + value);
 	});
 
 	Purchasely.userAttribute("key_double", value => {
-		console.log("User attribute double " + value);
+		console.log("User attribute double: " + value);
+	});
+
+	Purchasely.userAttribute("key_string_array", value => {
+	    console.log("User attribute string array: " + value);
+	});
+
+	Purchasely.userAttribute("key_int_array", value => {
+	    console.log("User attribute int array: " + value);
+	});
+
+	Purchasely.userAttribute("key_double_array", value => {
+	    console.log("User attribute double array: " + value);
+	});
+
+	Purchasely.userAttribute("key_boolean_array", value => {
+	    console.log("User attribute boolean array: " + value);
 	});
 
 	Purchasely.userAttribute("key_date", value => {

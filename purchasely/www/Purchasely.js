@@ -5,7 +5,7 @@ var defaultError = (e) => { console.log(e); }
 exports.start = function (apiKey, stores, storekit1, userId, logLevel, runningMode, success, error) {
     var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
     if(!cordovaSdkVersion) {
-        cordovaSdkVersion = "4.4.0";
+        cordovaSdkVersion = "5.1.0";
     }
     exec(success, error, 'Purchasely', 'start', [apiKey, stores, storekit1, userId, logLevel, runningMode, cordovaSdkVersion]);
 };
@@ -169,6 +169,22 @@ exports.setUserAttributeWithDouble = function (key, value) {
 exports.setUserAttributeWithDate = function (key, value) {
     exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDate', [key, value]);
 };
+
+exports.setUserAttributeWithStringArray = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithStringArray', [key, value]);
+}
+
+exports.setUserAttributeWithIntArray = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithIntArray', [key, value]);
+}
+
+exports.setUserAttributeWithDoubleArray = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDoubleArray', [key, value]);
+}
+
+exports.setUserAttributeWithBooleanArray = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithBooleanArray', [key, value]);
+}
 
 exports.userAttribute = function (key, success, error) {
     exec(success, error, 'Purchasely', 'userAttribute', [key]);

@@ -56,9 +56,14 @@
 - (void)hidePresentation:(CDVInvokedUrlCommand*)command;
 - (void)showPresentation:(CDVInvokedUrlCommand*)command;
 - (void)userDidConsumeSubscriptionContent:(CDVInvokedUrlCommand*)command;
+- (void)setUserAttributeWithStringArray:(CDVInvokedUrlCommand*)command;
+- (void)setUserAttributeWithIntArray:(CDVInvokedUrlCommand*)command;
+- (void)setUserAttributeWithDoubleArray:(CDVInvokedUrlCommand*)command;
+- (void)setUserAttributeWithBooleanArray:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithString:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithBoolean:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithInt:(CDVInvokedUrlCommand*)command;
+- (void)setUserAttributeWithDouble:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithDate:(CDVInvokedUrlCommand*)command;
 - (void)userAttribute:(CDVInvokedUrlCommand*)command;
 - (void)clearUserAttribute:(CDVInvokedUrlCommand*)command;
