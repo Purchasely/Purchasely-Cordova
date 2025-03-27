@@ -178,6 +178,22 @@ exports.setUserAttributeWithDate = function (key, value) {
     exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDate', [key, value]);
 };
 
+exports.setUserAttributeWithStringArray = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithStringArray', [key, value]);
+}
+
+exports.setUserAttributeWithIntArray = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithIntArray', [key, value]);
+}
+
+exports.setUserAttributeWithDoubleArray = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDoubleArray', [key, value]);
+}
+
+exports.setUserAttributeWithBooleanArray = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithBooleanArray', [key, value]);
+}
+
 exports.userAttribute = function (key, success, error) {
     exec(success, error, 'Purchasely', 'userAttribute', [key]);
 };

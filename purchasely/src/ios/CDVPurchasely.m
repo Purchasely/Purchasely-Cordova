@@ -589,6 +589,48 @@
     [Purchasely userDidConsumeSubscriptionContent];
 }
 
+- (void)setUserAttributeWithStringArray:(CDVInvokedUrlCommand*)command {
+    NSString *key = [command argumentAtIndex:0];
+    NSArray<NSString *> *array = [command argumentAtIndex:1];
+    [Purchasely setUserAttributeWithStringArray:array forKey:key];
+}
+
+- (void)setUserAttributeWithBooleanArray:(CDVInvokedUrlCommand*)command {
+    NSString *key = [command argumentAtIndex:0];
+    NSArray *values = [command argumentAtIndex:1];
+
+    NSMutableArray<NSNumber *> *boolArray = [NSMutableArray array];
+    for (id value in values) {
+        [boolArray addObject:@([value boolValue])];
+    }
+
+    [Purchasely setUserAttributeWithBoolArray:boolArray forKey:key];
+}
+
+- (void)setUserAttributeWithIntArray:(CDVInvokedUrlCommand*)command {
+    NSString *key = [command argumentAtIndex:0];
+    NSArray *values = [command argumentAtIndex:1];
+
+    NSMutableArray<NSNumber *> *intArray = [NSMutableArray array];
+    for (id val in values) {
+        [intArray addObject:@([val intValue])];
+    }
+
+    [Purchasely setUserAttributeWithIntArray:intArray forKey:key];
+}
+
+- (void)setUserAttributeWithDoubleArray:(CDVInvokedUrlCommand*)command {
+    NSString *key = [command argumentAtIndex:0];
+    NSArray *values = [command argumentAtIndex:1];
+
+    NSMutableArray<NSNumber *> *doubleArray = [NSMutableArray array];
+    for (id val in values) {
+        [doubleArray addObject:@([val doubleValue])];
+    }
+
+    [Purchasely setUserAttributeWithDoubleArray:doubleArray forKey:key];
+}
+
 - (void)setUserAttributeWithString:(CDVInvokedUrlCommand*)command {
     NSString *key = [command argumentAtIndex:0];
     NSString *value = [command argumentAtIndex:1];
