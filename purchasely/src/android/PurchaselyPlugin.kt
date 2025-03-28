@@ -16,7 +16,7 @@ import io.purchasely.ext.PLYEvent
 import io.purchasely.ext.PLYPresentation
 import io.purchasely.ext.PLYPresentationAction
 import io.purchasely.ext.PLYPresentationType
-import io.purchasely.ext.PLYPresentationViewProperties
+import io.purchasely.ext.PLYPresentationProperties
 import io.purchasely.ext.PLYProductViewResult
 import io.purchasely.ext.PLYRunningMode
 import io.purchasely.ext.PLYRunningMode.Full
@@ -29,6 +29,9 @@ import io.purchasely.ext.Purchasely
 import io.purchasely.ext.State
 import io.purchasely.ext.StoreType
 import io.purchasely.ext.SubscriptionsListener
+import io.purchasely.ext.UserAttributeListener
+import io.purchasely.storage.userData.PLYUserAttributeSource
+import io.purchasely.storage.userData.PLYUserAttributeType
 import io.purchasely.models.PLYError
 import io.purchasely.models.PLYPlan
 import io.purchasely.models.PLYPresentationPlan
@@ -465,7 +468,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         presentationId: String?,
         contentId: String?,
         callbackContext: CallbackContext) {
-        val properties = PLYPresentationViewProperties(
+        val properties = PLYPresentationProperties(
             placementId = placementId,
             presentationId = presentationId,
             contentId = contentId)
@@ -496,7 +499,7 @@ class PurchaselyPlugin : CordovaPlugin() {
             Pair("planVendorId", planVendorId),
             Pair("storeProductId", storeProductId),
             Pair("basePlanId", basePlanId),
-            Pair("offerId", offerId)
+            //Pair("offerId", offerId)
         )
     }
 
@@ -521,7 +524,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         purchaseCallback = callbackContext
 
         cordova.activity.let { activity ->
-            val intent = PLYProductActivity.newIntent(activity, PLYPresentationViewProperties(), isFullScreen, loadingBackgroundColor).apply {
+            val intent = PLYProductActivity.newIntent(activity, PLYPresentationProperties(), isFullScreen, loadingBackgroundColor).apply {
                 putExtra("presentation", presentation)
             }
             activity.startActivity(intent)
