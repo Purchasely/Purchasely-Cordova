@@ -76,40 +76,16 @@ function onPuchaselySdkReady() {
 	});
 
 	Purchasely.addUserAttributeListener((attribute) => {
-
-		if (attribute.action == "add") {
+		if (attribute.action == Purchasely.UserAttributeAction.ADD) {
 			console.log("ADD Attribute: " + attribute.key)
 			console.log("ADD Attribute: " + attribute.value)
 			console.log("ADD Attribute: " + attribute.source)
 			console.log("ADD Attribute: " + attribute.type)
-		} else if (attribute.action == "remove") {
+		} else if (attribute.action == Purchasely.UserAttributeAction.REMOVE) {
 			console.log("REMOVE Attribute: " + attribute.key)
 			console.log("REMOVE Attribute: " + attribute.source)
 		}
 
-		// WHY IS IT NOT WORKING ????
-		/*
-		if (attribute.action === PurchaselyUserAttributeAction.ADD) {
-			console.log("TOTO Attribute: " + attribute.key)
-			console.log("TOTO Attribute: " + attribute.value)
-			console.log("TOTO Attribute: " + attribute.source)
-			console.log("TOTO Attribute: " + attribute.type)
-		} else if (attribute.action === PurchaselyUserAttributeAction.REMOVE) {
-			console.log("TOTO Attribute: " + attribute.key)
-			console.log("TOTO Attribute: " + attribute.source)
-		}
-
-		switch (attribute.action) {
-			case PurchaselyUserAttributeAction.ADD:				
-				console.log("TOTO Attribute: " + attribute.key)
-				console.log("TOTO Attribute: " + attribute.value)
-				console.log("TOTO Attribute: " + attribute.source)
-				console.log("TOTO Attribute: " + attribute.type)
-			case PurchaselyUserAttributeAction.REMOVE:
-				console.log("TOTO Attribute: " + attribute.key)
-				console.log("TOTO Attribute: " + attribute.source)
-		}
-		*/
 	}, (error) => {
 		console.log("Error: " + error)
 	})

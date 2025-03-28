@@ -279,7 +279,7 @@ exports.ThemeMode = {
 	system: 2
 }
 
-exports.PurchaselyUserAttributeAction = {
+exports.UserAttributeAction = {
     ADD: 'add',
     REMOVE: 'remove'
 }
