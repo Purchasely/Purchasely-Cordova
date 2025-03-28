@@ -80,6 +80,7 @@ class PurchaselyPlugin : CordovaPlugin() {
                 "close" -> close()
                 "addEventsListener" -> addEventsListener(callbackContext)
                 "addUserAttributesListener" -> addUserAttributesListener(callbackContext)
+                "addUserAttributeListener" -> addUserAttributesListener(callbackContext)
                 "removeEventsListener" -> removeEventsListener()
                 "getAnonymousUserId" -> getAnonymousUserId(callbackContext)
                 "userLogin" -> userLogin(getStringFromJson(args.getString(0)), callbackContext)
@@ -292,7 +293,7 @@ class PurchaselyPlugin : CordovaPlugin() {
 
                 val pluginResult = PluginResult(PluginResult.Status.OK, JSONObject(map))
                 pluginResult.keepCallback = true
-                eventsCallback?.sendPluginResult(pluginResult)
+                attributesCallback?.sendPluginResult(pluginResult)
             }
 
             override fun onUserAttributeRemoved(key: String, source: PLYUserAttributeSource) {
@@ -303,7 +304,7 @@ class PurchaselyPlugin : CordovaPlugin() {
 
                 val pluginResult = PluginResult(PluginResult.Status.OK, JSONObject(map))
                 pluginResult.keepCallback = true
-                eventsCallback?.sendPluginResult(pluginResult)
+                attributesCallback?.sendPluginResult(pluginResult)
             }
         }
     }
