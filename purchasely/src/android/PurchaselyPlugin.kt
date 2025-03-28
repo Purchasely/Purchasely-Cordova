@@ -79,8 +79,8 @@ class PurchaselyPlugin : CordovaPlugin() {
 
                 "close" -> close()
                 "addEventsListener" -> addEventsListener(callbackContext)
-                "addUserAttributesListener" -> addUserAttributesListener(callbackContext)
                 "addUserAttributeListener" -> addUserAttributesListener(callbackContext)
+                "removeUserAttributeListener" -> removeUserAttributesListener()
                 "removeEventsListener" -> removeEventsListener()
                 "getAnonymousUserId" -> getAnonymousUserId(callbackContext)
                 "userLogin" -> userLogin(getStringFromJson(args.getString(0)), callbackContext)
@@ -321,6 +321,11 @@ class PurchaselyPlugin : CordovaPlugin() {
                 eventsCallback?.sendPluginResult(pluginResult)
             }
         }
+    }
+
+    private fun removeUserAttributesListener() {
+        attributesCallback = null
+        Purchasely.userAttributeListener = null
     }
 
     private fun removeEventsListener() {

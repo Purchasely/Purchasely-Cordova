@@ -203,6 +203,8 @@ function onPuchaselySdkReady() {
 		});
 	});
 
+	Purchasely.removeUserAttributeListener();
+
 	Purchasely.setPaywallActionInterceptor((result) => {
 		console.log(result);
 		console.log('Received action from paywall ' + result.info.presentationId);

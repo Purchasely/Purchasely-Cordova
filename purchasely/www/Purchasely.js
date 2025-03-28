@@ -16,7 +16,11 @@ exports.addEventsListener = function (success, error) {
 
 exports.addUserAttributeListener = function(success, error) {
     exec(success, error, 'Purchasely', 'addUserAttributeListener', []);
-}
+};
+
+exports.removeUserAttributeListener = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'removeUserAttributeListener', []);
+};
 
 exports.removeEventsListener = function () {
     exec(() => {}, defaultError, 'Purchasely', 'removeEventsListener', []);
