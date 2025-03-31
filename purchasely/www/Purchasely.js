@@ -5,13 +5,21 @@ var defaultError = (e) => { console.log(e); }
 exports.start = function (apiKey, stores, storekit1, userId, logLevel, runningMode, success, error) {
     var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
     if(!cordovaSdkVersion) {
-        cordovaSdkVersion = "4.4.0";
+        cordovaSdkVersion = "5.1.0";
     }
     exec(success, error, 'Purchasely', 'start', [apiKey, stores, storekit1, userId, logLevel, runningMode, cordovaSdkVersion]);
 };
 
 exports.addEventsListener = function (success, error) {
     exec(success, error, 'Purchasely', 'addEventsListener', []);
+};
+
+exports.addUserAttributeListener = function(success, error) {
+    exec(success, error, 'Purchasely', 'addUserAttributeListener', []);
+};
+
+exports.removeUserAttributeListener = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'removeUserAttributeListener', []);
 };
 
 exports.removeEventsListener = function () {
@@ -269,4 +277,9 @@ exports.ThemeMode = {
 	light: 0,
 	dark: 1,
 	system: 2
+}
+
+exports.UserAttributeAction = {
+    ADD: 'add',
+    REMOVE: 'remove'
 }

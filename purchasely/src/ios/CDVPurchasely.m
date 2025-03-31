@@ -62,7 +62,7 @@
 }
 
 - (void)userLogout:(CDVInvokedUrlCommand*)command {
-    [Purchasely userLogout];
+    [Purchasely userLogout:YES];
 }
 
 - (void)setThemeMode:(CDVInvokedUrlCommand *)command {
@@ -370,6 +370,16 @@
     self.eventCommand = nil;
 }
 
+- (void)removeUserAttributeListener:(CDVInvokedUrlCommand*)command {
+    [Purchasely setUserAttributeDelegate:nil];
+    self.attributeCommand = nil;
+}
+
+- (void)addUserAttributeListener:(CDVInvokedUrlCommand*)command {
+    [Purchasely setUserAttributeDelegate:self];
+    self.attributeCommand = command;
+}
+
 - (void)isDeeplinkHandled:(CDVInvokedUrlCommand*)command {
     NSString *deeplinkString = [command argumentAtIndex:0];
     NSURL *deeplink = [NSURL URLWithString:deeplinkString];
@@ -668,7 +678,7 @@
                    if (self.purchaseResolve != nil){
                        [self successFor:self.purchaseResolve resultDict:[self resultDictionaryForPresentationController:result plan:plan]];
                    }
-               }];
+               } loadedCompletion:nil];
            } else {
                [Purchasely fetchPresentationWith:presentationId contentId: contentId fetchCompletion:^(PLYPresentation * _Nullable presentation, NSError * _Nullable error) {
                    if (error != nil) {
@@ -681,7 +691,7 @@
                    if (self.purchaseResolve != nil) {
                        [self successFor:self.purchaseResolve resultDict:[self resultDictionaryForPresentationController:result plan:plan]];
                    }
-               }];
+               } loadedCompletion:nil];
            }
        });
 }

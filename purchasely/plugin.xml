@@ -18,6 +18,8 @@
         <source-file src="src/ios/CDVPurchasely.m" />
         <header-file src="src/ios/CDVPurchasely+Events.h" />
         <source-file src="src/ios/CDVPurchasely+Events.m" />
+        <header-file src="src/ios/CDVPurchasely+UserAttributes.h" />
+        <source-file src="src/ios/CDVPurchasely+UserAttributes.m" />
         <header-file src="src/ios/Hybrid/Purchasely_Hybrid.h" />
         <header-file src="src/ios/Hybrid/UIViewController+Hybrid.h" />
         <source-file src="src/ios/Hybrid/UIViewController+Hybrid.m" />

@@ -8,13 +8,14 @@
 #import <Cordova/CDVPlugin.h>
 #import <Purchasely/Purchasely-Swift.h>
 
-@interface CDVPurchasely<PLYEventDelegate> : CDVPlugin {
+@interface CDVPurchasely<PLYEventDelegate, PLYUserAttributeDelegate> : CDVPlugin {
 }
 
 @property (nonatomic, retain) UIViewController* presentedPresentationViewController;
 
 @property CDVInvokedUrlCommand* purchasedCommand;
 @property CDVInvokedUrlCommand* eventCommand;
+@property CDVInvokedUrlCommand* attributeCommand;
 
 @property (nonatomic) NSMutableArray<PLYPresentation *> *presentationsLoaded;
 @property (nonatomic, assign) Boolean shouldReopenPaywall;
@@ -68,5 +69,6 @@
 - (void)signPromotionalOffer:(CDVInvokedUrlCommand*)command;
 - (void)isEligibleForIntroOffer:(CDVInvokedUrlCommand*)command;
 - (void)setThemeMode:(CDVInvokedUrlCommand*)command;
+- (void)addUserAttributeListener:(CDVInvokedUrlCommand*)command;
 
 @end

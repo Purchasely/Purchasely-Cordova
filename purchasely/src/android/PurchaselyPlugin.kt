@@ -16,7 +16,7 @@ import io.purchasely.ext.PLYEvent
 import io.purchasely.ext.PLYPresentation
 import io.purchasely.ext.PLYPresentationAction
 import io.purchasely.ext.PLYPresentationType
-import io.purchasely.ext.PLYPresentationViewProperties
+import io.purchasely.ext.PLYPresentationProperties
 import io.purchasely.ext.PLYProductViewResult
 import io.purchasely.ext.PLYRunningMode
 import io.purchasely.ext.PLYRunningMode.Full
@@ -29,6 +29,9 @@ import io.purchasely.ext.Purchasely
 import io.purchasely.ext.State
 import io.purchasely.ext.StoreType
 import io.purchasely.ext.SubscriptionsListener
+import io.purchasely.ext.UserAttributeListener
+import io.purchasely.storage.userData.PLYUserAttributeSource
+import io.purchasely.storage.userData.PLYUserAttributeType
 import io.purchasely.models.PLYError
 import io.purchasely.models.PLYPlan
 import io.purchasely.models.PLYPresentationPlan
@@ -76,6 +79,8 @@ class PurchaselyPlugin : CordovaPlugin() {
 
                 "close" -> close()
                 "addEventsListener" -> addEventsListener(callbackContext)
+                "addUserAttributeListener" -> addUserAttributesListener(callbackContext)
+                "removeUserAttributeListener" -> removeUserAttributesListener()
                 "removeEventsListener" -> removeEventsListener()
                 "getAnonymousUserId" -> getAnonymousUserId(callbackContext)
                 "userLogin" -> userLogin(getStringFromJson(args.getString(0)), callbackContext)
@@ -270,6 +275,40 @@ class PurchaselyPlugin : CordovaPlugin() {
         Purchasely.close()
     }
 
+    private fun addUserAttributesListener(callbackContext: CallbackContext) {
+        attributesCallback = callbackContext
+        Purchasely.userAttributeListener = object: UserAttributeListener {
+            override fun onUserAttributeSet(
+                key: String, 
+                type: PLYUserAttributeType, 
+                value: Any, 
+                source: PLYUserAttributeSource
+            ) {
+                val map = HashMap<String, Any?>()
+                map["action"] = "add"
+                map["key"] = key
+                map["type"] = type.name
+                map["value"] = value
+                map["source"] = source.name
+
+                val pluginResult = PluginResult(PluginResult.Status.OK, JSONObject(map))
+                pluginResult.keepCallback = true
+                attributesCallback?.sendPluginResult(pluginResult)
+            }
+
+            override fun onUserAttributeRemoved(key: String, source: PLYUserAttributeSource) {
+                val map = HashMap<String, Any?>()
+                map["action"] = "remove"
+                map["key"] = key
+                map["source"] = source.name
+
+                val pluginResult = PluginResult(PluginResult.Status.OK, JSONObject(map))
+                pluginResult.keepCallback = true
+                attributesCallback?.sendPluginResult(pluginResult)
+            }
+        }
+    }
+
     private fun addEventsListener(callbackContext: CallbackContext) {
         eventsCallback = callbackContext
         Purchasely.eventListener = object: EventListener {
@@ -282,6 +321,11 @@ class PurchaselyPlugin : CordovaPlugin() {
                 eventsCallback?.sendPluginResult(pluginResult)
             }
         }
+    }
+
+    private fun removeUserAttributesListener() {
+        attributesCallback = null
+        Purchasely.userAttributeListener = null
     }
 
     private fun removeEventsListener() {
@@ -430,7 +474,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         presentationId: String?,
         contentId: String?,
         callbackContext: CallbackContext) {
-        val properties = PLYPresentationViewProperties(
+        val properties = PLYPresentationProperties(
             placementId = placementId,
             presentationId = presentationId,
             contentId = contentId)
@@ -461,7 +505,7 @@ class PurchaselyPlugin : CordovaPlugin() {
             Pair("planVendorId", planVendorId),
             Pair("storeProductId", storeProductId),
             Pair("basePlanId", basePlanId),
-            Pair("offerId", offerId)
+            //Pair("offerId", offerId)
         )
     }
 
@@ -486,7 +530,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         purchaseCallback = callbackContext
 
         cordova.activity.let { activity ->
-            val intent = PLYProductActivity.newIntent(activity, PLYPresentationViewProperties(), isFullScreen, loadingBackgroundColor).apply {
+            val intent = PLYProductActivity.newIntent(activity, PLYPresentationProperties(), isFullScreen, loadingBackgroundColor).apply {
                 putExtra("presentation", presentation)
             }
             activity.startActivity(intent)
@@ -906,6 +950,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         var defaultCallback: CallbackContext? = null
         var purchaseCallback: CallbackContext? = null
         var eventsCallback: CallbackContext? = null
+        var attributesCallback: CallbackContext? = null
         var productActivity: ProductActivity? = null
 
         var interceptorActivity: WeakReference<Activity>? = null
