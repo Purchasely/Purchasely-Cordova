@@ -370,6 +370,11 @@
     self.eventCommand = nil;
 }
 
+- (void)removeUserAttributeListener:(CDVInvokedUrlCommand*)command {
+    [Purchasely setUserAttributeDelegate:nil];
+    self.attributeCommand = nil;
+}
+
 - (void)addUserAttributeListener:(CDVInvokedUrlCommand*)command {
     [Purchasely setUserAttributeDelegate:self];
     self.attributeCommand = command;
