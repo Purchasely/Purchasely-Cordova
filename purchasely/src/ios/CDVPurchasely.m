@@ -72,8 +72,86 @@
 }
 
 - (void)setAttribute:(CDVInvokedUrlCommand*)command {
-    NSInteger attribute = [[command argumentAtIndex:0] intValue];
+    NSNumber *attributeNumber = [command argumentAtIndex:0];
     NSString *value = [command argumentAtIndex:1];
+
+    if (attributeNumber == nil || value == nil) {
+        return;
+    }
+
+    NSInteger rawAttribute = [attributeNumber integerValue];
+    PLYAttribute *attribute = nil;
+
+    switch (rawAttribute) {
+        case CordovaPLYAttributeFirebaseAppInstanceId:
+            attribute = PLYAttributeFirebaseAppInstanceId;
+            break;
+        case CordovaPLYAttributeAirshipChannelId:
+            attribute = PLYAttributeAirshipChannelId;
+            break;
+        case CordovaPLYAttributeAirshipUserId:
+            attribute = PLYAttributeAirshipUserId;
+            break;
+        case CordovaPLYAttributeBatchInstallationId:
+            attribute = PLYAttributeBatchInstallationId;
+            break;
+        case CordovaPLYAttributeAdjustId:
+            attribute = PLYAttributeAdjustId;
+            break;
+        case CordovaPLYAttributeAppsflyerId:
+            attribute = PLYAttributeAppsflyerId;
+            break;
+        case CordovaPLYAttributeMixpanelDistinctId:
+            attribute = PLYAttributeMixpanelDistinctId;
+            break;
+        case CordovaPLYAttributeCleverTapId:
+            attribute = PLYAttributeClevertapId;
+            break;
+        case CordovaPLYAttributeSendinblueUserEmail:
+            attribute = PLYAttributeSendinblueUserEmail;
+            break;
+        case CordovaPLYAttributeIterableUserEmail:
+            attribute = PLYAttributeIterableUserEmail;
+            break;
+        case CordovaPLYAttributeIterableUserId:
+            attribute = PLYAttributeIterableUserId;
+            break;
+        case CordovaPLYAttributeAtInternetIdClient:
+            attribute = PLYAttributeAtInternetIdClient;
+            break;
+        case CordovaPLYAttributeMParticleUserId:
+            attribute = PLYAttributeMParticleUserId;
+            break;
+        case CordovaPLYAttributeCustomerioUserId:
+            attribute = PLYAttributeCustomerioUserId;
+            break;
+        case CordovaPLYAttributeCustomerioUserEmail:
+            attribute = PLYAttributeCustomerioUserEmail;
+            break;
+        case CordovaPLYAttributeBranchUserDeveloperIdentity:
+            attribute = PLYAttributeBranchUserDeveloperIdentity;
+            break;
+        case CordovaPLYAttributeAmplitudeUserId:
+            attribute = PLYAttributeAmplitudeUserId;
+            break;
+        case CordovaPLYAttributeAmplitudeDeviceId:
+            attribute = PLYAttributeAmplitudeDeviceId;
+            break;
+        case CordovaPLYAttributeMoengageUniqueId:
+            attribute = PLYAttributeMoengageUniqueId;
+            break;
+        case CordovaPLYAttributeOneSignalExternalId:
+            attribute = PLYAttributeOneSignalExternalId;
+            break;
+        case CordovaPLYAttributeBatchCustomUserId:
+            attribute = PLYAttributeBatchCustomUserId;
+            break;
+    }
+
+
+    if (attribute == nil) {
+        return;
+    }
 
     [Purchasely setAttribute:attribute value:value];
 }
@@ -966,5 +1044,30 @@
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
+
+// WARNING: This enum must be strictly identical to the one in the JS side (Purchasely.js).
+typedef NS_ENUM(NSInteger, CordovaPLYAttribute) {
+    CordovaPLYAttributeFirebaseAppInstanceId,
+    CordovaPLYAttributeAirshipChannelId,
+    CordovaPLYAttributeAirshipUserId,
+    CordovaPLYAttributeBatchInstallationId,
+    CordovaPLYAttributeAdjustId,
+    CordovaPLYAttributeAppsflyerId,
+    CordovaPLYAttributeMixpanelDistinctId,
+    CordovaPLYAttributeCleverTapId,
+    CordovaPLYAttributeSendinblueUserEmail,
+    CordovaPLYAttributeIterableUserEmail,
+    CordovaPLYAttributeIterableUserId,
+    CordovaPLYAttributeAtInternetIdClient,
+    CordovaPLYAttributeMParticleUserId,
+    CordovaPLYAttributeCustomerioUserId,
+    CordovaPLYAttributeCustomerioUserEmail,
+    CordovaPLYAttributeBranchUserDeveloperIdentity,
+    CordovaPLYAttributeAmplitudeUserId,
+    CordovaPLYAttributeAmplitudeDeviceId,
+    CordovaPLYAttributeMoengageUniqueId,
+    CordovaPLYAttributeOneSignalExternalId,
+    CordovaPLYAttributeBatchCustomUserId
+};
 
 @end
