@@ -284,9 +284,9 @@ class PurchaselyPlugin : CordovaPlugin() {
         attributesCallback = callbackContext
         Purchasely.userAttributeListener = object: UserAttributeListener {
             override fun onUserAttributeSet(
-                key: String, 
-                type: PLYUserAttributeType, 
-                value: Any, 
+                key: String,
+                type: PLYUserAttributeType,
+                value: Any,
                 source: PLYUserAttributeSource
             ) {
                 val map = HashMap<String, Any?>()
@@ -381,27 +381,27 @@ class PurchaselyPlugin : CordovaPlugin() {
         if(value == null) return
 
         val attributeKey = when (attribute) {
-            FlutterPLYAttribute.firebase_app_instance_id.ordinal -> Attribute.FIREBASE_APP_INSTANCE_ID
-            FlutterPLYAttribute.airship_channel_id.ordinal -> Attribute.AIRSHIP_CHANNEL_ID
-            FlutterPLYAttribute.airship_user_id.ordinal -> Attribute.AIRSHIP_USER_ID
-            FlutterPLYAttribute.batch_installation_id.ordinal -> Attribute.BATCH_INSTALLATION_ID
-            FlutterPLYAttribute.adjust_id.ordinal -> Attribute.ADJUST_ID
-            FlutterPLYAttribute.appsflyer_id.ordinal -> Attribute.APPSFLYER_ID
-            FlutterPLYAttribute.mixpanel_distinct_id.ordinal -> Attribute.MIXPANEL_DISTINCT_ID
-            FlutterPLYAttribute.clever_tap_id.ordinal -> Attribute.CLEVER_TAP_ID
-            FlutterPLYAttribute.sendinblueUserEmail.ordinal -> Attribute.SENDINBLUE_USER_EMAIL
-            FlutterPLYAttribute.iterableUserEmail.ordinal -> Attribute.ITERABLE_USER_EMAIL
-            FlutterPLYAttribute.iterableUserId.ordinal -> Attribute.ITERABLE_USER_ID
-            FlutterPLYAttribute.atInternetIdClient.ordinal -> Attribute.AT_INTERNET_ID_CLIENT
-            FlutterPLYAttribute.mParticleUserId.ordinal -> Attribute.MPARTICLE_USER_ID
-            FlutterPLYAttribute.customerioUserId.ordinal -> Attribute.CUSTOMERIO_USER_ID
-            FlutterPLYAttribute.customerioUserEmail.ordinal -> Attribute.CUSTOMERIO_USER_EMAIL
-            FlutterPLYAttribute.branchUserDeveloperIdentity.ordinal -> Attribute.BRANCH_USER_DEVELOPER_IDENTITY
-            FlutterPLYAttribute.amplitudeUserId.ordinal -> Attribute.AMPLITUDE_USER_ID
-            FlutterPLYAttribute.amplitudeDeviceId.ordinal -> Attribute.AMPLITUDE_DEVICE_ID
-            FlutterPLYAttribute.moengageUniqueId.ordinal -> Attribute.MOENGAGE_UNIQUE_ID
-            FlutterPLYAttribute.oneSignalExternalId.ordinal -> Attribute.ONESIGNAL_EXTERNAL_ID
-            FlutterPLYAttribute.batchCustomUserId.ordinal -> Attribute.BATCH_CUSTOM_USER_ID
+            CordovaPLYAttribute.firebase_app_instance_id.ordinal -> Attribute.FIREBASE_APP_INSTANCE_ID
+            CordovaPLYAttribute.airship_channel_id.ordinal -> Attribute.AIRSHIP_CHANNEL_ID
+            CordovaPLYAttribute.airship_user_id.ordinal -> Attribute.AIRSHIP_USER_ID
+            CordovaPLYAttribute.batch_installation_id.ordinal -> Attribute.BATCH_INSTALLATION_ID
+            CordovaPLYAttribute.adjust_id.ordinal -> Attribute.ADJUST_ID
+            CordovaPLYAttribute.appsflyer_id.ordinal -> Attribute.APPSFLYER_ID
+            CordovaPLYAttribute.mixpanel_distinct_id.ordinal -> Attribute.MIXPANEL_DISTINCT_ID
+            CordovaPLYAttribute.clever_tap_id.ordinal -> Attribute.CLEVER_TAP_ID
+            CordovaPLYAttribute.sendinblueUserEmail.ordinal -> Attribute.SENDINBLUE_USER_EMAIL
+            CordovaPLYAttribute.iterableUserEmail.ordinal -> Attribute.ITERABLE_USER_EMAIL
+            CordovaPLYAttribute.iterableUserId.ordinal -> Attribute.ITERABLE_USER_ID
+            CordovaPLYAttribute.atInternetIdClient.ordinal -> Attribute.AT_INTERNET_ID_CLIENT
+            CordovaPLYAttribute.mParticleUserId.ordinal -> Attribute.MPARTICLE_USER_ID
+            CordovaPLYAttribute.customerioUserId.ordinal -> Attribute.CUSTOMERIO_USER_ID
+            CordovaPLYAttribute.customerioUserEmail.ordinal -> Attribute.CUSTOMERIO_USER_EMAIL
+            CordovaPLYAttribute.branchUserDeveloperIdentity.ordinal -> Attribute.BRANCH_USER_DEVELOPER_IDENTITY
+            CordovaPLYAttribute.amplitudeUserId.ordinal -> Attribute.AMPLITUDE_USER_ID
+            CordovaPLYAttribute.amplitudeDeviceId.ordinal -> Attribute.AMPLITUDE_DEVICE_ID
+            CordovaPLYAttribute.moengageUniqueId.ordinal -> Attribute.MOENGAGE_UNIQUE_ID
+            CordovaPLYAttribute.oneSignalExternalId.ordinal -> Attribute.ONESIGNAL_EXTERNAL_ID
+            CordovaPLYAttribute.batchCustomUserId.ordinal -> Attribute.BATCH_CUSTOM_USER_ID
             else -> null
         }
 
@@ -1099,7 +1099,7 @@ class PurchaselyPlugin : CordovaPlugin() {
     }
 
     // WARNING: This enum must be strictly identical to the one in the JS side (Purchasely.js).
-    enum class FlutterPLYAttribute {
+    enum class CordovaPLYAttribute {
         firebase_app_instance_id,
         airship_channel_id,
         airship_user_id,
@@ -1121,5 +1121,29 @@ class PurchaselyPlugin : CordovaPlugin() {
         moengageUniqueId,
         oneSignalExternalId,
         batchCustomUserId,
+
+        /*
+            FIREBASE_APP_INSTANCE_ID: 0,
+            AIRSHIP_CHANNEL_ID: 1,
+            AIRSHIP_USER_ID: 2,
+            BATCH_INSTALLATION_ID: 3,
+            ADJUST_ID: 4,
+            APPSFLYER_ID: 5,
+            MIXPANEL_DISTINCT_ID: 6,
+            CLEVER_TAP_ID: 7,
+            SENDINBLUE_USER_EMAIL: 8,
+            ITERABLE_USER_EMAIL: 9,
+            ITERABLE_USER_ID: 10,
+            AT_INTERNET_ID_CLIENT: 11,
+            MPARTICLE_USER_ID: 12,
+            CUSTOMERIO_USER_ID: 13,
+            CUSTOMERIO_USER_EMAIL: 14,
+            BRANCH_USER_DEVELOPER_IDENTITY: 15,
+            AMPLITUDE_USER_ID: 16,
+            AMPLITUDE_DEVICE_ID: 17,
+            MOENGAGE_UNIQUE_ID: 18,
+            ONESIGNAL_EXTERNAL_ID: 19,
+            BATCH_CUSTOM_USER_ID: 20,
+         */
     }
 }
