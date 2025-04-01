@@ -17,6 +17,7 @@
  * under the License.
  */
 
+
 // Wait for the deviceready event before using any of Cordova's device APIs.
 // See https://cordova.apache.org/docs/en/latest/cordova/events/events.html#deviceready
 document.addEventListener('deviceready', onDeviceReady, false);
@@ -74,6 +75,21 @@ function onPuchaselySdkReady() {
 		console.log(error);
 	});
 
+	Purchasely.addUserAttributeListener((attribute) => {
+		if (attribute.action == Purchasely.UserAttributeAction.ADD) {
+			console.log("ADD Attribute: " + attribute.key)
+			console.log("ADD Attribute: " + attribute.value)
+			console.log("ADD Attribute: " + attribute.source)
+			console.log("ADD Attribute: " + attribute.type)
+		} else if (attribute.action == Purchasely.UserAttributeAction.REMOVE) {
+			console.log("REMOVE Attribute: " + attribute.key)
+			console.log("REMOVE Attribute: " + attribute.source)
+		}
+
+	}, (error) => {
+		console.log("Error: " + error)
+	})
+
 	Purchasely.purchasedSubscription(() => {
 		console.log("Purchased performed, reload content to unlock.");
 	});
@@ -86,7 +102,27 @@ function onPuchaselySdkReady() {
 
 	Purchasely.setLogLevel(Purchasely.LogLevel.DEBUG);
 
-	Purchasely.setAttribute(Purchasely.Attribute.FIREBASE_APP_INSTANCE_ID, "1");
+	Purchasely.setAttribute(Purchasely.Attribute.FIREBASE_APP_INSTANCE_ID, "firebase_instance_id");
+	Purchasely.setAttribute(Purchasely.Attribute.AIRSHIP_CHANNEL_ID, "airship_channel_id");
+	Purchasely.setAttribute(Purchasely.Attribute.AIRSHIP_USER_ID, "airship_user_id");
+	Purchasely.setAttribute(Purchasely.Attribute.BATCH_INSTALLATION_ID, "batch_installation_id");
+	Purchasely.setAttribute(Purchasely.Attribute.ADJUST_ID, "adjust_id");
+	Purchasely.setAttribute(Purchasely.Attribute.APPSFLYER_ID, "appsflyer_id");
+	Purchasely.setAttribute(Purchasely.Attribute.MIXPANEL_DISTINCT_ID, "mixpanel_distinct_id");
+	Purchasely.setAttribute(Purchasely.Attribute.CLEVER_TAP_ID, "clever_tap_id");
+	Purchasely.setAttribute(Purchasely.Attribute.SENDINBLUE_USER_EMAIL, "sendinblue_user_email");
+	Purchasely.setAttribute(Purchasely.Attribute.ITERABLE_USER_EMAIL, "iterable_user_email");
+	Purchasely.setAttribute(Purchasely.Attribute.ITERABLE_USER_ID, "iterable_user_id");
+	Purchasely.setAttribute(Purchasely.Attribute.AT_INTERNET_ID_CLIENT, "at_internet_id_client");
+	Purchasely.setAttribute(Purchasely.Attribute.MPARTICLE_USER_ID, "mparticle_user_id");
+	Purchasely.setAttribute(Purchasely.Attribute.CUSTOMERIO_USER_ID, "customerio_user_id");
+	Purchasely.setAttribute(Purchasely.Attribute.CUSTOMERIO_USER_EMAIL, "customerio_user_email");
+	Purchasely.setAttribute(Purchasely.Attribute.BRANCH_USER_DEVELOPER_IDENTITY, "branch_user_developer_identity");
+	Purchasely.setAttribute(Purchasely.Attribute.AMPLITUDE_USER_ID, "amplitude_user_id");
+	Purchasely.setAttribute(Purchasely.Attribute.AMPLITUDE_DEVICE_ID, "amplitude_device_id");
+	Purchasely.setAttribute(Purchasely.Attribute.MOENGAGE_UNIQUE_ID, "moengage_unique_id");
+	Purchasely.setAttribute(Purchasely.Attribute.ONESIGNAL_EXTERNAL_ID, "onesignal_external_id");
+	Purchasely.setAttribute(Purchasely.Attribute.BATCH_CUSTOM_USER_ID, "batch_custom_user_id");
 	Purchasely.setAttribute(Purchasely.Attribute.BATCH_INSTALLATION_ID, "testBatch1");
 
 	Purchasely.readyToOpenDeeplink(true);
@@ -124,21 +160,50 @@ function onPuchaselySdkReady() {
 	Purchasely.setUserAttributeWithInt("key_int", 7);
 	Purchasely.setUserAttributeWithDouble("key_double", 4.5);
 	Purchasely.setUserAttributeWithDate("key_date", new Date().toISOString());
+	
+	Purchasely.clearUserAttributes();
+
+	Purchasely.setUserAttributeWithString("key_string", "value_string");
+	Purchasely.setUserAttributeWithBoolean("key_boolean", true);
+	Purchasely.setUserAttributeWithInt("key_int", 7);
+	Purchasely.setUserAttributeWithDouble("key_double", 4.5);
+	Purchasely.setUserAttributeWithDate("key_date", new Date().toISOString());
+
+	Purchasely.setUserAttributeWithStringArray("key_string_array", ["value1", "value2"]);
+	Purchasely.setUserAttributeWithIntArray("key_int_array", [1, 2, 3]);
+	Purchasely.setUserAttributeWithDoubleArray("key_double_array", [1.1, 2.2, 3.3]);
+	Purchasely.setUserAttributeWithBooleanArray("key_boolean_array", [true, false, true]);
 
 	Purchasely.userAttribute("key_string", value => {
-		console.log("User attribute string " + value);
+		console.log("User attribute string: " + value);
 	});
 
 	Purchasely.userAttribute("key_boolean", value => {
-		console.log("User attribute boolean " + value);
+		console.log("User attribute boolean: " + value);
 	});
 
 	Purchasely.userAttribute("key_int", value => {
-		console.log("User attribute int " + value);
+		console.log("User attribute int: " + value);
 	});
 
 	Purchasely.userAttribute("key_double", value => {
-		console.log("User attribute double " + value);
+		console.log("User attribute double: " + value);
+	});
+
+	Purchasely.userAttribute("key_string_array", value => {
+	    console.log("User attribute string array: " + value);
+	});
+
+	Purchasely.userAttribute("key_int_array", value => {
+	    console.log("User attribute int array: " + value);
+	});
+
+	Purchasely.userAttribute("key_double_array", value => {
+	    console.log("User attribute double array: " + value);
+	});
+
+	Purchasely.userAttribute("key_boolean_array", value => {
+	    console.log("User attribute boolean array: " + value);
 	});
 
 	Purchasely.userAttribute("key_date", value => {
@@ -154,6 +219,8 @@ function onPuchaselySdkReady() {
 			});
 		});
 	});
+
+	Purchasely.removeUserAttributeListener();
 
 	Purchasely.setPaywallActionInterceptor((result) => {
 		console.log(result);
@@ -193,6 +260,8 @@ function onPuchaselySdkReady() {
 			Purchasely.onProcessAction(true);
 		}
 	});
+
+	Purchasely.clearBuiltInAttributes();
 }
 
 function openPresentation() {

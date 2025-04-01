@@ -16,7 +16,7 @@ import io.purchasely.ext.PLYEvent
 import io.purchasely.ext.PLYPresentation
 import io.purchasely.ext.PLYPresentationAction
 import io.purchasely.ext.PLYPresentationType
-import io.purchasely.ext.PLYPresentationViewProperties
+import io.purchasely.ext.PLYPresentationProperties
 import io.purchasely.ext.PLYProductViewResult
 import io.purchasely.ext.PLYRunningMode
 import io.purchasely.ext.PLYRunningMode.Full
@@ -29,6 +29,9 @@ import io.purchasely.ext.Purchasely
 import io.purchasely.ext.State
 import io.purchasely.ext.StoreType
 import io.purchasely.ext.SubscriptionsListener
+import io.purchasely.ext.UserAttributeListener
+import io.purchasely.storage.userData.PLYUserAttributeSource
+import io.purchasely.storage.userData.PLYUserAttributeType
 import io.purchasely.models.PLYError
 import io.purchasely.models.PLYPlan
 import io.purchasely.models.PLYPresentationPlan
@@ -76,6 +79,8 @@ class PurchaselyPlugin : CordovaPlugin() {
 
                 "close" -> close()
                 "addEventsListener" -> addEventsListener(callbackContext)
+                "addUserAttributeListener" -> addUserAttributesListener(callbackContext)
+                "removeUserAttributeListener" -> removeUserAttributesListener()
                 "removeEventsListener" -> removeEventsListener()
                 "getAnonymousUserId" -> getAnonymousUserId(callbackContext)
                 "userLogin" -> userLogin(getStringFromJson(args.getString(0)), callbackContext)
@@ -170,9 +175,14 @@ class PurchaselyPlugin : CordovaPlugin() {
                 "setUserAttributeWithInt" -> setUserAttributeWithInt(getStringFromJson(args.getString(0)), args.getInt(1))
                 "setUserAttributeWithDouble" -> setUserAttributeWithDouble(getStringFromJson(args.getString(0)), args.getDouble(1))
                 "setUserAttributeWithDate" -> setUserAttributeWithDate(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)))
+                "setUserAttributeWithStringArray" -> setUserAttributeWithStringArray(getStringFromJson(args.getString(0)), args.getJSONArray(1))
+                "setUserAttributeWithIntArray" -> setUserAttributeWithIntArray(getStringFromJson(args.getString(0)), args.getJSONArray(1))
+                "setUserAttributeWithDoubleArray" -> setUserAttributeWithDoubleArray(getStringFromJson(args.getString(0)), args.getJSONArray(1))
+                "setUserAttributeWithBooleanArray" -> setUserAttributeWithBooleanArray(getStringFromJson(args.getString(0)), args.getJSONArray(1))
                 "userAttribute" -> userAttribute(getStringFromJson(args.getString(0)), callbackContext)
                 "clearUserAttribute" -> clearUserAttribute(getStringFromJson(args.getString(0)))
                 "clearUserAttributes" -> clearUserAttributes()
+                "clearBuiltInAttributes" -> clearBuiltInAttributes()
                 "isEligibleForIntroOffer" -> isEligibleForIntroOffer(getStringFromJson(args.getString(0)), callbackContext)
                 "signPromotionalOffer" -> signPromotionalOffer(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), callbackContext)
                 else -> return false
@@ -270,6 +280,40 @@ class PurchaselyPlugin : CordovaPlugin() {
         Purchasely.close()
     }
 
+    private fun addUserAttributesListener(callbackContext: CallbackContext) {
+        attributesCallback = callbackContext
+        Purchasely.userAttributeListener = object: UserAttributeListener {
+            override fun onUserAttributeSet(
+                key: String,
+                type: PLYUserAttributeType,
+                value: Any,
+                source: PLYUserAttributeSource
+            ) {
+                val map = HashMap<String, Any?>()
+                map["action"] = "add"
+                map["key"] = key
+                map["type"] = type.name
+                map["value"] = value
+                map["source"] = source.name
+
+                val pluginResult = PluginResult(PluginResult.Status.OK, JSONObject(map))
+                pluginResult.keepCallback = true
+                attributesCallback?.sendPluginResult(pluginResult)
+            }
+
+            override fun onUserAttributeRemoved(key: String, source: PLYUserAttributeSource) {
+                val map = HashMap<String, Any?>()
+                map["action"] = "remove"
+                map["key"] = key
+                map["source"] = source.name
+
+                val pluginResult = PluginResult(PluginResult.Status.OK, JSONObject(map))
+                pluginResult.keepCallback = true
+                attributesCallback?.sendPluginResult(pluginResult)
+            }
+        }
+    }
+
     private fun addEventsListener(callbackContext: CallbackContext) {
         eventsCallback = callbackContext
         Purchasely.eventListener = object: EventListener {
@@ -282,6 +326,11 @@ class PurchaselyPlugin : CordovaPlugin() {
                 eventsCallback?.sendPluginResult(pluginResult)
             }
         }
+    }
+
+    private fun removeUserAttributesListener() {
+        attributesCallback = null
+        Purchasely.userAttributeListener = null
     }
 
     private fun removeEventsListener() {
@@ -331,7 +380,34 @@ class PurchaselyPlugin : CordovaPlugin() {
     private fun setAttribute(attribute: Int, value: String?) {
         if(value == null) return
 
-        Purchasely.setAttribute(Attribute.values()[attribute], value)
+        val attributeKey = when (attribute) {
+            CordovaPLYAttribute.firebase_app_instance_id.ordinal -> Attribute.FIREBASE_APP_INSTANCE_ID
+            CordovaPLYAttribute.airship_channel_id.ordinal -> Attribute.AIRSHIP_CHANNEL_ID
+            CordovaPLYAttribute.airship_user_id.ordinal -> Attribute.AIRSHIP_USER_ID
+            CordovaPLYAttribute.batch_installation_id.ordinal -> Attribute.BATCH_INSTALLATION_ID
+            CordovaPLYAttribute.adjust_id.ordinal -> Attribute.ADJUST_ID
+            CordovaPLYAttribute.appsflyer_id.ordinal -> Attribute.APPSFLYER_ID
+            CordovaPLYAttribute.mixpanel_distinct_id.ordinal -> Attribute.MIXPANEL_DISTINCT_ID
+            CordovaPLYAttribute.clever_tap_id.ordinal -> Attribute.CLEVER_TAP_ID
+            CordovaPLYAttribute.sendinblueUserEmail.ordinal -> Attribute.SENDINBLUE_USER_EMAIL
+            CordovaPLYAttribute.iterableUserEmail.ordinal -> Attribute.ITERABLE_USER_EMAIL
+            CordovaPLYAttribute.iterableUserId.ordinal -> Attribute.ITERABLE_USER_ID
+            CordovaPLYAttribute.atInternetIdClient.ordinal -> Attribute.AT_INTERNET_ID_CLIENT
+            CordovaPLYAttribute.mParticleUserId.ordinal -> Attribute.MPARTICLE_USER_ID
+            CordovaPLYAttribute.customerioUserId.ordinal -> Attribute.CUSTOMERIO_USER_ID
+            CordovaPLYAttribute.customerioUserEmail.ordinal -> Attribute.CUSTOMERIO_USER_EMAIL
+            CordovaPLYAttribute.branchUserDeveloperIdentity.ordinal -> Attribute.BRANCH_USER_DEVELOPER_IDENTITY
+            CordovaPLYAttribute.amplitudeUserId.ordinal -> Attribute.AMPLITUDE_USER_ID
+            CordovaPLYAttribute.amplitudeDeviceId.ordinal -> Attribute.AMPLITUDE_DEVICE_ID
+            CordovaPLYAttribute.moengageUniqueId.ordinal -> Attribute.MOENGAGE_UNIQUE_ID
+            CordovaPLYAttribute.oneSignalExternalId.ordinal -> Attribute.ONESIGNAL_EXTERNAL_ID
+            CordovaPLYAttribute.batchCustomUserId.ordinal -> Attribute.BATCH_CUSTOM_USER_ID
+            else -> null
+        }
+
+        attributeKey?.let {
+            Purchasely.setAttribute(attribute = it, value = value)
+        }
     }
 
     private fun setDefaultPresentationResultHandler(callbackContext: CallbackContext) {
@@ -430,7 +506,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         presentationId: String?,
         contentId: String?,
         callbackContext: CallbackContext) {
-        val properties = PLYPresentationViewProperties(
+        val properties = PLYPresentationProperties(
             placementId = placementId,
             presentationId = presentationId,
             contentId = contentId)
@@ -461,7 +537,7 @@ class PurchaselyPlugin : CordovaPlugin() {
             Pair("planVendorId", planVendorId),
             Pair("storeProductId", storeProductId),
             Pair("basePlanId", basePlanId),
-            Pair("offerId", offerId)
+            //Pair("offerId", offerId)
         )
     }
 
@@ -486,7 +562,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         purchaseCallback = callbackContext
 
         cordova.activity.let { activity ->
-            val intent = PLYProductActivity.newIntent(activity, PLYPresentationViewProperties(), isFullScreen, loadingBackgroundColor).apply {
+            val intent = PLYProductActivity.newIntent(activity, PLYPresentationProperties(), isFullScreen, loadingBackgroundColor).apply {
                 putExtra("presentation", presentation)
             }
             activity.startActivity(intent)
@@ -758,6 +834,58 @@ class PurchaselyPlugin : CordovaPlugin() {
         )
     }
 
+    fun setUserAttributeWithStringArray(key: String?, value: JSONArray?) {
+        if(key == null || value == null) return
+        val list = mutableListOf<String>()
+        for (i in 0 until value.length()) {
+            try {
+                list.add(value.getString(i))
+            } catch (e: JSONException) {
+                Log.e("Purchasely", "Error in string array" + e.message, e)
+            }
+        }
+        Purchasely.setUserAttribute(key, list.toTypedArray())
+    }
+
+    fun setUserAttributeWithIntArray(key: String?, value: JSONArray?) {
+        if(key == null || value == null) return
+        val list = mutableListOf<Int>()
+        for (i in 0 until value.length()) {
+            try {
+                list.add(value.getInt(i))
+            } catch (e: JSONException) {
+                Log.e("Purchasely", "Error in int array" + e.message, e)
+            }
+        }
+        Purchasely.setUserAttribute(key, list.toTypedArray())
+    }
+
+    fun setUserAttributeWithDoubleArray(key: String?, value: JSONArray?) {
+        if (key == null || value == null) return
+        val list = mutableListOf<Float>()
+        for (i in 0 until value.length()) {
+            try {
+                list.add(value.getDouble(i).toFloat())
+            } catch (e: JSONException) {
+                Log.e("Purchasely", "Error in double array: ${e.message}", e)
+            }
+        }
+        Purchasely.setUserAttribute(key, list.toTypedArray())
+    }
+
+    fun setUserAttributeWithBooleanArray(key: String?, value: JSONArray?) {
+        if(key == null || value == null) return
+        val list = mutableListOf<Boolean>()
+        for (i in 0 until value.length()) {
+            try {
+                list.add(value.getBoolean(i))
+            } catch (e: JSONException) {
+                Log.e("Purchasely", "Error in boolean array" + e.message, e)
+            }
+        }
+        Purchasely.setUserAttribute(key, list.toTypedArray())
+    }
+
     fun setUserAttributeWithString(key: String?, value: String?) {
         if(key == null || value == null) return
         Purchasely.setUserAttribute(key, value)
@@ -800,14 +928,16 @@ class PurchaselyPlugin : CordovaPlugin() {
     fun userAttribute(key: String?, callbackContext: CallbackContext) {
         if(key == null) return
         val result = getUserAttributeValueForCordova(Purchasely.userAttribute(key))
-        if(result != null) {
-            callbackContext.success(getUserAttributeValueForCordova(result))
-        } else {
-            callbackContext.error("No user attribute found with $key")
+        when (result) {
+            is JSONArray -> callbackContext.success(result)
+            is String -> callbackContext.success(result)
+            is Int -> callbackContext.success(result)
+            is Boolean -> callbackContext.success(if (result) 1 else 0)
+            else -> callbackContext.error("No user attribute found with $key")
         }
     }
 
-    private fun getUserAttributeValueForCordova(value: Any?): String? {
+    private fun getUserAttributeValueForCordova(value: Any?): Any? {
         return when (value) {
             is Date -> {
                 val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -822,11 +952,18 @@ class PurchaselyPlugin : CordovaPlugin() {
                     ""
                 }
             }
-            is Int -> value.toString()
+            is Int -> value
             //awful but to keep same precision so 1.2f = 1.2 double and not 1.20000056
-            is Float -> value.toString().toDouble().toString()
+            is Float -> value.toString().toDouble()
             is String -> value
-            is Boolean -> value.toString()
+            is Boolean -> value
+            is Array<*> -> {
+                val jsonArray = JSONArray()
+                value.forEach {
+                    jsonArray.put(getUserAttributeValueForCordova(it))
+                }
+                jsonArray
+            }
             else -> null
         }
     }
@@ -838,6 +975,10 @@ class PurchaselyPlugin : CordovaPlugin() {
 
     fun clearUserAttributes() {
         Purchasely.clearUserAttributes()
+    }
+
+    fun clearBuiltInAttributes() {
+        Purchasely.clearBuiltInAttributes()
     }
 
     private fun isEligibleForIntroOffer(planId: String?, callbackContext: CallbackContext) {
@@ -906,6 +1047,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         var defaultCallback: CallbackContext? = null
         var purchaseCallback: CallbackContext? = null
         var eventsCallback: CallbackContext? = null
+        var attributesCallback: CallbackContext? = null
         var productActivity: ProductActivity? = null
 
         var interceptorActivity: WeakReference<Activity>? = null
@@ -954,5 +1096,54 @@ class PurchaselyPlugin : CordovaPlugin() {
             map["isEligibleForIntroOffer"] = plan.isEligibleToIntroOffer(null)
             return map
         }
+    }
+
+    // WARNING: This enum must be strictly identical to the one in the JS side (Purchasely.js).
+    enum class CordovaPLYAttribute {
+        firebase_app_instance_id,
+        airship_channel_id,
+        airship_user_id,
+        batch_installation_id,
+        adjust_id,
+        appsflyer_id,
+        mixpanel_distinct_id,
+        clever_tap_id,
+        sendinblueUserEmail,
+        iterableUserEmail,
+        iterableUserId,
+        atInternetIdClient,
+        mParticleUserId,
+        customerioUserId,
+        customerioUserEmail,
+        branchUserDeveloperIdentity,
+        amplitudeUserId,
+        amplitudeDeviceId,
+        moengageUniqueId,
+        oneSignalExternalId,
+        batchCustomUserId,
+
+        /*
+            FIREBASE_APP_INSTANCE_ID: 0,
+            AIRSHIP_CHANNEL_ID: 1,
+            AIRSHIP_USER_ID: 2,
+            BATCH_INSTALLATION_ID: 3,
+            ADJUST_ID: 4,
+            APPSFLYER_ID: 5,
+            MIXPANEL_DISTINCT_ID: 6,
+            CLEVER_TAP_ID: 7,
+            SENDINBLUE_USER_EMAIL: 8,
+            ITERABLE_USER_EMAIL: 9,
+            ITERABLE_USER_ID: 10,
+            AT_INTERNET_ID_CLIENT: 11,
+            MPARTICLE_USER_ID: 12,
+            CUSTOMERIO_USER_ID: 13,
+            CUSTOMERIO_USER_EMAIL: 14,
+            BRANCH_USER_DEVELOPER_IDENTITY: 15,
+            AMPLITUDE_USER_ID: 16,
+            AMPLITUDE_DEVICE_ID: 17,
+            MOENGAGE_UNIQUE_ID: 18,
+            ONESIGNAL_EXTERNAL_ID: 19,
+            BATCH_CUSTOM_USER_ID: 20,
+         */
     }
 }

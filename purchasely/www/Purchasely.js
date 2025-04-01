@@ -5,13 +5,21 @@ var defaultError = (e) => { console.log(e); }
 exports.start = function (apiKey, stores, storekit1, userId, logLevel, runningMode, success, error) {
     var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
     if(!cordovaSdkVersion) {
-        cordovaSdkVersion = "4.4.0";
+        cordovaSdkVersion = "5.1.0";
     }
     exec(success, error, 'Purchasely', 'start', [apiKey, stores, storekit1, userId, logLevel, runningMode, cordovaSdkVersion]);
 };
 
 exports.addEventsListener = function (success, error) {
     exec(success, error, 'Purchasely', 'addEventsListener', []);
+};
+
+exports.addUserAttributeListener = function(success, error) {
+    exec(success, error, 'Purchasely', 'addUserAttributeListener', []);
+};
+
+exports.removeUserAttributeListener = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'removeUserAttributeListener', []);
 };
 
 exports.removeEventsListener = function () {
@@ -170,6 +178,22 @@ exports.setUserAttributeWithDate = function (key, value) {
     exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDate', [key, value]);
 };
 
+exports.setUserAttributeWithStringArray = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithStringArray', [key, value]);
+}
+
+exports.setUserAttributeWithIntArray = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithIntArray', [key, value]);
+}
+
+exports.setUserAttributeWithDoubleArray = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDoubleArray', [key, value]);
+}
+
+exports.setUserAttributeWithBooleanArray = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithBooleanArray', [key, value]);
+}
+
 exports.userAttribute = function (key, success, error) {
     exec(success, error, 'Purchasely', 'userAttribute', [key]);
 };
@@ -181,6 +205,10 @@ exports.clearUserAttribute = function (key) {
 exports.clearUserAttributes = function () {
     exec(() => {}, defaultError, 'Purchasely', 'clearUserAttributes', []);
 };
+
+exports.clearBuiltInAttributes = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'clearBuiltInAttributes', []);
+}
 
 exports.isEligibleForIntroOffer = function (planId, success, error) {
     exec(success, error, 'Purchasely', 'isEligibleForIntroOffer', [planId]);
@@ -208,22 +236,21 @@ exports.Attribute = {
   BATCH_INSTALLATION_ID: 3,
   ADJUST_ID: 4,
   APPSFLYER_ID: 5,
-  ONESIGNAL_PLAYER_ID: 6,
-  MIXPANEL_DISTINCT_ID: 7,
-  CLEVER_TAP_ID: 8,
-  SENDINBLUE_USER_EMAIL: 9,
-  ITERABLE_USER_EMAIL: 10,
-  ITERABLE_USER_ID: 11,
-  AT_INTERNET_ID_CLIENT: 12,
-  MPARTICLE_USER_ID: 13,
-  CUSTOMERIO_USER_ID: 14,
-  CUSTOMERIO_USER_EMAIL: 15,
-  BRANCH_USER_DEVELOPER_IDENTITY: 16,
-  AMPLITUDE_USER_ID: 17,
-  AMPLITUDE_DEVICE_ID: 18,
-  MOENGAGE_UNIQUE_ID: 19,
-  ONESIGNAL_EXTERNAL_ID: 20,
-  BATCH_CUSTOM_USER_ID: 21,
+  MIXPANEL_DISTINCT_ID: 6,
+  CLEVER_TAP_ID: 7,
+  SENDINBLUE_USER_EMAIL: 8,
+  ITERABLE_USER_EMAIL: 9,
+  ITERABLE_USER_ID: 10,
+  AT_INTERNET_ID_CLIENT: 11,
+  MPARTICLE_USER_ID: 12,
+  CUSTOMERIO_USER_ID: 13,
+  CUSTOMERIO_USER_EMAIL: 14,
+  BRANCH_USER_DEVELOPER_IDENTITY: 15,
+  AMPLITUDE_USER_ID: 16,
+  AMPLITUDE_DEVICE_ID: 17,
+  MOENGAGE_UNIQUE_ID: 18,
+  ONESIGNAL_EXTERNAL_ID: 19,
+  BATCH_CUSTOM_USER_ID: 20,
 }
 
 exports.PurchaseResult = {
@@ -269,4 +296,9 @@ exports.ThemeMode = {
 	light: 0,
 	dark: 1,
 	system: 2
+}
+
+exports.UserAttributeAction = {
+    ADD: 'add',
+    REMOVE: 'remove'
 }

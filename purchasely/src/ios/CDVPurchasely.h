@@ -8,13 +8,14 @@
 #import <Cordova/CDVPlugin.h>
 #import <Purchasely/Purchasely-Swift.h>
 
-@interface CDVPurchasely<PLYEventDelegate> : CDVPlugin {
+@interface CDVPurchasely<PLYEventDelegate, PLYUserAttributeDelegate> : CDVPlugin {
 }
 
 @property (nonatomic, retain) UIViewController* presentedPresentationViewController;
 
 @property CDVInvokedUrlCommand* purchasedCommand;
 @property CDVInvokedUrlCommand* eventCommand;
+@property CDVInvokedUrlCommand* attributeCommand;
 
 @property (nonatomic) NSMutableArray<PLYPresentation *> *presentationsLoaded;
 @property (nonatomic, assign) Boolean shouldReopenPaywall;
@@ -56,17 +57,24 @@
 - (void)hidePresentation:(CDVInvokedUrlCommand*)command;
 - (void)showPresentation:(CDVInvokedUrlCommand*)command;
 - (void)userDidConsumeSubscriptionContent:(CDVInvokedUrlCommand*)command;
+- (void)setUserAttributeWithStringArray:(CDVInvokedUrlCommand*)command;
+- (void)setUserAttributeWithIntArray:(CDVInvokedUrlCommand*)command;
+- (void)setUserAttributeWithDoubleArray:(CDVInvokedUrlCommand*)command;
+- (void)setUserAttributeWithBooleanArray:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithString:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithBoolean:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithInt:(CDVInvokedUrlCommand*)command;
+- (void)setUserAttributeWithDouble:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithDate:(CDVInvokedUrlCommand*)command;
 - (void)userAttribute:(CDVInvokedUrlCommand*)command;
 - (void)clearUserAttribute:(CDVInvokedUrlCommand*)command;
 - (void)clearUserAttributes:(CDVInvokedUrlCommand*)command;
+- (void)clearBuiltInAttributes:(CDVInvokedUrlCommand*)command;
 - (void)fetchPresentation:(CDVInvokedUrlCommand*)command;
 - (void)presentPresentation:(CDVInvokedUrlCommand*)command;
 - (void)signPromotionalOffer:(CDVInvokedUrlCommand*)command;
 - (void)isEligibleForIntroOffer:(CDVInvokedUrlCommand*)command;
 - (void)setThemeMode:(CDVInvokedUrlCommand*)command;
+- (void)addUserAttributeListener:(CDVInvokedUrlCommand*)command;
 
 @end

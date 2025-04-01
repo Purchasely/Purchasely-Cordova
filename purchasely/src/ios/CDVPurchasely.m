@@ -62,7 +62,7 @@
 }
 
 - (void)userLogout:(CDVInvokedUrlCommand*)command {
-    [Purchasely userLogout];
+    [Purchasely userLogout:YES];
 }
 
 - (void)setThemeMode:(CDVInvokedUrlCommand *)command {
@@ -72,8 +72,86 @@
 }
 
 - (void)setAttribute:(CDVInvokedUrlCommand*)command {
-    NSInteger attribute = [[command argumentAtIndex:0] intValue];
+    NSNumber *attributeNumber = [command argumentAtIndex:0];
     NSString *value = [command argumentAtIndex:1];
+
+    if (attributeNumber == nil || value == nil) {
+        return;
+    }
+
+    NSInteger rawAttribute = [attributeNumber integerValue];
+    PLYAttribute *attribute = nil;
+
+    switch (rawAttribute) {
+        case CordovaPLYAttributeFirebaseAppInstanceId:
+            attribute = PLYAttributeFirebaseAppInstanceId;
+            break;
+        case CordovaPLYAttributeAirshipChannelId:
+            attribute = PLYAttributeAirshipChannelId;
+            break;
+        case CordovaPLYAttributeAirshipUserId:
+            attribute = PLYAttributeAirshipUserId;
+            break;
+        case CordovaPLYAttributeBatchInstallationId:
+            attribute = PLYAttributeBatchInstallationId;
+            break;
+        case CordovaPLYAttributeAdjustId:
+            attribute = PLYAttributeAdjustId;
+            break;
+        case CordovaPLYAttributeAppsflyerId:
+            attribute = PLYAttributeAppsflyerId;
+            break;
+        case CordovaPLYAttributeMixpanelDistinctId:
+            attribute = PLYAttributeMixpanelDistinctId;
+            break;
+        case CordovaPLYAttributeCleverTapId:
+            attribute = PLYAttributeClevertapId;
+            break;
+        case CordovaPLYAttributeSendinblueUserEmail:
+            attribute = PLYAttributeSendinblueUserEmail;
+            break;
+        case CordovaPLYAttributeIterableUserEmail:
+            attribute = PLYAttributeIterableUserEmail;
+            break;
+        case CordovaPLYAttributeIterableUserId:
+            attribute = PLYAttributeIterableUserId;
+            break;
+        case CordovaPLYAttributeAtInternetIdClient:
+            attribute = PLYAttributeAtInternetIdClient;
+            break;
+        case CordovaPLYAttributeMParticleUserId:
+            attribute = PLYAttributeMParticleUserId;
+            break;
+        case CordovaPLYAttributeCustomerioUserId:
+            attribute = PLYAttributeCustomerioUserId;
+            break;
+        case CordovaPLYAttributeCustomerioUserEmail:
+            attribute = PLYAttributeCustomerioUserEmail;
+            break;
+        case CordovaPLYAttributeBranchUserDeveloperIdentity:
+            attribute = PLYAttributeBranchUserDeveloperIdentity;
+            break;
+        case CordovaPLYAttributeAmplitudeUserId:
+            attribute = PLYAttributeAmplitudeUserId;
+            break;
+        case CordovaPLYAttributeAmplitudeDeviceId:
+            attribute = PLYAttributeAmplitudeDeviceId;
+            break;
+        case CordovaPLYAttributeMoengageUniqueId:
+            attribute = PLYAttributeMoengageUniqueId;
+            break;
+        case CordovaPLYAttributeOneSignalExternalId:
+            attribute = PLYAttributeOneSignalExternalId;
+            break;
+        case CordovaPLYAttributeBatchCustomUserId:
+            attribute = PLYAttributeBatchCustomUserId;
+            break;
+    }
+
+
+    if (attribute == nil) {
+        return;
+    }
 
     [Purchasely setAttribute:attribute value:value];
 }
@@ -370,6 +448,16 @@
     self.eventCommand = nil;
 }
 
+- (void)removeUserAttributeListener:(CDVInvokedUrlCommand*)command {
+    [Purchasely setUserAttributeDelegate:nil];
+    self.attributeCommand = nil;
+}
+
+- (void)addUserAttributeListener:(CDVInvokedUrlCommand*)command {
+    [Purchasely setUserAttributeDelegate:self];
+    self.attributeCommand = command;
+}
+
 - (void)isDeeplinkHandled:(CDVInvokedUrlCommand*)command {
     NSString *deeplinkString = [command argumentAtIndex:0];
     NSURL *deeplink = [NSURL URLWithString:deeplinkString];
@@ -579,6 +667,48 @@
     [Purchasely userDidConsumeSubscriptionContent];
 }
 
+- (void)setUserAttributeWithStringArray:(CDVInvokedUrlCommand*)command {
+    NSString *key = [command argumentAtIndex:0];
+    NSArray<NSString *> *array = [command argumentAtIndex:1];
+    [Purchasely setUserAttributeWithStringArray:array forKey:key];
+}
+
+- (void)setUserAttributeWithBooleanArray:(CDVInvokedUrlCommand*)command {
+    NSString *key = [command argumentAtIndex:0];
+    NSArray *values = [command argumentAtIndex:1];
+
+    NSMutableArray<NSNumber *> *boolArray = [NSMutableArray array];
+    for (id value in values) {
+        [boolArray addObject:@([value boolValue])];
+    }
+
+    [Purchasely setUserAttributeWithBoolArray:boolArray forKey:key];
+}
+
+- (void)setUserAttributeWithIntArray:(CDVInvokedUrlCommand*)command {
+    NSString *key = [command argumentAtIndex:0];
+    NSArray *values = [command argumentAtIndex:1];
+
+    NSMutableArray<NSNumber *> *intArray = [NSMutableArray array];
+    for (id val in values) {
+        [intArray addObject:@([val intValue])];
+    }
+
+    [Purchasely setUserAttributeWithIntArray:intArray forKey:key];
+}
+
+- (void)setUserAttributeWithDoubleArray:(CDVInvokedUrlCommand*)command {
+    NSString *key = [command argumentAtIndex:0];
+    NSArray *values = [command argumentAtIndex:1];
+
+    NSMutableArray<NSNumber *> *doubleArray = [NSMutableArray array];
+    for (id val in values) {
+        [doubleArray addObject:@([val doubleValue])];
+    }
+
+    [Purchasely setUserAttributeWithDoubleArray:doubleArray forKey:key];
+}
+
 - (void)setUserAttributeWithString:(CDVInvokedUrlCommand*)command {
     NSString *key = [command argumentAtIndex:0];
     NSString *value = [command argumentAtIndex:1];
@@ -650,6 +780,10 @@
     [Purchasely clearUserAttributes];
 }
 
+- (void)clearBuiltInAttributes:(CDVInvokedUrlCommand*)command {
+    [Purchasely clearBuiltInAttributes];
+}
+
 - (void)fetchPresentation:(CDVInvokedUrlCommand*)command {
     NSString *placementId = [command argumentAtIndex:0];
     NSString *presentationId = [command argumentAtIndex:1];
@@ -668,7 +802,7 @@
                    if (self.purchaseResolve != nil){
                        [self successFor:self.purchaseResolve resultDict:[self resultDictionaryForPresentationController:result plan:plan]];
                    }
-               }];
+               } loadedCompletion:nil];
            } else {
                [Purchasely fetchPresentationWith:presentationId contentId: contentId fetchCompletion:^(PLYPresentation * _Nullable presentation, NSError * _Nullable error) {
                    if (error != nil) {
@@ -681,7 +815,7 @@
                    if (self.purchaseResolve != nil) {
                        [self successFor:self.purchaseResolve resultDict:[self resultDictionaryForPresentationController:result plan:plan]];
                    }
-               }];
+               } loadedCompletion:nil];
            }
        });
 }
@@ -910,5 +1044,30 @@
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
+
+// WARNING: This enum must be strictly identical to the one in the JS side (Purchasely.js).
+typedef NS_ENUM(NSInteger, CordovaPLYAttribute) {
+    CordovaPLYAttributeFirebaseAppInstanceId,
+    CordovaPLYAttributeAirshipChannelId,
+    CordovaPLYAttributeAirshipUserId,
+    CordovaPLYAttributeBatchInstallationId,
+    CordovaPLYAttributeAdjustId,
+    CordovaPLYAttributeAppsflyerId,
+    CordovaPLYAttributeMixpanelDistinctId,
+    CordovaPLYAttributeCleverTapId,
+    CordovaPLYAttributeSendinblueUserEmail,
+    CordovaPLYAttributeIterableUserEmail,
+    CordovaPLYAttributeIterableUserId,
+    CordovaPLYAttributeAtInternetIdClient,
+    CordovaPLYAttributeMParticleUserId,
+    CordovaPLYAttributeCustomerioUserId,
+    CordovaPLYAttributeCustomerioUserEmail,
+    CordovaPLYAttributeBranchUserDeveloperIdentity,
+    CordovaPLYAttributeAmplitudeUserId,
+    CordovaPLYAttributeAmplitudeDeviceId,
+    CordovaPLYAttributeMoengageUniqueId,
+    CordovaPLYAttributeOneSignalExternalId,
+    CordovaPLYAttributeBatchCustomUserId
+};
 
 @end
