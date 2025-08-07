@@ -17,6 +17,18 @@
  * under the License.
  */
 
+function safeStringify(obj, space = 2) {
+  const seen = new WeakSet();
+  return JSON.stringify(obj, (key, value) => {
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) {
+        return '[Circular Reference]';
+      }
+      seen.add(value);
+    }
+    return value;
+  }, space);
+}
 
 // Wait for the deviceready event before using any of Cordova's device APIs.
 // See https://cordova.apache.org/docs/en/latest/cordova/events/events.html#deviceready
@@ -69,8 +81,8 @@ function onPuchaselySdkReady() {
 
 	Purchasely.addEventsListener((event) => {
 		console.log("Event Name " + event.name);
-		console.log(event.properties);
-		console.log(event);
+		console.log(safeStringify(event.properties));
+		console.log(safeStringify(event));
 	}, (error) => {
 		console.log(error);
 	});
@@ -288,7 +300,7 @@ function fetchPresentation() {
 		'onboarding', //placementId
 		null, //contentId
 		(presentation) => {
-			console.log(presentation);
+			console.log(safeStringify(presentation));
 			Purchasely.presentPresentation(presentation, false, null,
 				(callback) => {
 					console.log(callback);
