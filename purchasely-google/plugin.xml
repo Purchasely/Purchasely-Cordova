@@ -12,7 +12,7 @@
         </config-file>
         <config-file parent="/*" target="AndroidManifest.xml">
         </config-file>
-        <framework src="io.purchasely:google-play:5.3.1" />
+        <framework src="io.purchasely:google-play:5.3.3" />
         <source-file src="src/android/PurchaselyGoogle.java" target-dir="src/cordova-plugin-puchasely-google/PurchaselyGoogle" />
     </platform>
 </plugin>
