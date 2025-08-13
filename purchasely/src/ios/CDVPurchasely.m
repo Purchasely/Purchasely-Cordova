@@ -612,7 +612,8 @@
             [promoOffer setObject:params.promoOffer.storeOfferId forKey:@"storeOfferId"];
             [paramsResult setObject:promoOffer forKey:@"offer"];
         }
-//        [paramsResult setValue: params.webCheckoutProvider forKey:@"webCheckoutProvider"];
+        NSString *webCheckoutProviderString = PLYWebCheckoutProviderToString(params.webCheckoutProvider);
+        [paramsResult setObject:webCheckoutProviderString forKey:@"webCheckoutProvider"];
         if (params.queryParameterKey != nil) {
             [paramsResult setObject:params.queryParameterKey forKey:@"queryParameterKey"];
         }
@@ -621,8 +622,19 @@
         }
         [actionInterceptorResult setObject:paramsResult forKey:@"parameters"];
     }
-
+    
     return actionInterceptorResult;
+}
+
+static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider) {
+    switch (provider) {
+        case PLYWebCheckoutProviderStripe:
+            return @"stripe";
+        case PLYWebCheckoutProviderOther:
+            return @"other";
+        default:
+            return @"unknown";
+    }
 }
 
 - (void)setPaywallActionInterceptor:(CDVInvokedUrlCommand*)command {
