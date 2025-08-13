@@ -562,6 +562,12 @@
         case PLYPresentationActionOpenPresentation:
             actionString = @"open_presentation";
             break;
+        case PLYPresentationActionOpenPlacement:
+            actionString = @"open_placement";
+            break;
+        case PLYPresentationActionWebCheckout:
+            actionString = @"web_checkout";
+            break;
     }
 
     [actionInterceptorResult setObject:actionString forKey:@"action"];
@@ -605,6 +611,13 @@
             [promoOffer setObject:params.promoOffer.vendorId forKey:@"vendorId"];
             [promoOffer setObject:params.promoOffer.storeOfferId forKey:@"storeOfferId"];
             [paramsResult setObject:promoOffer forKey:@"offer"];
+        }
+//        [paramsResult setValue: params.webCheckoutProvider forKey:@"webCheckoutProvider"];
+        if (params.queryParameterKey != nil) {
+            [paramsResult setObject:params.queryParameterKey forKey:@"queryParameterKey"];
+        }
+        if (params.clientReferenceId != nil) {
+            [paramsResult setObject:params.clientReferenceId forKey:@"clientReferenceId"];
         }
         [actionInterceptorResult setObject:paramsResult forKey:@"parameters"];
     }
