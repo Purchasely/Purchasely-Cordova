@@ -297,7 +297,7 @@ function openPresentation() {
 
 function fetchPresentation() {
 	Purchasely.fetchPresentationForPlacement(
-		'FLOW', //placementId
+		'onboarding', //placementId
 		null, //contentId
 		(presentation) => {
 			console.log(safeStringify(presentation));
