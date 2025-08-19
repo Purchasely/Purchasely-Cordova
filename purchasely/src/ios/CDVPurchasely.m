@@ -550,6 +550,9 @@
         case PLYPresentationActionClose:
             actionString = @"close";
             break;
+        case PLYPresentationActionCloseAll:
+            actionString = @"close_all";
+            break;
         case PLYPresentationActionRestore:
             actionString = @"restore";
             break;
