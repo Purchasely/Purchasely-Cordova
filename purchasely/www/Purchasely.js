@@ -5,7 +5,7 @@ var defaultError = (e) => { console.log(e); }
 exports.start = function (apiKey, stores, storekit1, userId, logLevel, runningMode, success, error) {
     var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
     if(!cordovaSdkVersion) {
-        cordovaSdkVersion = "5.1.0";
+        cordovaSdkVersion = "5.3.0";
     }
     exec(success, error, 'Purchasely', 'start', [apiKey, stores, storekit1, userId, logLevel, runningMode, cordovaSdkVersion]);
 };

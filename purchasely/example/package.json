@@ -22,12 +22,12 @@
   },
   "cordova": {
     "plugins": {
-      "@purchasely/cordova-plugin-purchasely": {},
-      "@purchasely/cordova-plugin-puchasely-google": {}
+      "@purchasely/cordova-plugin-puchasely-google": {},
+      "@purchasely/cordova-plugin-purchasely": {}
     },
     "platforms": [
-      "ios",
-      "android"
+      "android",
+      "ios"
     ]
   }
 }

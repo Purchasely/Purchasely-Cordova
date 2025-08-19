@@ -550,6 +550,9 @@
         case PLYPresentationActionClose:
             actionString = @"close";
             break;
+        case PLYPresentationActionCloseAll:
+            actionString = @"close_all";
+            break;
         case PLYPresentationActionRestore:
             actionString = @"restore";
             break;
@@ -561,6 +564,12 @@
             break;
         case PLYPresentationActionOpenPresentation:
             actionString = @"open_presentation";
+            break;
+        case PLYPresentationActionOpenPlacement:
+            actionString = @"open_placement";
+            break;
+        case PLYPresentationActionWebCheckout:
+            actionString = @"web_checkout";
             break;
     }
 
@@ -606,10 +615,29 @@
             [promoOffer setObject:params.promoOffer.storeOfferId forKey:@"storeOfferId"];
             [paramsResult setObject:promoOffer forKey:@"offer"];
         }
+        NSString *webCheckoutProviderString = PLYWebCheckoutProviderToString(params.webCheckoutProvider);
+        [paramsResult setObject:webCheckoutProviderString forKey:@"webCheckoutProvider"];
+        if (params.queryParameterKey != nil) {
+            [paramsResult setObject:params.queryParameterKey forKey:@"queryParameterKey"];
+        }
+        if (params.clientReferenceId != nil) {
+            [paramsResult setObject:params.clientReferenceId forKey:@"clientReferenceId"];
+        }
         [actionInterceptorResult setObject:paramsResult forKey:@"parameters"];
     }
-
+    
     return actionInterceptorResult;
+}
+
+static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider) {
+    switch (provider) {
+        case PLYWebCheckoutProviderStripe:
+            return @"stripe";
+        case PLYWebCheckoutProviderOther:
+            return @"other";
+        default:
+            return @"unknown";
+    }
 }
 
 - (void)setPaywallActionInterceptor:(CDVInvokedUrlCommand*)command {
@@ -860,7 +888,11 @@
                 [Purchasely closeDisplayedPresentation];
                 self.presentedPresentationViewController = presentationLoaded.controller;
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                    [Purchasely showController:presentationLoaded.controller type: PLYUIControllerTypeProductPage from:nil];
+                    if (presentationLoaded.isFlow) {
+                        [presentationLoaded displayFrom:nil];
+                    } else {
+                        [Purchasely showController:presentationLoaded.controller type: PLYUIControllerTypeProductPage from:nil];
+                    }
                 });
             }
         });

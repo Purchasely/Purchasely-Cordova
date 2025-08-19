@@ -562,10 +562,17 @@ class PurchaselyPlugin : CordovaPlugin() {
         purchaseCallback = callbackContext
 
         cordova.activity.let { activity ->
-            val intent = PLYProductActivity.newIntent(activity, PLYPresentationProperties(), isFullScreen, loadingBackgroundColor).apply {
-                putExtra("presentation", presentation)
+            if (presentation.flowId != null) {
+                presentation.display(activity) { result, plan ->
+                    sendPurchaseResult(result, plan)
+                }
+            } else {
+                // Open legacy Activity for now if not a flow
+                val intent = PLYProductActivity.newIntent(activity, PLYPresentationProperties(), isFullScreen, loadingBackgroundColor).apply {
+                    putExtra("presentation", presentation)
+                }
+                activity.startActivity(intent)
             }
-            activity.startActivity(intent)
         }
 
     }
