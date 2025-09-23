@@ -158,40 +158,40 @@ exports.closePresentation = function () {
     exec(() => {}, defaultError, 'Purchasely', 'closePresentation', []);
 };
 
-exports.setUserAttributeWithString = function (key, value) {
-    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithString', [key, value]);
+exports.setUserAttributeWithString = function (key, value, processLegalBasis) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithString', [key, value, processLegalBasis]);
 };
 
-exports.setUserAttributeWithBoolean = function (key, value) {
-    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithBoolean', [key, value]);
+exports.setUserAttributeWithBoolean = function (key, value, processLegalBasis) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithBoolean', [key, value, processLegalBasis]);
 };
 
-exports.setUserAttributeWithInt = function (key, value) {
-    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithInt', [key, value]);
+exports.setUserAttributeWithInt = function (key, value, processLegalBasis) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithInt', [key, value, processLegalBasis]);
 };
 
-exports.setUserAttributeWithDouble = function (key, value) {
-    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDouble', [key, value]);
+exports.setUserAttributeWithDouble = function (key, value, processLegalBasis) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDouble', [key, value, processLegalBasis]);
 };
 
-exports.setUserAttributeWithDate = function (key, value) {
-    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDate', [key, value]);
+exports.setUserAttributeWithDate = function (key, value, processLegalBasis) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDate', [key, value, processLegalBasis]);
 };
 
-exports.setUserAttributeWithStringArray = function (key, value) {
-    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithStringArray', [key, value]);
+exports.setUserAttributeWithStringArray = function (key, value, processLegalBasis) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithStringArray', [key, value, processLegalBasis]);
 }
 
-exports.setUserAttributeWithIntArray = function (key, value) {
-    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithIntArray', [key, value]);
+exports.setUserAttributeWithIntArray = function (key, value, processLegalBasis) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithIntArray', [key, value, processLegalBasis]);
 }
 
-exports.setUserAttributeWithDoubleArray = function (key, value) {
-    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDoubleArray', [key, value]);
+exports.setUserAttributeWithDoubleArray = function (key, value, processLegalBasis) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDoubleArray', [key, value, processLegalBasis]);
 }
 
-exports.setUserAttributeWithBooleanArray = function (key, value) {
-    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithBooleanArray', [key, value]);
+exports.setUserAttributeWithBooleanArray = function (key, value, processLegalBasis) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithBooleanArray', [key, value, processLegalBasis]);
 }
 
 exports.userAttribute = function (key, success, error) {

@@ -167,11 +167,11 @@ function onPuchaselySdkReady() {
 		console.log("Error with purchase : " + error);
 	});
 
-	Purchasely.setUserAttributeWithString("key_string", "value_string");
-	Purchasely.setUserAttributeWithBoolean("key_boolean", true);
-	Purchasely.setUserAttributeWithInt("key_int", 7);
-	Purchasely.setUserAttributeWithDouble("key_double", 4.5);
-	Purchasely.setUserAttributeWithDate("key_date", new Date().toISOString());
+	Purchasely.setUserAttributeWithString("key_string", "value_string", "ESSENTIAL");
+	Purchasely.setUserAttributeWithBoolean("key_boolean", true, "ESSENTIAL");
+	Purchasely.setUserAttributeWithInt("key_int", 7, "ESSENTIAL");
+	Purchasely.setUserAttributeWithDouble("key_double", 4.5, "ESSENTIAL");
+	Purchasely.setUserAttributeWithDate("key_date", new Date().toISOString(), "ESSENTIAL");
 	
 	Purchasely.clearUserAttributes();
 
