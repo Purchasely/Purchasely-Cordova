@@ -698,79 +698,148 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
 - (void)setUserAttributeWithStringArray:(CDVInvokedUrlCommand*)command {
     NSString *key = [command argumentAtIndex:0];
     NSArray<NSString *> *array = [command argumentAtIndex:1];
-    [Purchasely setUserAttributeWithStringArray:array forKey:key];
+    NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
+    
+    NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
+    
+    if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
+        processingLegalBasis = PLYDataProcessingLegalBasisEssential;
+    }
+
+    [Purchasely setUserAttributeWithStringArray:array forKey:key processingLegalBasis:processingLegalBasis];
 }
 
 - (void)setUserAttributeWithBooleanArray:(CDVInvokedUrlCommand*)command {
     NSString *key = [command argumentAtIndex:0];
     NSArray *values = [command argumentAtIndex:1];
+    NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
 
     NSMutableArray<NSNumber *> *boolArray = [NSMutableArray array];
     for (id value in values) {
         [boolArray addObject:@([value boolValue])];
     }
+    
+    NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
+    
+    if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
+        processingLegalBasis = PLYDataProcessingLegalBasisEssential;
+    }
 
-    [Purchasely setUserAttributeWithBoolArray:boolArray forKey:key];
+    [Purchasely setUserAttributeWithBoolArray:boolArray forKey:key processingLegalBasis:processingLegalBasis];
 }
 
 - (void)setUserAttributeWithIntArray:(CDVInvokedUrlCommand*)command {
     NSString *key = [command argumentAtIndex:0];
     NSArray *values = [command argumentAtIndex:1];
+    NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
 
     NSMutableArray<NSNumber *> *intArray = [NSMutableArray array];
     for (id val in values) {
         [intArray addObject:@([val intValue])];
     }
+    
+    NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
+    
+    if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
+        processingLegalBasis = PLYDataProcessingLegalBasisEssential;
+    }
 
-    [Purchasely setUserAttributeWithIntArray:intArray forKey:key];
+    [Purchasely setUserAttributeWithIntArray:intArray forKey:key processingLegalBasis:processingLegalBasis];
 }
 
 - (void)setUserAttributeWithDoubleArray:(CDVInvokedUrlCommand*)command {
     NSString *key = [command argumentAtIndex:0];
     NSArray *values = [command argumentAtIndex:1];
+    NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
 
     NSMutableArray<NSNumber *> *doubleArray = [NSMutableArray array];
     for (id val in values) {
         [doubleArray addObject:@([val doubleValue])];
     }
+    
+    NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
+    
+    if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
+        processingLegalBasis = PLYDataProcessingLegalBasisEssential;
+    }
 
-    [Purchasely setUserAttributeWithDoubleArray:doubleArray forKey:key];
+    [Purchasely setUserAttributeWithDoubleArray:doubleArray forKey:key processingLegalBasis:processingLegalBasis];
 }
 
 - (void)setUserAttributeWithString:(CDVInvokedUrlCommand*)command {
     NSString *key = [command argumentAtIndex:0];
     NSString *value = [command argumentAtIndex:1];
-    [Purchasely setUserAttributeWithStringValue:value forKey:key];
+    NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
+    
+    NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
+    
+    if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
+        processingLegalBasis = PLYDataProcessingLegalBasisEssential;
+    }
+
+    [Purchasely setUserAttributeWithStringValue:value forKey:key processingLegalBasis:processingLegalBasis];
 }
 
 - (void)setUserAttributeWithBoolean:(CDVInvokedUrlCommand*)command {
     NSString *key = [command argumentAtIndex:0];
     BOOL value = [[command argumentAtIndex:1] boolValue];
-    [Purchasely setUserAttributeWithBoolValue:value forKey:key];
+    NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
+    
+    NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
+    
+    if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
+        processingLegalBasis = PLYDataProcessingLegalBasisEssential;
+    }
+
+    [Purchasely setUserAttributeWithBoolValue:value forKey:key processingLegalBasis:processingLegalBasis];
 }
 
 - (void)setUserAttributeWithInt:(CDVInvokedUrlCommand*)command {
     NSString *key = [command argumentAtIndex:0];
     NSInteger value = [[command argumentAtIndex:1] intValue];
-    [Purchasely setUserAttributeWithIntValue:value forKey:key];
+    NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
+    
+    NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
+    
+    if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
+        processingLegalBasis = PLYDataProcessingLegalBasisEssential;
+    }
+
+    [Purchasely setUserAttributeWithIntValue:value forKey:key processingLegalBasis:processingLegalBasis];
 }
 
 - (void)setUserAttributeWithDouble:(CDVInvokedUrlCommand*)command {
     NSString *key = [command argumentAtIndex:0];
     double value = [[command argumentAtIndex:1] doubleValue];
-    [Purchasely setUserAttributeWithDoubleValue:value forKey:key];
+    NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
+    
+    NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
+    
+    if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
+        processingLegalBasis = PLYDataProcessingLegalBasisEssential;
+    }
+
+    [Purchasely setUserAttributeWithDoubleValue:value forKey:key processingLegalBasis:processingLegalBasis];
 }
 
 - (void)setUserAttributeWithDate:(CDVInvokedUrlCommand*)command {
     NSString *key = [command argumentAtIndex:0];
     NSString *value = [command argumentAtIndex:1];
+    NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
 
     NSDateFormatter * dateFormatter = [NSDateFormatter new];
     dateFormatter.timeZone = [NSTimeZone timeZoneWithName:@"GMT"];
     [dateFormatter setDateFormat:@"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"];
     NSDate *date = [dateFormatter dateFromString:value];
+    
+    NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
+    
+    if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
+        processingLegalBasis = PLYDataProcessingLegalBasisEssential;
+    }
+
     if (date != nil) {
-        [Purchasely setUserAttributeWithDateValue:date forKey:key];
+        [Purchasely setUserAttributeWithDateValue:date forKey:key processingLegalBasis:processingLegalBasis];
     } else {
         NSLog(@"[Purchasely] Cannot save date attribute %@", key);
     }
