@@ -975,7 +975,7 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
         NSString *string = [val stringValue];
         if ([string isEqualToString:@"ALL_NON_ESSENTIAL"]) {
             purposesSet = [NSMutableSet setWithObject:[PLYDataProcessingPurpose allNonEssentials]];
-            break
+            break;
         } else if ([string isEqualToString:@"ANALYTICS"]) {
             [purposesSet addObject:[PLYDataProcessingPurpose analytics]];
         } else if ([string isEqualToString:@"IDENTIFIED_ANALYTICS"]) {
