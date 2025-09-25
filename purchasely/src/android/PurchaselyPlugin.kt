@@ -13,6 +13,7 @@ import io.purchasely.ext.LogLevel
 import io.purchasely.ext.PLYAppTechnology
 import io.purchasely.ext.PLYCompletionHandler
 import io.purchasely.ext.PLYDataProcessingLegalBasis
+import io.purchasely.ext.PLYDataProcessingPurpose
 import io.purchasely.ext.PLYEvent
 import io.purchasely.ext.PLYPresentation
 import io.purchasely.ext.PLYPresentationAction
@@ -186,6 +187,7 @@ class PurchaselyPlugin : CordovaPlugin() {
                 "clearBuiltInAttributes" -> clearBuiltInAttributes()
                 "isEligibleForIntroOffer" -> isEligibleForIntroOffer(getStringFromJson(args.getString(0)), callbackContext)
                 "signPromotionalOffer" -> signPromotionalOffer(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), callbackContext)
+                "revokeDataProcessingConsent" -> revokeDataProcessingConsent(args.getJSONArray(0))
                 else -> return false
             }
         } catch (e: JSONException) {
@@ -1038,6 +1040,29 @@ class PurchaselyPlugin : CordovaPlugin() {
 
     private fun signPromotionalOffer(storeProductId: String?, storeOfferId: String?, callbackContext: CallbackContext) {
         callbackContext.error("No signing required on Android")
+    }
+
+    private fun revokeDataProcessingConsent(purposes: JSONArray?) {
+        if(purposes == null) return
+        var mappedPurposes = mutableSetOf<PLYDataProcessingPurpose>()
+        for (i in 0 until purposes.length()) {
+            try {
+                when (purposes.getString(i)) {
+                    "ALL_NON_ESSENTIAL" -> {
+                        mappedPurposes = mutableSetOf(PLYDataProcessingPurpose.AllNonEssentials)
+                        break
+                    }
+                    "ANALYTICS" -> mappedPurposes.add(PLYDataProcessingPurpose.Analytics)
+                    "IDENTIFIED_ANALYTICS" -> mappedPurposes.add(PLYDataProcessingPurpose.IdentifiedAnalytics)
+                    "CAMPAIGNS" -> mappedPurposes.add(PLYDataProcessingPurpose.Campaigns)
+                    "PERSONALIZATION" -> mappedPurposes.add(PLYDataProcessingPurpose.Personalization)
+                    "THIRD_PARTY_INTEGRATIONS" -> mappedPurposes.add(PLYDataProcessingPurpose.ThirdPartyIntegrations)
+                }
+            } catch (e: JSONException) {
+                Log.e("Purchasely", "Error in string array" + e.message, e)
+            }
+        }
+        Purchasely.revokeDataProcessingConsent(mappedPurposes)
     }
 
 

@@ -967,6 +967,30 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
         });
 }
 
+- (void) revokeDataProcessingConsent:(CDVInvokedUrlCommand *)command {
+    NSArray *values = [command argumentAtIndex:0];
+    NSMutableSet<PLYDataProcessingPurpose *> *purposesSet = [NSMutableSet set];
+
+    for (id val in values) {
+        NSString *string = [val stringValue];
+        if ([string isEqualToString:@"ALL_NON_ESSENTIAL"]) {
+            purposesSet = [NSMutableSet setWithObject:[PLYDataProcessingPurpose allNonEssentials]];
+            break
+        } else if ([string isEqualToString:@"ANALYTICS"]) {
+            [purposesSet addObject:[PLYDataProcessingPurpose analytics]];
+        } else if ([string isEqualToString:@"IDENTIFIED_ANALYTICS"]) {
+            [purposesSet addObject:[PLYDataProcessingPurpose identifiedAnalytics]];
+        } else if ([string isEqualToString:@"CAMPAIGNS"]) {
+            [purposesSet addObject:[PLYDataProcessingPurpose campaigns]];
+        } else if ([string isEqualToString:@"PERSONALIZATION"]) {
+            [purposesSet addObject:[PLYDataProcessingPurpose personalization]];
+        } else if ([string isEqualToString:@"THIRD_PARTY_INTEGRATIONS"]) {
+            [purposesSet addObject:[PLYDataProcessingPurpose thirdPartyIntegrations]];
+        }
+    }
+    [Purchasely revokeDataProcessingConsentFor: purposesSet];
+}
+
 - (PLYPresentation *) findPresentationLoadedFor:(NSString * _Nullable) presentationId {
     for (PLYPresentation *presentationLoaded in self.presentationsLoaded) {
         if ([presentationLoaded.id isEqualToString: presentationId]) {

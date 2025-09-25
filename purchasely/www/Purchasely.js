@@ -222,6 +222,10 @@ exports.setThemeMode = function (mode) {
     exec(() => {}, defaultError, 'Purchasely', 'setThemeMode', [mode]);
 };
 
+exports.revokeDataProcessingConsent = function (purposes) {
+    exec(() => {}, defaultError, 'Purchasely', 'revokeDataProcessingConsent', [purposes]);
+}
+
 exports.LogLevel = {
 	DEBUG: 0,
 	INFO: 1,
@@ -253,6 +257,20 @@ exports.Attribute = {
   BATCH_CUSTOM_USER_ID: 20,
 }
 
+exports.DataProcessingLegalBasis = {
+    essential:  'ESSENTIAL',
+    optional:   'OPTIONAL'
+}
+
+exports.DataProcessingPurpose = {
+    allNonEssential:        'ALL_NON_ESSENTIAL',
+    analytics:              'ANALYTICS',
+    identifiedAnalytics:    'IDENTIFIED_ANALYTICS',
+    campaigns:              'CAMPAIGNS',
+    personalization:        'PERSONALIZATION',
+    thirdPartyIntegrations: 'THIRD_PARTY_INTEGRATIONS'
+}
+
 exports.PurchaseResult = {
 	PURCHASED: 0,
 	CANCELLED: 1,
@@ -274,7 +292,6 @@ exports.PlanType = {
     nonRenewingSubscription: 3,
     unknown: 4
 }
-
 
 exports.RunningMode = {
     paywallObserver: 2,
