@@ -15,19 +15,18 @@
   "devDependencies": {
     "@purchasely/cordova-plugin-puchasely-google": "file:../../purchasely-google",
     "@purchasely/cordova-plugin-purchasely": "file:..",
-    "cordova-android": "^13.0.0",
+    "cordova-android": "^14.0.0",
     "cordova-ios": "^7.0.1",
     "cordova-plugin-puchasely-google": "file:../../purchasely-google",
     "cordova-plugin-purchasely": "file:.."
   },
   "cordova": {
     "plugins": {
-      "@purchasely/cordova-plugin-puchasely-google": {},
-      "@purchasely/cordova-plugin-purchasely": {}
+      "@purchasely/cordova-plugin-puchasely-google": {}
     },
     "platforms": [
-      "android",
-      "ios"
+      "ios",
+      "android"
     ]
   }
 }
