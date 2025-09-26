@@ -1049,7 +1049,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         for (i in 0 until purposes.length()) {
             try {
                 when (purposes.getString(i)) {
-                    "ALL_NON_ESSENTIAL" -> {
+                    "ALL_NON_ESSENTIALS" -> {
                         mappedPurposes = mutableSetOf(PLYDataProcessingPurpose.AllNonEssentials)
                         break
                     }

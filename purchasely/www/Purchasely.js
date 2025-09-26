@@ -263,7 +263,7 @@ exports.DataProcessingLegalBasis = {
 }
 
 exports.DataProcessingPurpose = {
-    allNonEssential:        'ALL_NON_ESSENTIAL',
+    allNonEssentials:       'ALL_NON_ESSENTIALS',
     analytics:              'ANALYTICS',
     identifiedAnalytics:    'IDENTIFIED_ANALYTICS',
     campaigns:              'CAMPAIGNS',
