@@ -167,11 +167,11 @@ function onPuchaselySdkReady() {
 		console.log("Error with purchase : " + error);
 	});
 
-	Purchasely.setUserAttributeWithString("key_string", "value_string");
-	Purchasely.setUserAttributeWithBoolean("key_boolean", true);
-	Purchasely.setUserAttributeWithInt("key_int", 7);
-	Purchasely.setUserAttributeWithDouble("key_double", 4.5);
-	Purchasely.setUserAttributeWithDate("key_date", new Date().toISOString());
+	Purchasely.setUserAttributeWithString("key_string", "value_string", Purchasely.DataProcessingLegalBasis.essential);
+	Purchasely.setUserAttributeWithBoolean("key_boolean", true, Purchasely.DataProcessingLegalBasis.essential);
+	Purchasely.setUserAttributeWithInt("key_int", 7, Purchasely.DataProcessingLegalBasis.essential);
+	Purchasely.setUserAttributeWithDouble("key_double", 4.5, Purchasely.DataProcessingLegalBasis.essential);
+	Purchasely.setUserAttributeWithDate("key_date", new Date().toISOString(), Purchasely.DataProcessingLegalBasis.essential);
 	
 	Purchasely.clearUserAttributes();
 
@@ -185,6 +185,8 @@ function onPuchaselySdkReady() {
 	Purchasely.setUserAttributeWithIntArray("key_int_array", [1, 2, 3]);
 	Purchasely.setUserAttributeWithDoubleArray("key_double_array", [1.1, 2.2, 3.3]);
 	Purchasely.setUserAttributeWithBooleanArray("key_boolean_array", [true, false, true]);
+
+	Purchasely.revokeDataProcessingConsent(["CAMPAIGNS"])
 
 	Purchasely.userAttribute("key_string", value => {
 		console.log("User attribute string: " + value);
@@ -248,7 +250,7 @@ function onPuchaselySdkReady() {
 			console.log('prevent Purchasely SDK to navigate to website');
 			Purchasely.onProcessAction(true);
 		} else if (result.action === Purchasely.PaywallAction.close) {
-			console.log('User wants to close paywall');
+			console.log('User wants to close paywall - close reason ' + result.parameters.closeReason);
 			Purchasely.onProcessAction(true);
 		} else if (result.action === Purchasely.PaywallAction.login) {
 			console.log('User wants to login');

@@ -12,6 +12,8 @@ import io.purchasely.ext.EventListener
 import io.purchasely.ext.LogLevel
 import io.purchasely.ext.PLYAppTechnology
 import io.purchasely.ext.PLYCompletionHandler
+import io.purchasely.ext.PLYDataProcessingLegalBasis
+import io.purchasely.ext.PLYDataProcessingPurpose
 import io.purchasely.ext.PLYEvent
 import io.purchasely.ext.PLYPresentation
 import io.purchasely.ext.PLYPresentationAction
@@ -170,21 +172,22 @@ class PurchaselyPlugin : CordovaPlugin() {
                 "hidePresentation" -> hidePresentation()
                 "showPresentation" -> showPresentation()
                 "userDidConsumeSubscriptionContent" -> userDidConsumeSubscriptionContent()
-                "setUserAttributeWithString" -> setUserAttributeWithString(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)))
-                "setUserAttributeWithBoolean" -> setUserAttributeWithBoolean(getStringFromJson(args.getString(0)), args.getBoolean(1))
-                "setUserAttributeWithInt" -> setUserAttributeWithInt(getStringFromJson(args.getString(0)), args.getInt(1))
-                "setUserAttributeWithDouble" -> setUserAttributeWithDouble(getStringFromJson(args.getString(0)), args.getDouble(1))
-                "setUserAttributeWithDate" -> setUserAttributeWithDate(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)))
-                "setUserAttributeWithStringArray" -> setUserAttributeWithStringArray(getStringFromJson(args.getString(0)), args.getJSONArray(1))
-                "setUserAttributeWithIntArray" -> setUserAttributeWithIntArray(getStringFromJson(args.getString(0)), args.getJSONArray(1))
-                "setUserAttributeWithDoubleArray" -> setUserAttributeWithDoubleArray(getStringFromJson(args.getString(0)), args.getJSONArray(1))
-                "setUserAttributeWithBooleanArray" -> setUserAttributeWithBooleanArray(getStringFromJson(args.getString(0)), args.getJSONArray(1))
+                "setUserAttributeWithString" -> setUserAttributeWithString(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), getStringFromJson(args.optString(2)))
+                "setUserAttributeWithBoolean" -> setUserAttributeWithBoolean(getStringFromJson(args.getString(0)), args.getBoolean(1), getStringFromJson(args.optString(2)))
+                "setUserAttributeWithInt" -> setUserAttributeWithInt(getStringFromJson(args.getString(0)), args.getInt(1), getStringFromJson(args.optString(2)))
+                "setUserAttributeWithDouble" -> setUserAttributeWithDouble(getStringFromJson(args.getString(0)), args.getDouble(1), getStringFromJson(args.optString(2)))
+                "setUserAttributeWithDate" -> setUserAttributeWithDate(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), getStringFromJson(args.optString(2)))
+                "setUserAttributeWithStringArray" -> setUserAttributeWithStringArray(getStringFromJson(args.getString(0)), args.getJSONArray(1), getStringFromJson(args.optString(2)))
+                "setUserAttributeWithIntArray" -> setUserAttributeWithIntArray(getStringFromJson(args.getString(0)), args.getJSONArray(1), getStringFromJson(args.optString(2)))
+                "setUserAttributeWithDoubleArray" -> setUserAttributeWithDoubleArray(getStringFromJson(args.getString(0)), args.getJSONArray(1), getStringFromJson(args.optString(2)))
+                "setUserAttributeWithBooleanArray" -> setUserAttributeWithBooleanArray(getStringFromJson(args.getString(0)), args.getJSONArray(1), getStringFromJson(args.optString(2)))
                 "userAttribute" -> userAttribute(getStringFromJson(args.getString(0)), callbackContext)
                 "clearUserAttribute" -> clearUserAttribute(getStringFromJson(args.getString(0)))
                 "clearUserAttributes" -> clearUserAttributes()
                 "clearBuiltInAttributes" -> clearBuiltInAttributes()
                 "isEligibleForIntroOffer" -> isEligibleForIntroOffer(getStringFromJson(args.getString(0)), callbackContext)
                 "signPromotionalOffer" -> signPromotionalOffer(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), callbackContext)
+                "revokeDataProcessingConsent" -> revokeDataProcessingConsent(args.getJSONArray(0))
                 else -> return false
             }
         } catch (e: JSONException) {
@@ -775,6 +778,7 @@ class PurchaselyPlugin : CordovaPlugin() {
             parametersForCordova["subscriptionOffer"] = parameters.subscriptionOffer?.toMap()
             parametersForCordova["presentation"] = parameters.presentation
             parametersForCordova["placement"] = parameters.placement
+            parametersForCordova["closeReason"] = parameters.closeReason?.name
 
             val result = PluginResult(
                 PluginResult.Status.OK,
@@ -841,7 +845,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         )
     }
 
-    fun setUserAttributeWithStringArray(key: String?, value: JSONArray?) {
+    fun setUserAttributeWithStringArray(key: String?, value: JSONArray?, legalBasisString: String?) {
         if(key == null || value == null) return
         val list = mutableListOf<String>()
         for (i in 0 until value.length()) {
@@ -851,10 +855,14 @@ class PurchaselyPlugin : CordovaPlugin() {
                 Log.e("Purchasely", "Error in string array" + e.message, e)
             }
         }
-        Purchasely.setUserAttribute(key, list.toTypedArray())
+        val processingLegalBasis = when (legalBasisString?.uppercase()) {
+            "ESSENTIAL" -> PLYDataProcessingLegalBasis.ESSENTIAL
+            else -> PLYDataProcessingLegalBasis.OPTIONAL
+        }
+        Purchasely.setUserAttribute(key, list.toTypedArray(), processingLegalBasis)
     }
 
-    fun setUserAttributeWithIntArray(key: String?, value: JSONArray?) {
+    fun setUserAttributeWithIntArray(key: String?, value: JSONArray?, legalBasisString: String?) {
         if(key == null || value == null) return
         val list = mutableListOf<Int>()
         for (i in 0 until value.length()) {
@@ -864,10 +872,14 @@ class PurchaselyPlugin : CordovaPlugin() {
                 Log.e("Purchasely", "Error in int array" + e.message, e)
             }
         }
-        Purchasely.setUserAttribute(key, list.toTypedArray())
+        val processingLegalBasis = when (legalBasisString?.uppercase()) {
+            "ESSENTIAL" -> PLYDataProcessingLegalBasis.ESSENTIAL
+            else -> PLYDataProcessingLegalBasis.OPTIONAL
+        }
+        Purchasely.setUserAttribute(key, list.toTypedArray(), processingLegalBasis)
     }
 
-    fun setUserAttributeWithDoubleArray(key: String?, value: JSONArray?) {
+    fun setUserAttributeWithDoubleArray(key: String?, value: JSONArray?, legalBasisString: String?) {
         if (key == null || value == null) return
         val list = mutableListOf<Float>()
         for (i in 0 until value.length()) {
@@ -877,10 +889,14 @@ class PurchaselyPlugin : CordovaPlugin() {
                 Log.e("Purchasely", "Error in double array: ${e.message}", e)
             }
         }
-        Purchasely.setUserAttribute(key, list.toTypedArray())
+        val processingLegalBasis = when (legalBasisString?.uppercase()) {
+            "ESSENTIAL" -> PLYDataProcessingLegalBasis.ESSENTIAL
+            else -> PLYDataProcessingLegalBasis.OPTIONAL
+        }
+        Purchasely.setUserAttribute(key, list.toTypedArray(), processingLegalBasis)
     }
 
-    fun setUserAttributeWithBooleanArray(key: String?, value: JSONArray?) {
+    fun setUserAttributeWithBooleanArray(key: String?, value: JSONArray?, legalBasisString: String?) {
         if(key == null || value == null) return
         val list = mutableListOf<Boolean>()
         for (i in 0 until value.length()) {
@@ -890,31 +906,55 @@ class PurchaselyPlugin : CordovaPlugin() {
                 Log.e("Purchasely", "Error in boolean array" + e.message, e)
             }
         }
-        Purchasely.setUserAttribute(key, list.toTypedArray())
+        val processingLegalBasis = when (legalBasisString?.uppercase()) {
+            "ESSENTIAL" -> PLYDataProcessingLegalBasis.ESSENTIAL
+            else -> PLYDataProcessingLegalBasis.OPTIONAL
+        }
+        Purchasely.setUserAttribute(key, list.toTypedArray(), processingLegalBasis)
     }
 
-    fun setUserAttributeWithString(key: String?, value: String?) {
+    fun setUserAttributeWithString(key: String?, value: String?, legalBasisString: String?) {
         if(key == null || value == null) return
-        Purchasely.setUserAttribute(key, value)
+        val processingLegalBasis = when (legalBasisString?.uppercase()) {
+            "ESSENTIAL" -> PLYDataProcessingLegalBasis.ESSENTIAL
+            else -> PLYDataProcessingLegalBasis.OPTIONAL
+        }
+        Purchasely.setUserAttribute(key, value, processingLegalBasis)
     }
 
-    fun setUserAttributeWithInt(key: String?, value: Int?) {
+    fun setUserAttributeWithInt(key: String?, value: Int?, legalBasisString: String?) {
         if(key == null || value == null) return
-        Purchasely.setUserAttribute(key, value)
+        val processingLegalBasis = when (legalBasisString?.uppercase()) {
+            "ESSENTIAL" -> PLYDataProcessingLegalBasis.ESSENTIAL
+            else -> PLYDataProcessingLegalBasis.OPTIONAL
+        }
+        Purchasely.setUserAttribute(key, value, processingLegalBasis)
     }
 
-    fun setUserAttributeWithDouble(key: String?, value: Double?) {
+    fun setUserAttributeWithDouble(key: String?, value: Double?, legalBasisString: String?) {
         if(key == null || value == null) return
-        Purchasely.setUserAttribute(key, value.toFloat())
+        val processingLegalBasis = when (legalBasisString?.uppercase()) {
+            "ESSENTIAL" -> PLYDataProcessingLegalBasis.ESSENTIAL
+            else -> PLYDataProcessingLegalBasis.OPTIONAL
+        }
+        Purchasely.setUserAttribute(key, value.toFloat(), processingLegalBasis)
     }
 
-    fun setUserAttributeWithBoolean(key: String?, value: Boolean?) {
+    fun setUserAttributeWithBoolean(key: String?, value: Boolean?, legalBasisString: String?) {
         if(key == null || value == null) return
-        Purchasely.setUserAttribute(key, value)
+        val processingLegalBasis = when (legalBasisString?.uppercase()) {
+            "ESSENTIAL" -> PLYDataProcessingLegalBasis.ESSENTIAL
+            else -> PLYDataProcessingLegalBasis.OPTIONAL
+        }
+        Purchasely.setUserAttribute(key, value, processingLegalBasis)
     }
 
-    fun setUserAttributeWithDate(key: String?, value: String?) {
+    fun setUserAttributeWithDate(key: String?, value: String?, legalBasisString: String?) {
         if(key == null || value == null) return
+        val processingLegalBasis = when (legalBasisString?.uppercase()) {
+            "ESSENTIAL" -> PLYDataProcessingLegalBasis.ESSENTIAL
+            else -> PLYDataProcessingLegalBasis.OPTIONAL
+        }
         val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", Locale.getDefault())
         } else {
@@ -926,7 +966,7 @@ class PurchaselyPlugin : CordovaPlugin() {
             format.parse(value)?.let {
                 calendar.time = it
             }
-            Purchasely.setUserAttribute(key, calendar.time)
+            Purchasely.setUserAttribute(key, calendar.time, processingLegalBasis)
         } catch (e: Exception) {
             Log.e("Purchasely", "Cannot save date attribute $key", e)
         }
@@ -1001,6 +1041,29 @@ class PurchaselyPlugin : CordovaPlugin() {
 
     private fun signPromotionalOffer(storeProductId: String?, storeOfferId: String?, callbackContext: CallbackContext) {
         callbackContext.error("No signing required on Android")
+    }
+
+    private fun revokeDataProcessingConsent(purposes: JSONArray?) {
+        if(purposes == null) return
+        var mappedPurposes = mutableSetOf<PLYDataProcessingPurpose>()
+        for (i in 0 until purposes.length()) {
+            try {
+                when (purposes.getString(i)) {
+                    "ALL_NON_ESSENTIALS" -> {
+                        mappedPurposes = mutableSetOf(PLYDataProcessingPurpose.AllNonEssentials)
+                        break
+                    }
+                    "ANALYTICS" -> mappedPurposes.add(PLYDataProcessingPurpose.Analytics)
+                    "IDENTIFIED_ANALYTICS" -> mappedPurposes.add(PLYDataProcessingPurpose.IdentifiedAnalytics)
+                    "CAMPAIGNS" -> mappedPurposes.add(PLYDataProcessingPurpose.Campaigns)
+                    "PERSONALIZATION" -> mappedPurposes.add(PLYDataProcessingPurpose.Personalization)
+                    "THIRD_PARTY_INTEGRATIONS" -> mappedPurposes.add(PLYDataProcessingPurpose.ThirdPartyIntegrations)
+                }
+            } catch (e: JSONException) {
+                Log.e("Purchasely", "Error in string array" + e.message, e)
+            }
+        }
+        Purchasely.revokeDataProcessingConsent(mappedPurposes)
     }
 
 

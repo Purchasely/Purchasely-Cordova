@@ -16,6 +16,7 @@ import io.purchasely.ext.Purchasely
 import io.purchasely.models.PLYPlan
 import io.purchasely.views.parseColor
 import java.lang.ref.WeakReference
+import android.view.WindowManager
 
 class PLYProductActivity : AppCompatActivity() {
 
@@ -40,6 +41,7 @@ class PLYProductActivity : AppCompatActivity() {
 
         if(isFullScreen) {
             WindowCompat.setDecorFitsSystemWindows(window, false)
+            window.setFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
         }
 
         val package_name = application.packageName

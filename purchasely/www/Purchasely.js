@@ -5,7 +5,7 @@ var defaultError = (e) => { console.log(e); }
 exports.start = function (apiKey, stores, storekit1, userId, logLevel, runningMode, success, error) {
     var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
     if(!cordovaSdkVersion) {
-        cordovaSdkVersion = "5.3.1";
+        cordovaSdkVersion = "5.4.0";
     }
     exec(success, error, 'Purchasely', 'start', [apiKey, stores, storekit1, userId, logLevel, runningMode, cordovaSdkVersion]);
 };
@@ -158,40 +158,40 @@ exports.closePresentation = function () {
     exec(() => {}, defaultError, 'Purchasely', 'closePresentation', []);
 };
 
-exports.setUserAttributeWithString = function (key, value) {
-    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithString', [key, value]);
+exports.setUserAttributeWithString = function (key, value, processLegalBasis) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithString', [key, value, processLegalBasis]);
 };
 
-exports.setUserAttributeWithBoolean = function (key, value) {
-    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithBoolean', [key, value]);
+exports.setUserAttributeWithBoolean = function (key, value, processLegalBasis) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithBoolean', [key, value, processLegalBasis]);
 };
 
-exports.setUserAttributeWithInt = function (key, value) {
-    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithInt', [key, value]);
+exports.setUserAttributeWithInt = function (key, value, processLegalBasis) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithInt', [key, value, processLegalBasis]);
 };
 
-exports.setUserAttributeWithDouble = function (key, value) {
-    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDouble', [key, value]);
+exports.setUserAttributeWithDouble = function (key, value, processLegalBasis) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDouble', [key, value, processLegalBasis]);
 };
 
-exports.setUserAttributeWithDate = function (key, value) {
-    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDate', [key, value]);
+exports.setUserAttributeWithDate = function (key, value, processLegalBasis) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDate', [key, value, processLegalBasis]);
 };
 
-exports.setUserAttributeWithStringArray = function (key, value) {
-    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithStringArray', [key, value]);
+exports.setUserAttributeWithStringArray = function (key, value, processLegalBasis) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithStringArray', [key, value, processLegalBasis]);
 }
 
-exports.setUserAttributeWithIntArray = function (key, value) {
-    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithIntArray', [key, value]);
+exports.setUserAttributeWithIntArray = function (key, value, processLegalBasis) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithIntArray', [key, value, processLegalBasis]);
 }
 
-exports.setUserAttributeWithDoubleArray = function (key, value) {
-    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDoubleArray', [key, value]);
+exports.setUserAttributeWithDoubleArray = function (key, value, processLegalBasis) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithDoubleArray', [key, value, processLegalBasis]);
 }
 
-exports.setUserAttributeWithBooleanArray = function (key, value) {
-    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithBooleanArray', [key, value]);
+exports.setUserAttributeWithBooleanArray = function (key, value, processLegalBasis) {
+    exec(() => {}, defaultError, 'Purchasely', 'setUserAttributeWithBooleanArray', [key, value, processLegalBasis]);
 }
 
 exports.userAttribute = function (key, success, error) {
@@ -221,6 +221,10 @@ exports.signPromotionalOffer = function (storeProductId, storeOfferId, success, 
 exports.setThemeMode = function (mode) {
     exec(() => {}, defaultError, 'Purchasely', 'setThemeMode', [mode]);
 };
+
+exports.revokeDataProcessingConsent = function (purposes) {
+    exec(() => {}, defaultError, 'Purchasely', 'revokeDataProcessingConsent', [purposes]);
+}
 
 exports.LogLevel = {
 	DEBUG: 0,
@@ -253,6 +257,20 @@ exports.Attribute = {
   BATCH_CUSTOM_USER_ID: 20,
 }
 
+exports.DataProcessingLegalBasis = {
+    essential:  'ESSENTIAL',
+    optional:   'OPTIONAL'
+}
+
+exports.DataProcessingPurpose = {
+    allNonEssentials:       'ALL_NON_ESSENTIALS',
+    analytics:              'ANALYTICS',
+    identifiedAnalytics:    'IDENTIFIED_ANALYTICS',
+    campaigns:              'CAMPAIGNS',
+    personalization:        'PERSONALIZATION',
+    thirdPartyIntegrations: 'THIRD_PARTY_INTEGRATIONS'
+}
+
 exports.PurchaseResult = {
 	PURCHASED: 0,
 	CANCELLED: 1,
@@ -274,7 +292,6 @@ exports.PlanType = {
     nonRenewingSubscription: 3,
     unknown: 4
 }
-
 
 exports.RunningMode = {
     paywallObserver: 2,
