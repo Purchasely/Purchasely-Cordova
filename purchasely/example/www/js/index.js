@@ -248,7 +248,7 @@ function onPuchaselySdkReady() {
 			console.log('prevent Purchasely SDK to navigate to website');
 			Purchasely.onProcessAction(true);
 		} else if (result.action === Purchasely.PaywallAction.close) {
-			console.log('User wants to close paywall');
+			console.log('User wants to close paywall - close reason ' + result.parameters.closeReason);
 			Purchasely.onProcessAction(true);
 		} else if (result.action === Purchasely.PaywallAction.login) {
 			console.log('User wants to login');

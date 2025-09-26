@@ -778,6 +778,7 @@ class PurchaselyPlugin : CordovaPlugin() {
             parametersForCordova["subscriptionOffer"] = parameters.subscriptionOffer?.toMap()
             parametersForCordova["presentation"] = parameters.presentation
             parametersForCordova["placement"] = parameters.placement
+            parametersForCordova["closeReason"] = parameters.closeReason?.name
 
             val result = PluginResult(
                 PluginResult.Status.OK,
