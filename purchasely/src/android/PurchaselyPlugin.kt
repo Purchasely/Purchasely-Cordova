@@ -845,7 +845,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         )
     }
 
-    fun setUserAttributeWithStringArray(key: String?, value: JSONArray?, processingLegalBasis: String?) {
+    fun setUserAttributeWithStringArray(key: String?, value: JSONArray?, legalBasisString: String?) {
         if(key == null || value == null) return
         val list = mutableListOf<String>()
         for (i in 0 until value.length()) {
@@ -862,7 +862,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         Purchasely.setUserAttribute(key, list.toTypedArray(), processingLegalBasis)
     }
 
-    fun setUserAttributeWithIntArray(key: String?, value: JSONArray?, processingLegalBasis: String?) {
+    fun setUserAttributeWithIntArray(key: String?, value: JSONArray?, legalBasisString: String?) {
         if(key == null || value == null) return
         val list = mutableListOf<Int>()
         for (i in 0 until value.length()) {
@@ -879,7 +879,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         Purchasely.setUserAttribute(key, list.toTypedArray(), processingLegalBasis)
     }
 
-    fun setUserAttributeWithDoubleArray(key: String?, value: JSONArray?, processingLegalBasis: String?) {
+    fun setUserAttributeWithDoubleArray(key: String?, value: JSONArray?, legalBasisString: String?) {
         if (key == null || value == null) return
         val list = mutableListOf<Float>()
         for (i in 0 until value.length()) {
@@ -896,7 +896,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         Purchasely.setUserAttribute(key, list.toTypedArray(), processingLegalBasis)
     }
 
-    fun setUserAttributeWithBooleanArray(key: String?, value: JSONArray?, processingLegalBasis: String?) {
+    fun setUserAttributeWithBooleanArray(key: String?, value: JSONArray?, legalBasisString: String?) {
         if(key == null || value == null) return
         val list = mutableListOf<Boolean>()
         for (i in 0 until value.length()) {
@@ -913,7 +913,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         Purchasely.setUserAttribute(key, list.toTypedArray(), processingLegalBasis)
     }
 
-    fun setUserAttributeWithString(key: String?, value: String?, processingLegalBasis: String?) {
+    fun setUserAttributeWithString(key: String?, value: String?, legalBasisString: String?) {
         if(key == null || value == null) return
         val processingLegalBasis = when (legalBasisString?.uppercase()) {
             "ESSENTIAL" -> PLYDataProcessingLegalBasis.ESSENTIAL
@@ -922,7 +922,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         Purchasely.setUserAttribute(key, value, processingLegalBasis)
     }
 
-    fun setUserAttributeWithInt(key: String?, value: Int?, processingLegalBasis: String?) {
+    fun setUserAttributeWithInt(key: String?, value: Int?, legalBasisString: String?) {
         if(key == null || value == null) return
         val processingLegalBasis = when (legalBasisString?.uppercase()) {
             "ESSENTIAL" -> PLYDataProcessingLegalBasis.ESSENTIAL
@@ -931,7 +931,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         Purchasely.setUserAttribute(key, value, processingLegalBasis)
     }
 
-    fun setUserAttributeWithDouble(key: String?, value: Double?, processingLegalBasis: String?) {
+    fun setUserAttributeWithDouble(key: String?, value: Double?, legalBasisString: String?) {
         if(key == null || value == null) return
         val processingLegalBasis = when (legalBasisString?.uppercase()) {
             "ESSENTIAL" -> PLYDataProcessingLegalBasis.ESSENTIAL
@@ -940,7 +940,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         Purchasely.setUserAttribute(key, value.toFloat(), processingLegalBasis)
     }
 
-    fun setUserAttributeWithBoolean(key: String?, value: Boolean?, processingLegalBasis: String?) {
+    fun setUserAttributeWithBoolean(key: String?, value: Boolean?, legalBasisString: String?) {
         if(key == null || value == null) return
         val processingLegalBasis = when (legalBasisString?.uppercase()) {
             "ESSENTIAL" -> PLYDataProcessingLegalBasis.ESSENTIAL
@@ -949,7 +949,7 @@ class PurchaselyPlugin : CordovaPlugin() {
         Purchasely.setUserAttribute(key, value, processingLegalBasis)
     }
 
-    fun setUserAttributeWithDate(key: String?, value: String?, processingLegalBasis: String?) {
+    fun setUserAttributeWithDate(key: String?, value: String?, legalBasisString: String?) {
         if(key == null || value == null) return
         val processingLegalBasis = when (legalBasisString?.uppercase()) {
             "ESSENTIAL" -> PLYDataProcessingLegalBasis.ESSENTIAL
