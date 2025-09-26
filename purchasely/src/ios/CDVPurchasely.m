@@ -972,7 +972,7 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
     NSMutableSet<PLYDataProcessingPurpose *> *purposesSet = [NSMutableSet set];
 
     for (id val in values) {
-        NSString *string = [val stringValue];
+        NSString *string = val;
         if ([string isEqualToString:@"ALL_NON_ESSENTIALS"]) {
             purposesSet = [NSMutableSet setWithObject:[PLYDataProcessingPurpose allNonEssentials]];
             break;
