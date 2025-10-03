@@ -2,7 +2,7 @@
 
 cordova plugin remove @purchasely/cordova-plugin-purchasely
 cordova platform remove ios
-cordova platform add ios@7.0.1
+cordova platform add ios@7.1.1
 cordova plugin add ../ --link
 
 if [[ $1 = true ]]
