@@ -1,4 +1,4 @@
-package cordova.plugin.puchasely.google;
+package cordova.plugin.purchasely.google;
 
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.CallbackContext;
