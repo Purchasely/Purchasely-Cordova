@@ -11,9 +11,17 @@
 
 `cd example/`
 
-`cordova platform add android@13.0.0`
+`cordova platform add android@latest`
 
 `cordova run android`
+
+## Add iOS platform :
+
+`cd example/`
+
+`cordova platform add ios@latest`
+
+`cordova run ios`
 
 ### Add Google-Play dependencies
 
