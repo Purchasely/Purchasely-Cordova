@@ -18,6 +18,7 @@
     <platform name="android">
         <allow-intent href="market:*" />
         <preference name="GradlePluginKotlinEnabled" value="true" />
+        <preference name="GradlePluginKotlinVersion" value="2.1.21" />
         <!--<edit-config
             file="AndroidManifest.xml"
             target="/manifest/application/activity[@android:name='cordova.plugin.purchasely.PLYProductActivity']"
