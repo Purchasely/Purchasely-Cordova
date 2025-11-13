@@ -252,6 +252,9 @@ function onPuchaselySdkReady() {
 		} else if (result.action === Purchasely.PaywallAction.close) {
 			console.log('User wants to close paywall - close reason ' + result.parameters.closeReason);
 			Purchasely.onProcessAction(true);
+		} else if (result.action === Purchasely.PaywallAction.close_all) {
+		    console.log('User wants to close all paywalls');
+            Purchasely.onProcessAction(true);
 		} else if (result.action === Purchasely.PaywallAction.login) {
 			console.log('User wants to login');
 			//Present your own screen for user to log in
@@ -262,12 +265,19 @@ function onPuchaselySdkReady() {
 		} else if (result.action === Purchasely.PaywallAction.open_presentation) {
 			console.log('User wants to open a new paywall');
 			Purchasely.onProcessAction(true);
+	    } else if (result.action === Purchasely.PaywallAction.open_placement) {
+            console.log('User wants to open a new placement');
+            Purchasely.onProcessAction(true);
 		} else if (result.action === Purchasely.PaywallAction.purchase) {
 			console.log('User wants to purchase');
 			//If you want to intercept it, close paywall and display your screen
 			Purchasely.hidePresentation();
-		} else if (result.action === Purchasely.PaywallAction.restore) {
-			console.log('User wants to restore his purchases');
+		} else if (result.action === Purchasely.PaywallAction.web_checkout) {
+			console.log('User wants to proceed to web checkout');
+			console.log('web checkout url: ' + result.parameters.url);
+			console.log('web checkout provider: ' + result.parameters.webCheckoutProvider);
+	        console.log('web checkout client reference id: ' + result.parameters.clientReferenceId);
+	        console.log('web checkout query parameter key: ' + result.parameters.queryParameterKey);
 			Purchasely.onProcessAction(true);
 		} else {
 			console.log('Action unknown ' + result.action);

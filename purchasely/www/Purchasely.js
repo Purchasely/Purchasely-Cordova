@@ -5,7 +5,7 @@ var defaultError = (e) => { console.log(e); }
 exports.start = function (apiKey, stores, storekit1, userId, logLevel, runningMode, success, error) {
     var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
     if(!cordovaSdkVersion) {
-        cordovaSdkVersion = "5.5.0";
+        cordovaSdkVersion = "5.5.1";
     }
     exec(success, error, 'Purchasely', 'start', [apiKey, stores, storekit1, userId, logLevel, runningMode, cordovaSdkVersion]);
 };
@@ -300,13 +300,15 @@ exports.RunningMode = {
 
 exports.PaywallAction = {
     close: 'close',
+    close_all: 'close_all',
     login: 'login',
     navigate: 'navigate',
     purchase: 'purchase',
     restore: 'restore',
     open_presentation: 'open_presentation',
-    open_presentation: 'open_placement',
+    open_placement: 'open_placement',
     promo_code: 'promo_code',
+    web_checkout: 'web_checkout'
 }
 
 exports.ThemeMode = {

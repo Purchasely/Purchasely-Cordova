@@ -779,6 +779,9 @@ class PurchaselyPlugin : CordovaPlugin() {
             parametersForCordova["presentation"] = parameters.presentation
             parametersForCordova["placement"] = parameters.placement
             parametersForCordova["closeReason"] = parameters.closeReason?.name
+            parametersForCordova["clientReferenceId"] = parameters?.clientReferenceId
+            parametersForCordova["queryParameterKey"] = parameters?.queryParameterKey
+            parametersForCordova["webCheckoutProvider"] = parameters?.webCheckoutProvider?.name
 
             val result = PluginResult(
                 PluginResult.Status.OK,
