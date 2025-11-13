@@ -300,13 +300,15 @@ exports.RunningMode = {
 
 exports.PaywallAction = {
     close: 'close',
+    close_all: 'close_all',
     login: 'login',
     navigate: 'navigate',
     purchase: 'purchase',
     restore: 'restore',
     open_presentation: 'open_presentation',
-    open_presentation: 'open_placement',
+    open_placement: 'open_placement',
     promo_code: 'promo_code',
+    web_checkout: 'web_checkout'
 }
 
 exports.ThemeMode = {
