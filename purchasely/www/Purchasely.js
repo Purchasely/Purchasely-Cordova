@@ -5,7 +5,7 @@ var defaultError = (e) => { console.log(e); }
 exports.start = function (apiKey, stores, storekit1, userId, logLevel, runningMode, success, error) {
     var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
     if(!cordovaSdkVersion) {
-        cordovaSdkVersion = "5.5.1";
+        cordovaSdkVersion = "5.6.0";
     }
     exec(success, error, 'Purchasely', 'start', [apiKey, stores, storekit1, userId, logLevel, runningMode, cordovaSdkVersion]);
 };
@@ -224,6 +224,10 @@ exports.setThemeMode = function (mode) {
 
 exports.revokeDataProcessingConsent = function (purposes) {
     exec(() => {}, defaultError, 'Purchasely', 'revokeDataProcessingConsent', [purposes]);
+}
+
+exports.setDebugMode = function (enabled) {
+    exec(() => {}, defaultError, 'Purchasely', 'setDebugMode', [enabled]);
 }
 
 exports.LogLevel = {

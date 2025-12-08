@@ -188,6 +188,7 @@ class PurchaselyPlugin : CordovaPlugin() {
                 "isEligibleForIntroOffer" -> isEligibleForIntroOffer(getStringFromJson(args.getString(0)), callbackContext)
                 "signPromotionalOffer" -> signPromotionalOffer(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), callbackContext)
                 "revokeDataProcessingConsent" -> revokeDataProcessingConsent(args.getJSONArray(0))
+                "setDebugMode" -> setDebugMode(args.getBoolean(0))
                 else -> return false
             }
         } catch (e: JSONException) {
@@ -1069,6 +1070,9 @@ class PurchaselyPlugin : CordovaPlugin() {
         Purchasely.revokeDataProcessingConsent(mappedPurposes)
     }
 
+    fun setDebugMode(enabled: Boolean) {
+        Purchasely.debugMode = enabled
+    }
 
     class ProductActivity {
         var presentationId: String? = null

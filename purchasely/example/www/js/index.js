@@ -54,6 +54,8 @@ function onDeviceReady() {
 			console.log(error);
 		});
 
+	Purchasely.setDebugMode(true);
+
 	Purchasely.setLanguage('en');
 
 	document.getElementById("openPresentation").addEventListener("click", openPresentation);
@@ -172,7 +174,7 @@ function onPuchaselySdkReady() {
 	Purchasely.setUserAttributeWithInt("key_int", 7, Purchasely.DataProcessingLegalBasis.essential);
 	Purchasely.setUserAttributeWithDouble("key_double", 4.5, Purchasely.DataProcessingLegalBasis.essential);
 	Purchasely.setUserAttributeWithDate("key_date", new Date().toISOString(), Purchasely.DataProcessingLegalBasis.essential);
-	
+
 	Purchasely.clearUserAttributes();
 
 	Purchasely.setUserAttributeWithString("key_string", "value_string");
@@ -309,7 +311,7 @@ function openPresentation() {
 
 function fetchPresentation() {
 	Purchasely.fetchPresentationForPlacement(
-		'onboarding', //placementId
+		'flow_demo', //placementId
 		null, //contentId
 		(presentation) => {
 			console.log(safeStringify(presentation));
