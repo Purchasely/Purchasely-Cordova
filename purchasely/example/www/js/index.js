@@ -48,7 +48,7 @@ function onDeviceReady() {
 		Purchasely.LogLevel.DEBUG,
 		Purchasely.RunningMode.full,
 		(isConfigured) => {
-			if(isConfigured) onPuchaselySdkReady();
+			if(isConfigured) onPurchaselySdkReady();
 		},
 		(error) => {
 			console.log(error);
@@ -71,7 +71,7 @@ function onDeviceReady() {
 
 }
 
-function onPuchaselySdkReady() {
+function onPurchaselySdkReady() {
 	Purchasely.allProducts( products => {
 		console.log("Products " + products.length);
 		console.log("First product name: " + products[0].name);
