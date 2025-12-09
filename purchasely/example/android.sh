@@ -1,7 +1,7 @@
 #!/bin/bash
 
 cordova plugin remove @purchasely/cordova-plugin-purchasely
-cordova plugin remove @purchasely/cordova-plugin-puchasely-google
+cordova plugin remove @purchasely/cordova-plugin-purchasely-google
 cordova platform remove android
 cordova platform add android@14.0.1
 cordova plugin add ../ --link

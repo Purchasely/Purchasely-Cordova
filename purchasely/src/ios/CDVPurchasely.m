@@ -625,7 +625,7 @@
         }
         [actionInterceptorResult setObject:paramsResult forKey:@"parameters"];
     }
-    
+
     return actionInterceptorResult;
 }
 
@@ -699,9 +699,9 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
     NSString *key = [command argumentAtIndex:0];
     NSArray<NSString *> *array = [command argumentAtIndex:1];
     NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
-    
+
     NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
-    
+
     if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
         processingLegalBasis = PLYDataProcessingLegalBasisEssential;
     }
@@ -718,9 +718,9 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
     for (id value in values) {
         [boolArray addObject:@([value boolValue])];
     }
-    
+
     NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
-    
+
     if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
         processingLegalBasis = PLYDataProcessingLegalBasisEssential;
     }
@@ -737,9 +737,9 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
     for (id val in values) {
         [intArray addObject:@([val intValue])];
     }
-    
+
     NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
-    
+
     if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
         processingLegalBasis = PLYDataProcessingLegalBasisEssential;
     }
@@ -756,9 +756,9 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
     for (id val in values) {
         [doubleArray addObject:@([val doubleValue])];
     }
-    
+
     NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
-    
+
     if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
         processingLegalBasis = PLYDataProcessingLegalBasisEssential;
     }
@@ -770,9 +770,9 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
     NSString *key = [command argumentAtIndex:0];
     NSString *value = [command argumentAtIndex:1];
     NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
-    
+
     NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
-    
+
     if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
         processingLegalBasis = PLYDataProcessingLegalBasisEssential;
     }
@@ -784,9 +784,9 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
     NSString *key = [command argumentAtIndex:0];
     BOOL value = [[command argumentAtIndex:1] boolValue];
     NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
-    
+
     NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
-    
+
     if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
         processingLegalBasis = PLYDataProcessingLegalBasisEssential;
     }
@@ -798,9 +798,9 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
     NSString *key = [command argumentAtIndex:0];
     NSInteger value = [[command argumentAtIndex:1] intValue];
     NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
-    
+
     NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
-    
+
     if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
         processingLegalBasis = PLYDataProcessingLegalBasisEssential;
     }
@@ -812,9 +812,9 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
     NSString *key = [command argumentAtIndex:0];
     double value = [[command argumentAtIndex:1] doubleValue];
     NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
-    
+
     NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
-    
+
     if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
         processingLegalBasis = PLYDataProcessingLegalBasisEssential;
     }
@@ -831,9 +831,9 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
     dateFormatter.timeZone = [NSTimeZone timeZoneWithName:@"GMT"];
     [dateFormatter setDateFormat:@"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"];
     NSDate *date = [dateFormatter dateFromString:value];
-    
+
     NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
-    
+
     if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
         processingLegalBasis = PLYDataProcessingLegalBasisEssential;
     }
@@ -989,6 +989,11 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
         }
     }
     [Purchasely revokeDataProcessingConsentFor: purposesSet];
+}
+
+- (void)setDebugMode:(CDVInvokedUrlCommand*)command {
+    BOOL enabled = [[command argumentAtIndex:0] boolValue];
+    [Purchasely setDebugModeWithEnabled: enabled];
 }
 
 - (PLYPresentation *) findPresentationLoadedFor:(NSString * _Nullable) presentationId {
