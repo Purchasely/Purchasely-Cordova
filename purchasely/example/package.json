@@ -22,11 +22,12 @@
   },
   "cordova": {
     "plugins": {
+      "@purchasely/cordova-plugin-purchasely": {},
       "@purchasely/cordova-plugin-purchasely-google": {}
     },
     "platforms": [
-      "android",
-      "ios"
+      "ios",
+      "android"
     ]
   }
 }
