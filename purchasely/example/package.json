@@ -13,17 +13,16 @@
   "author": "Apache Cordova Team",
   "license": "Apache-2.0",
   "devDependencies": {
-    "@purchasely/cordova-plugin-purchasely-google": "file:../../purchasely-google",
     "@purchasely/cordova-plugin-purchasely": "file:..",
+    "@purchasely/cordova-plugin-purchasely-google": "file:../../purchasely-google",
     "cordova-android": "^14.0.1",
     "cordova-ios": "^8.0.0",
-    "cordova-plugin-purchasely-google": "file:../../purchasely-google",
-    "cordova-plugin-purchasely": "file:.."
+    "cordova-plugin-purchasely": "file:..",
+    "cordova-plugin-purchasely-google": "file:../../purchasely-google"
   },
   "cordova": {
     "plugins": {
-      "@purchasely/cordova-plugin-purchasely-google": {},
-      "@purchasely/cordova-plugin-purchasely": {}
+      "@purchasely/cordova-plugin-purchasely-google": {}
     },
     "platforms": [
       "android",
