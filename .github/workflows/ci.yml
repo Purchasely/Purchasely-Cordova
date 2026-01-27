@@ -1,0 +1,158 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: purchasely
+        run: npm install
+
+      - name: Run tests
+        working-directory: purchasely
+        run: npm test
+
+  build-ios:
+    name: Build iOS
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: purchasely/example/package-lock.json
+
+      - name: Install Cordova CLI
+        run: npm install -g cordova
+
+      - name: Install CocoaPods
+        run: |
+          sudo gem install cocoapods
+          pod repo update
+
+      - name: Install example dependencies
+        working-directory: purchasely/example
+        run: npm install
+
+      - name: Setup iOS platform and plugins
+        working-directory: purchasely/example
+        run: |
+          cordova plugin remove @purchasely/cordova-plugin-purchasely || true
+          cordova platform remove ios || true
+          cordova platform add ios@latest
+          cordova plugin add ../ --link
+
+      - name: Install CocoaPods dependencies
+        working-directory: purchasely/example/platforms/ios
+        run: |
+          rm -f Podfile.lock
+          pod install --repo-update
+
+      - name: Build iOS
+        working-directory: purchasely/example
+        run: cordova build ios --emulator
+
+  build-android:
+    name: Build Android
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: purchasely/example/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Cordova CLI
+        run: npm install -g cordova
+
+      - name: Install example dependencies
+        working-directory: purchasely/example
+        run: npm install
+
+      - name: Setup Android platform and plugins
+        working-directory: purchasely/example
+        run: |
+          cordova plugin remove @purchasely/cordova-plugin-purchasely || true
+          cordova plugin remove @purchasely/cordova-plugin-purchasely-google || true
+          cordova platform remove android || true
+          cordova platform add android@latest
+          cordova plugin add ../ --link
+          cordova plugin add ../../purchasely-google/ --link
+
+      - name: Build Android
+        working-directory: purchasely/example
+        run: cordova build android
+
+  validate-versions:
+    name: Validate Version Consistency
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check version consistency
+        run: |
+          # Extract versions from different files
+          PLUGIN_XML_VERSION=$(grep -oP 'plugin id="@purchasely/cordova-plugin-purchasely" version="\K[^"]+' purchasely/plugin.xml)
+          PACKAGE_JSON_VERSION=$(grep -oP '"version": "\K[^"]+' purchasely/package.json)
+          GOOGLE_PLUGIN_XML_VERSION=$(grep -oP 'plugin id="@purchasely/cordova-plugin-purchasely-google" version="\K[^"]+' purchasely-google/plugin.xml)
+          GOOGLE_PACKAGE_JSON_VERSION=$(grep -oP '"version": "\K[^"]+' purchasely-google/package.json)
+
+          echo "purchasely/plugin.xml version: $PLUGIN_XML_VERSION"
+          echo "purchasely/package.json version: $PACKAGE_JSON_VERSION"
+          echo "purchasely-google/plugin.xml version: $GOOGLE_PLUGIN_XML_VERSION"
+          echo "purchasely-google/package.json version: $GOOGLE_PACKAGE_JSON_VERSION"
+
+          # Check all versions match
+          if [ "$PLUGIN_XML_VERSION" != "$PACKAGE_JSON_VERSION" ]; then
+            echo "❌ Version mismatch: purchasely/plugin.xml ($PLUGIN_XML_VERSION) != purchasely/package.json ($PACKAGE_JSON_VERSION)"
+            exit 1
+          fi
+
+          if [ "$GOOGLE_PLUGIN_XML_VERSION" != "$GOOGLE_PACKAGE_JSON_VERSION" ]; then
+            echo "❌ Version mismatch: purchasely-google/plugin.xml ($GOOGLE_PLUGIN_XML_VERSION) != purchasely-google/package.json ($GOOGLE_PACKAGE_JSON_VERSION)"
+            exit 1
+          fi
+
+          if [ "$PLUGIN_XML_VERSION" != "$GOOGLE_PLUGIN_XML_VERSION" ]; then
+            echo "❌ Version mismatch: main plugin ($PLUGIN_XML_VERSION) != google plugin ($GOOGLE_PLUGIN_XML_VERSION)"
+            exit 1
+          fi
+
+          echo "✅ All versions are consistent: $PLUGIN_XML_VERSION"
