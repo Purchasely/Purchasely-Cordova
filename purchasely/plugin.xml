@@ -63,6 +63,7 @@
                 android:theme="@style/Theme.AppCompat.Light.NoActionBar">
             </activity>
         </config-file>
+        <framework src="src/android/build-extras.gradle" custom="true" type="gradleReference" />
         <framework src="io.purchasely:core:5.7.0" />
         <source-file src="src/android/PurchaselyPlugin.kt" target-dir="java/cordova/plugin/purchasely" />
         <source-file src="src/android/PLYProductActivity.kt" target-dir="java/cordova/plugin/purchasely" />
