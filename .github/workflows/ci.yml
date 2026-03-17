@@ -45,11 +45,6 @@ jobs:
       - name: Install Cordova CLI
         run: npm install -g cordova
 
-      - name: Install CocoaPods
-        run: |
-          sudo gem install cocoapods
-          pod repo update
-
       - name: Install example dependencies
         working-directory: purchasely/example
         run: npm install
@@ -62,15 +57,39 @@ jobs:
           cordova platform add ios@latest
           cordova plugin add ../ --link
 
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: |
+            purchasely/example/platforms/ios/Pods
+            ~/.cocoapods
+            ~/Library/Caches/CocoaPods
+          key: ${{ runner.os }}-cocoapods-${{ hashFiles('purchasely/plugin.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-cocoapods-
+
       - name: Install CocoaPods dependencies
         working-directory: purchasely/example/platforms/ios
-        run: |
-          rm -f Podfile.lock
-          pod install --repo-update
+        run: pod install --repo-update
+
+      - name: Cache Xcode DerivedData
+        uses: actions/cache@v4
+        with:
+          path: purchasely/example/platforms/ios/DerivedData
+          key: ${{ runner.os }}-derived-data-${{ hashFiles('purchasely/plugin.xml', 'purchasely/example/platforms/ios/Pods/Manifest.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-derived-data-
 
       - name: Build iOS
-        working-directory: purchasely/example
-        run: cordova build ios --emulator
+        run: |
+          xcodebuild \
+            -workspace purchasely/example/platforms/ios/*.xcworkspace \
+            -scheme example \
+            -configuration Debug \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath purchasely/example/platforms/ios/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build
 
   build-android:
     name: Build Android
