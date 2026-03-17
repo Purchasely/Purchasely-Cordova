@@ -32,10 +32,10 @@
   "license": "ISC",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Purchasely/Purchasely-Cordova-Sources.git"
+    "url": "git+https://github.com/Purchasely/Purchasely-Cordova.git"
   },
   "bugs": {
-    "url": "https://github.com/Purchasely/Purchasely-Cordova-Sources/issues"
+    "url": "https://github.com/Purchasely/Purchasely-Cordova/issues"
   },
-  "homepage": "https://github.com/Purchasely/Purchasely-Cordova-Sources#readme"
+  "homepage": "https://github.com/Purchasely/Purchasely-Cordova#readme"
 }
