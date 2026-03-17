@@ -1,0 +1,53 @@
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish packages
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Ensure npm >= 11.5.1 (required for trusted publishing)
+        run: npm install -g npm@latest
+
+      - name: Verify versions match release tag
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          MAIN_VERSION=$(grep -oP '"version": "\K[^"]+' purchasely/package.json)
+          GOOGLE_VERSION=$(grep -oP '"version": "\K[^"]+' purchasely-google/package.json)
+
+          if [ "$MAIN_VERSION" != "$TAG" ]; then
+            echo "❌ purchasely/package.json version ($MAIN_VERSION) does not match release tag ($TAG)"
+            exit 1
+          fi
+
+          if [ "$GOOGLE_VERSION" != "$TAG" ]; then
+            echo "❌ purchasely-google/package.json version ($GOOGLE_VERSION) does not match release tag ($TAG)"
+            exit 1
+          fi
+
+          echo "✅ All versions match release tag: $TAG"
+
+      - name: Publish @purchasely/cordova-plugin-purchasely
+        working-directory: purchasely
+        run: npm publish --access public --provenance
+
+      - name: Publish @purchasely/cordova-plugin-purchasely-google
+        working-directory: purchasely-google
+        run: npm publish --access public --provenance
