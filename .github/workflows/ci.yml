@@ -74,7 +74,7 @@ jobs:
 
       - name: Build iOS
         working-directory: purchasely/example
-        run: cordova build ios --device --buildFlag="-quiet" --buildFlag="CODE_SIGNING_ALLOWED=NO"
+        run: cordova build ios --emulator
 
   build-android:
     name: Build Android
