@@ -8,18 +8,22 @@ This is the Purchasely Cordova SDK - a bridge layer enabling In-App Purchase & S
 
 ## Build & Development Commands
 
-**Publishing a release:**
-```bash
-./publish.sh VERSION [publish]  # e.g., ./publish.sh 5.7.0 true
-```
-Note: Manually update `plugin.xml` version before publishing.
-
 **Example app (for testing):**
 ```bash
 cd purchasely/example
 ./ios.sh      # Build/run iOS
 ./android.sh  # Build/run Android
 ```
+
+## Release Process
+
+See `RELEASE.md` for full details. Summary:
+
+1. Create branch `release/X.Y.Z` from `main`
+2. Update versions in: `purchasely/plugin.xml`, `purchasely/package.json`, `purchasely/www/Purchasely.js`, `purchasely-google/plugin.xml`, `purchasely-google/package.json`, `VERSIONS.md`
+3. Open PR, wait for CI, merge
+4. Create a GitHub release tagged `X.Y.Z` — this triggers automated npm publish (trusted publishing via OIDC, no token needed)
+5. Include native SDK release notes from `Purchasely/Purchasely-Android` and `Purchasely/Purchasely-iOS` GitHub releases
 
 ## Architecture
 
@@ -68,10 +72,15 @@ override fun execute(action: String, args: JSONArray, callbackContext: CallbackC
 
 ## Version Alignment
 
-Cordova SDK, iOS SDK, and Android SDK versions are kept in sync (e.g., all at 5.6.0). Update all three when bumping versions.
+Cordova SDK, iOS SDK, and Android SDK versions are usually close but **may differ** (e.g., Cordova 5.7.2 with iOS 5.7.2 and Android 5.7.3). Always check `VERSIONS.md` for the mapping.
 
 ## Dependencies
 
 - iOS: `Purchasely` CocoaPod (declared in plugin.xml)
 - Android: `io.purchasely:core` Gradle dependency
 - Google plugin adds: `io.purchasely:google-play`
+
+## CI/CD
+
+- **`ci.yml`** — Runs on PRs: unit tests, iOS build, Android build, version consistency check
+- **`publish.yml`** — Runs on GitHub release: calls CI first, then publishes both npm packages via OIDC trusted publishing (no npm token stored)
