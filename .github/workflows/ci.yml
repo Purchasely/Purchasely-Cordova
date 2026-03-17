@@ -72,24 +72,9 @@ jobs:
         working-directory: purchasely/example/platforms/ios
         run: pod install --repo-update
 
-      - name: Cache Xcode DerivedData
-        uses: actions/cache@v4
-        with:
-          path: purchasely/example/platforms/ios/DerivedData
-          key: ${{ runner.os }}-derived-data-${{ hashFiles('purchasely/plugin.xml', 'purchasely/example/platforms/ios/Pods/Manifest.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-derived-data-
-
       - name: Build iOS
-        run: |
-          xcodebuild \
-            -workspace purchasely/example/platforms/ios/*.xcworkspace \
-            -scheme example \
-            -configuration Debug \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath purchasely/example/platforms/ios/DerivedData \
-            CODE_SIGNING_ALLOWED=NO \
-            build
+        working-directory: purchasely/example
+        run: cordova build ios --device --buildFlag="-quiet" --buildFlag="CODE_SIGNING_ALLOWED=NO"
 
   build-android:
     name: Build Android
