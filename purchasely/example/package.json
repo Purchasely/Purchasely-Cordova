@@ -20,6 +20,9 @@
     "cordova-plugin-purchasely": "file:..",
     "cordova-plugin-purchasely-google": "file:../../purchasely-google"
   },
+  "overrides": {
+    "@xmldom/xmldom": "^0.9.8"
+  },
   "cordova": {
     "plugins": {
       "@purchasely/cordova-plugin-purchasely-google": {}
