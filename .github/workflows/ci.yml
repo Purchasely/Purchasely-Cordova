@@ -30,7 +30,7 @@ jobs:
   build-ios:
     name: Build iOS
     runs-on: macos-15
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
       - name: Checkout repository
@@ -50,16 +50,15 @@ jobs:
         working-directory: purchasely/example
         run: npm install
 
-      # Restore CocoaPods CDN cache and downloaded pod sources BEFORE
-      # `cordova platform add` so the implicit `pod install` triggered by
-      # `cordova prepare` reuses cached spec repos instead of re-downloading
-      # them (saves several minutes on a cold run).
+      # Restore CocoaPods downloaded pod sources BEFORE `cordova platform add`
+      # so the implicit `pod install` triggered by `cordova prepare` reuses
+      # already-downloaded sources. We intentionally do NOT cache `~/.cocoapods`
+      # (legacy spec repo, ~1.5 GB) since CocoaPods CDN handles spec lookups
+      # on demand and the cache save was the real bottleneck.
       - name: Cache CocoaPods
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cocoapods
-            ~/Library/Caches/CocoaPods
+          path: ~/Library/Caches/CocoaPods
           key: ${{ runner.os }}-cocoapods-${{ hashFiles('purchasely/plugin.xml') }}
           restore-keys: |
             ${{ runner.os }}-cocoapods-
