@@ -133,29 +133,37 @@ jobs:
         run: |
           # Extract versions from different files
           PLUGIN_XML_VERSION=$(grep -oP 'plugin id="@purchasely/cordova-plugin-purchasely" version="\K[^"]+' purchasely/plugin.xml)
-          PACKAGE_JSON_VERSION=$(grep -oP '"version": "\K[^"]+' purchasely/package.json)
+          PACKAGE_JSON_VERSION=$(jq -r '.version' purchasely/package.json)
           GOOGLE_PLUGIN_XML_VERSION=$(grep -oP 'plugin id="@purchasely/cordova-plugin-purchasely-google" version="\K[^"]+' purchasely-google/plugin.xml)
-          GOOGLE_PACKAGE_JSON_VERSION=$(grep -oP '"version": "\K[^"]+' purchasely-google/package.json)
+          GOOGLE_PACKAGE_JSON_VERSION=$(jq -r '.version' purchasely-google/package.json)
+          LOCK_TOP_VERSION=$(jq -r '.version' purchasely/package-lock.json)
+          LOCK_PKG_VERSION=$(jq -r '.packages[""].version' purchasely/package-lock.json)
+          EXAMPLE_LOCK_PLUGIN_VERSION=$(jq -r '.packages[".."].version' purchasely/example/package-lock.json)
+          EXAMPLE_LOCK_GOOGLE_VERSION=$(jq -r '.packages["../../purchasely-google"].version' purchasely/example/package-lock.json)
 
-          echo "purchasely/plugin.xml version: $PLUGIN_XML_VERSION"
-          echo "purchasely/package.json version: $PACKAGE_JSON_VERSION"
-          echo "purchasely-google/plugin.xml version: $GOOGLE_PLUGIN_XML_VERSION"
-          echo "purchasely-google/package.json version: $GOOGLE_PACKAGE_JSON_VERSION"
+          echo "purchasely/plugin.xml: $PLUGIN_XML_VERSION"
+          echo "purchasely/package.json: $PACKAGE_JSON_VERSION"
+          echo "purchasely-google/plugin.xml: $GOOGLE_PLUGIN_XML_VERSION"
+          echo "purchasely-google/package.json: $GOOGLE_PACKAGE_JSON_VERSION"
+          echo "purchasely/package-lock.json (top): $LOCK_TOP_VERSION"
+          echo "purchasely/package-lock.json (packages['']): $LOCK_PKG_VERSION"
+          echo "purchasely/example/package-lock.json (packages['..']): $EXAMPLE_LOCK_PLUGIN_VERSION"
+          echo "purchasely/example/package-lock.json (packages['../../purchasely-google']): $EXAMPLE_LOCK_GOOGLE_VERSION"
 
-          # Check all versions match
-          if [ "$PLUGIN_XML_VERSION" != "$PACKAGE_JSON_VERSION" ]; then
-            echo "❌ Version mismatch: purchasely/plugin.xml ($PLUGIN_XML_VERSION) != purchasely/package.json ($PACKAGE_JSON_VERSION)"
-            exit 1
-          fi
+          fail=0
+          check() {
+            if [ "$2" != "$PLUGIN_XML_VERSION" ]; then
+              echo "❌ Version mismatch: $1 ($2) != purchasely/plugin.xml ($PLUGIN_XML_VERSION)"
+              fail=1
+            fi
+          }
+          check "purchasely/package.json" "$PACKAGE_JSON_VERSION"
+          check "purchasely-google/plugin.xml" "$GOOGLE_PLUGIN_XML_VERSION"
+          check "purchasely-google/package.json" "$GOOGLE_PACKAGE_JSON_VERSION"
+          check "purchasely/package-lock.json (top)" "$LOCK_TOP_VERSION"
+          check "purchasely/package-lock.json (packages[''])" "$LOCK_PKG_VERSION"
+          check "purchasely/example/package-lock.json (packages['..'])" "$EXAMPLE_LOCK_PLUGIN_VERSION"
+          check "purchasely/example/package-lock.json (packages['../../purchasely-google'])" "$EXAMPLE_LOCK_GOOGLE_VERSION"
 
-          if [ "$GOOGLE_PLUGIN_XML_VERSION" != "$GOOGLE_PACKAGE_JSON_VERSION" ]; then
-            echo "❌ Version mismatch: purchasely-google/plugin.xml ($GOOGLE_PLUGIN_XML_VERSION) != purchasely-google/package.json ($GOOGLE_PACKAGE_JSON_VERSION)"
-            exit 1
-          fi
-
-          if [ "$PLUGIN_XML_VERSION" != "$GOOGLE_PLUGIN_XML_VERSION" ]; then
-            echo "❌ Version mismatch: main plugin ($PLUGIN_XML_VERSION) != google plugin ($GOOGLE_PLUGIN_XML_VERSION)"
-            exit 1
-          fi
-
+          if [ $fail -ne 0 ]; then exit 1; fi
           echo "✅ All versions are consistent: $PLUGIN_XML_VERSION"

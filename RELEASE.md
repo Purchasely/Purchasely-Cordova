@@ -25,11 +25,15 @@ Update **all** of the following files:
 | `purchasely/plugin.xml` | `<pod name="Purchasely" spec="IOS_VERSION"/>` |
 | `purchasely/plugin.xml` | `<framework src="io.purchasely:core:ANDROID_VERSION" />` |
 | `purchasely/package.json` | `version` field |
+| `purchasely/package-lock.json` | top-level `version` and `packages[""].version` |
+| `purchasely/example/package-lock.json` | `packages[".."].version` and `packages["../../purchasely-google"].version` |
 | `purchasely/www/Purchasely.js` | `cordovaSdkVersion` fallback string |
 | `purchasely-google/plugin.xml` | `version` attribute in `<plugin>` tag |
 | `purchasely-google/plugin.xml` | `<framework src="io.purchasely:google-play:ANDROID_VERSION" />` |
 | `purchasely-google/package.json` | `version` field |
 | `VERSIONS.md` | Add new row with Cordova / iOS / Android versions |
+
+> **Tip:** the `Validate Version Consistency` CI job checks `plugin.xml`, `package.json`, and the lockfiles — a forgotten file fails the PR.
 
 > **Note:** The Cordova SDK version, iOS SDK version, and Android SDK version may differ. Check the native release tags for the correct versions.
 
