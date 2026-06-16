@@ -17,13 +17,14 @@
 @property CDVInvokedUrlCommand* eventCommand;
 @property CDVInvokedUrlCommand* attributeCommand;
 
-@property (nonatomic) NSMutableArray<PLYPresentation *> *presentationsLoaded;
+@property (nonatomic) NSMutableArray<id<PLYPresentation>> *presentationsLoaded;
+@property (nonatomic) id<PLYPresentation> displayedPresentation;
 @property (nonatomic, assign) Boolean shouldReopenPaywall;
 
 @property (nonatomic) CDVInvokedUrlCommand* purchaseResolve;
 
 @property CDVInvokedUrlCommand* paywallActionInterceptorCommand;
-@property void (^onProcessActionHandler)(BOOL proceed);
+@property (nonatomic, copy) void (^interceptCompletion)(enum PLYInterceptResult);
 
 - (void)start:(CDVInvokedUrlCommand*)command;
 - (void)setLogLevel:(CDVInvokedUrlCommand*)command;
@@ -31,7 +32,7 @@
 - (void)userLogout:(CDVInvokedUrlCommand*)command;
 - (void)setAttribute:(CDVInvokedUrlCommand*)command;
 - (void)getAnonymousUserId:(CDVInvokedUrlCommand*)command;
-- (void)readyToOpenDeeplink:(CDVInvokedUrlCommand*)command;
+- (void)allowDeeplink:(CDVInvokedUrlCommand*)command;
 - (void)setDefaultPresentationResultHandler:(CDVInvokedUrlCommand*)command;
 - (void)presentPresentationWithIdentifier:(CDVInvokedUrlCommand*)command;
 - (void)presentPresentationForPlacement:(CDVInvokedUrlCommand*)command;
@@ -50,7 +51,7 @@
 - (void)userSubscriptionsHistory:(CDVInvokedUrlCommand*)command;
 - (void)addEventsListener:(CDVInvokedUrlCommand*)command;
 - (void)removeEventsListener:(CDVInvokedUrlCommand*)command;
-- (void)isDeeplinkHandled:(CDVInvokedUrlCommand*)command;
+- (void)handleDeeplink:(CDVInvokedUrlCommand*)command;
 - (void)setPaywallActionInterceptor:(CDVInvokedUrlCommand*)command;
 - (void)onProcessAction:(CDVInvokedUrlCommand*)command;
 - (void)closePresentation:(CDVInvokedUrlCommand*)command;

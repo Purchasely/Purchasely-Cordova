@@ -10,19 +10,14 @@ import io.purchasely.ext.Attribute
 import io.purchasely.ext.DistributionType
 import io.purchasely.ext.EventListener
 import io.purchasely.ext.LogLevel
+import io.purchasely.ext.PLYActionInterceptorCallback
 import io.purchasely.ext.PLYAppTechnology
-import io.purchasely.ext.PLYCompletionHandler
 import io.purchasely.ext.PLYDataProcessingLegalBasis
 import io.purchasely.ext.PLYDataProcessingPurpose
 import io.purchasely.ext.PLYEvent
-import io.purchasely.ext.PLYPresentation
-import io.purchasely.ext.PLYPresentationAction
-import io.purchasely.ext.PLYPresentationType
-import io.purchasely.ext.PLYPresentationProperties
-import io.purchasely.ext.PLYProductViewResult
+import io.purchasely.ext.PLYInterceptResult
+import io.purchasely.ext.PLYInterceptorInfo
 import io.purchasely.ext.PLYRunningMode
-import io.purchasely.ext.PLYRunningMode.Full
-import io.purchasely.ext.PLYRunningMode.PaywallObserver
 import io.purchasely.ext.PlanListener
 import io.purchasely.ext.ProductListener
 import io.purchasely.ext.ProductsListener
@@ -32,6 +27,13 @@ import io.purchasely.ext.State
 import io.purchasely.ext.StoreType
 import io.purchasely.ext.SubscriptionsListener
 import io.purchasely.ext.UserAttributeListener
+import io.purchasely.ext.presentation.PLYPresentation
+import io.purchasely.ext.presentation.PLYPresentationAction
+import io.purchasely.ext.presentation.PLYPresentationOutcome
+import io.purchasely.ext.presentation.PLYPresentationType
+import io.purchasely.ext.presentation.PLYPurchaseResult
+import io.purchasely.ext.presentation.display
+import io.purchasely.ext.presentation.preload
 import io.purchasely.storage.userData.PLYUserAttributeSource
 import io.purchasely.storage.userData.PLYUserAttributeType
 import io.purchasely.models.PLYError
@@ -58,8 +60,10 @@ import java.util.TimeZone
  * This class echoes a string called from JavaScript.
  */
 class PurchaselyPlugin : CordovaPlugin() {
-    private var paywallActionHandler: PLYCompletionHandler? = null
-    private var paywallAction: PLYPresentationAction? = null
+    // v6: the global interceptor was replaced by per-action interceptors that
+    // resolve a PLYInterceptResult. We keep the latest resolver so onProcessAction
+    // can complete it, preserving the v5 Cordova contract.
+    private var interceptCompletion: ((PLYInterceptResult) -> Unit)? = null
 
     override fun execute(
         action: String,
@@ -96,8 +100,8 @@ class PurchaselyPlugin : CordovaPlugin() {
                 )
 
                 "purchasedSubscription" -> purchasedSubscription(callbackContext)
-                "readyToOpenDeeplink" -> readyToOpenDeeplink(args.getBoolean(0))
-                "synchronize" -> synchronize()
+                "allowDeeplink" -> allowDeeplink(args.getBoolean(0))
+                "synchronize" -> synchronize(callbackContext)
                 "presentPresentationWithIdentifier" -> presentPresentationWithIdentifier(
                     getStringFromJson(args.getString(0)),
                     getStringFromJson(args.getString(1)),
@@ -144,7 +148,7 @@ class PurchaselyPlugin : CordovaPlugin() {
                 "silentRestoreAllProducts" -> restoreAllProducts(callbackContext)
                 "userSubscriptions" -> userSubscriptions(callbackContext)
                 "userSubscriptionsHistory" -> userSubscriptionsHistory(callbackContext)
-                "isDeeplinkHandled" -> isDeeplinkHandled(
+                "handleDeeplink" -> handleDeeplink(
                     getStringFromJson(args.getString(0)),
                     callbackContext
                 )
@@ -228,8 +232,11 @@ class PurchaselyPlugin : CordovaPlugin() {
             }
         }
         val storesInstances = getStoresInstances(list)
-        var plyRunningMode: PLYRunningMode = Full
-        if (runningMode == runningModePaywallObserver) plyRunningMode = PaywallObserver
+        // v6: PLYRunningMode.PaywallObserver was removed; both observer modes map to
+        // PLYRunningMode.Observer. The JS layer passes the raw value (observer = 2,
+        // full = 3). Note the native default changed to Observer in v6.
+        val plyRunningMode: PLYRunningMode =
+            if (runningMode == runningModeObserver) PLYRunningMode.Observer else PLYRunningMode.Full
         Purchasely.Builder(cordova.context)
             .apiKey(apiKey)
             .stores(storesInstances)
@@ -239,13 +246,12 @@ class PurchaselyPlugin : CordovaPlugin() {
             .build()
         Purchasely.sdkBridgeVersion = cordovaSdkVersion
         Purchasely.appTechnology = PLYAppTechnology.CORDOVA
-        Purchasely.start { isConfigured: Boolean, error: PLYError? ->
-            if (isConfigured) {
+        // v6: the start callback now delivers a single nullable PLYError.
+        Purchasely.start { error: PLYError? ->
+            if (error == null) {
                 callbackContext.success()
             } else {
-                callbackContext.error(
-                    if (error != null) error.message else "Purchasely SDK not configured"
-                )
+                callbackContext.error(error.message ?: "Purchasely SDK not configured")
             }
         }
     }
@@ -279,8 +285,8 @@ class PurchaselyPlugin : CordovaPlugin() {
     private fun close() {
         defaultCallback = null
         purchaseCallback = null
-        paywallActionHandler = null
-        productActivity = null
+        interceptCompletion = null
+        displayedPresentation = null
         Purchasely.close()
     }
 
@@ -373,8 +379,8 @@ class PurchaselyPlugin : CordovaPlugin() {
         }
     }
 
-    private fun readyToOpenDeeplink(isReadyToPurchase: Boolean) {
-        Purchasely.readyToOpenDeeplink = isReadyToPurchase
+    private fun allowDeeplink(isAllowed: Boolean) {
+        Purchasely.allowDeeplink = isAllowed
     }
 
     private fun setThemeMode(mode: Int) {
@@ -416,11 +422,9 @@ class PurchaselyPlugin : CordovaPlugin() {
 
     private fun setDefaultPresentationResultHandler(callbackContext: CallbackContext) {
         defaultCallback = callbackContext
-        Purchasely.setDefaultPresentationResultHandler { result: PLYProductViewResult, plan: PLYPlan? ->
-            sendPurchaseResult(
-                result,
-                plan
-            )
+        // v6: the handler now receives a single PLYPresentationOutcome.
+        Purchasely.setDefaultPresentationResultHandler { outcome: PLYPresentationOutcome ->
+            sendPurchaseResult(outcome)
         }
     }
 
@@ -437,26 +441,36 @@ class PurchaselyPlugin : CordovaPlugin() {
         }
     }
 
-    private fun synchronize() {
-        Purchasely.synchronize()
+    private fun synchronize(callbackContext: CallbackContext) {
+        // v6 exposes onSuccess/onError callbacks on synchronize — wire them to the
+        // JS success/error callbacks (was previously fire-and-forget).
+        Purchasely.synchronize(
+            onSuccess = { callbackContext.success() },
+            onError = { error -> callbackContext.error(error?.message ?: "Synchronization failed") }
+        )
     }
 
     private fun userDidConsumeSubscriptionContent() {
         Purchasely.userDidConsumeSubscriptionContent()
     }
 
+    // v6: the dedicated PLYProductActivity host is gone. The native SDK's
+    // PLYPresentation { ... }.display(activity) builds, preloads and displays the
+    // presentation (handling full-screen and multi-step Flows automatically).
+    // isFullScreen is now controlled by the Console transition and is ignored here.
     private fun presentPresentationWithIdentifier(
-        presentationVendorId: String?,
+        screenId: String?,
         contentId: String?,
         isFullScreen: Boolean,
         callbackContext: CallbackContext
     ) {
         purchaseCallback = callbackContext
-        val intent = PLYProductActivity.newIntent(cordova.activity)
-        intent.putExtra("presentationId", presentationVendorId)
-        intent.putExtra("contentId", contentId)
-        intent.putExtra("isFullScreen", isFullScreen)
-        cordova.activity.startActivity(intent)
+        val activity = cordova.activity ?: return
+        PLYPresentation {
+            if (screenId != null) screenId(screenId)
+            contentId(contentId)
+            onPresented { loaded, _ -> displayedPresentation = loaded }
+        }.display(activity) { outcome -> sendPurchaseResult(outcome) }
     }
 
     private fun presentPresentationForPlacement(
@@ -466,72 +480,80 @@ class PurchaselyPlugin : CordovaPlugin() {
         callbackContext: CallbackContext
     ) {
         purchaseCallback = callbackContext
-        val intent = PLYProductActivity.newIntent(cordova.activity)
-        intent.putExtra("placementId", placementVendorId)
-        intent.putExtra("contentId", contentId)
-        intent.putExtra("isFullScreen", isFullScreen)
-        cordova.activity.startActivity(intent)
+        val activity = cordova.activity ?: return
+        PLYPresentation {
+            if (placementVendorId != null) placementId(placementVendorId)
+            contentId(contentId)
+            onPresented { loaded, _ -> displayedPresentation = loaded }
+        }.display(activity) { outcome -> sendPurchaseResult(outcome) }
     }
 
     private fun presentProductWithIdentifier(
         productVendorId: String?,
-        presentationVendorId: String?,
+        screenId: String?,
         contentId: String?,
         isFullScreen: Boolean,
         callbackContext: CallbackContext
     ) {
+        // v6: product-specific presentation was removed. A presentation is identified by
+        // a placementId or screenId; here we display the screen.
         purchaseCallback = callbackContext
-        val intent = PLYProductActivity.newIntent(cordova.activity)
-        intent.putExtra("presentationId", presentationVendorId)
-        intent.putExtra("productId", productVendorId)
-        intent.putExtra("contentId", contentId)
-        intent.putExtra("isFullScreen", isFullScreen)
-        cordova.activity.startActivity(intent)
+        val activity = cordova.activity ?: return
+        PLYPresentation {
+            if (screenId != null) screenId(screenId)
+            contentId(contentId)
+            onPresented { loaded, _ -> displayedPresentation = loaded }
+        }.display(activity) { outcome -> sendPurchaseResult(outcome) }
     }
 
     private fun presentPlanWithIdentifier(
         planVendorId: String?,
-        presentationVendorId: String?,
+        screenId: String?,
         contentId: String?,
         isFullScreen: Boolean,
         callbackContext: CallbackContext
     ) {
+        // v6: plan-specific presentation was removed. A presentation is identified by
+        // a placementId or screenId; here we display the screen.
         purchaseCallback = callbackContext
-        val intent = PLYProductActivity.newIntent(cordova.activity)
-        intent.putExtra("presentationId", presentationVendorId)
-        intent.putExtra("planId", planVendorId)
-        intent.putExtra("contentId", contentId)
-        intent.putExtra("isFullScreen", isFullScreen)
-        cordova.activity.startActivity(intent)
+        val activity = cordova.activity ?: return
+        PLYPresentation {
+            if (screenId != null) screenId(screenId)
+            contentId(contentId)
+            onPresented { loaded, _ -> displayedPresentation = loaded }
+        }.display(activity) { outcome -> sendPurchaseResult(outcome) }
     }
 
     private fun fetchPresentation(
         placementId: String?,
-        presentationId: String?,
+        screenId: String?,
         contentId: String?,
         callbackContext: CallbackContext) {
-        val properties = PLYPresentationProperties(
-            placementId = placementId,
-            presentationId = presentationId,
-            contentId = contentId)
-
-        Purchasely.fetchPresentation(properties = properties) { presentation: PLYPresentation?, error: PLYError? ->
-            if(presentation != null) {
-                presentationsLoaded.removeAll { it.id == presentation.id && it.placementId == presentation.placementId }
+        // v6: Purchasely.fetchPresentation(properties) / PLYPresentationProperties were
+        // removed. Build a request with the PLYPresentation { } DSL (by placementId or
+        // screenId) and preload it; keep the loaded presentation so presentPresentation
+        // can display it later.
+        PLYPresentation {
+            if (placementId != null) placementId(placementId)
+            if (screenId != null) screenId(screenId)
+            contentId(contentId)
+        }.preload { presentation: PLYPresentation?, error: PLYError? ->
+            if (presentation != null) {
+                presentationsLoaded.removeAll { it.screenId == presentation.screenId && it.placementId == presentation.placementId }
                 presentationsLoaded.add(presentation)
-                val map = presentation.toMap().mapValues {
-                    val value = it.value
-                    if(value is PLYPresentationType) value.ordinal
-                    else value
-                }
-
-                val mutableMap = map.toMutableMap().apply {
-                    //this["metadata"] = presentation.metadata?.toMap()
-                    this["plans"] = (this["plans"] as List<PLYPresentationPlan>).map { it.toMap() }
-                }
+                val map = hashMapOf<String, Any?>(
+                    "id" to presentation.screenId,
+                    "placementId" to presentation.placementId,
+                    "audienceId" to presentation.audienceId,
+                    "abTestId" to presentation.abTestId,
+                    "abTestVariantId" to presentation.abTestVariantId,
+                    "language" to presentation.language,
+                    "type" to presentation.type.ordinal,
+                    "plans" to presentation.plans.map { it.toMap() }
+                )
                 callbackContext.success(JSONObject(map))
             }
-            if(error != null) callbackContext.error(error.message ?: "Unable to fetch presentation")
+            if (error != null) callbackContext.error(error.message ?: "Unable to fetch presentation")
         }
     }
 
@@ -554,37 +576,32 @@ class PurchaselyPlugin : CordovaPlugin() {
             return
         }
 
+        val id = if (presentationMap.has("id") && !presentationMap.isNull("id")) presentationMap.getString("id") else null
+        val placement = if (presentationMap.has("placementId") && !presentationMap.isNull("placementId")) presentationMap.getString("placementId") else null
+
         val presentation = presentationsLoaded.lastOrNull {
-            it.id == presentationMap.getString("id")
-                    && it.placementId == presentationMap.getString("placementId")
+            it.screenId == id && it.placementId == placement
         }
-        if(presentation == null) {
+        if (presentation == null) {
             callbackContext.error("presentation cannot be found")
             return
         }
 
         purchaseCallback = callbackContext
+        // Retain so showPresentation can re-display it after hide.
+        displayedPresentation = presentation
 
-        cordova.activity.let { activity ->
-            if (presentation.flowId != null) {
-                presentation.display(activity) { result, plan ->
-                    sendPurchaseResult(result, plan)
-                }
-            } else {
-                // Open legacy Activity for now if not a flow
-                val intent = PLYProductActivity.newIntent(activity, PLYPresentationProperties(), isFullScreen, loadingBackgroundColor).apply {
-                    putExtra("presentation", presentation)
-                }
-                activity.startActivity(intent)
-            }
+        // v6: display() handles Flows and standard presentations transparently and
+        // delivers a single PLYPresentationOutcome on dismissal.
+        cordova.activity?.let { activity ->
+            presentation.display(activity) { outcome -> sendPurchaseResult(outcome) }
         }
-
     }
 
     private fun presentSubscriptions() {
-        val intent =
-            Intent(cordova.context, PLYSubscriptionsActivity::class.java)
-        cordova.activity.startActivity(intent)
+        // v6: the native subscriptions list UI (subscriptionsFragment) was removed.
+        // Build your own UI from userSubscriptions / userSubscriptionsHistory.
+        Log.w("Purchasely", "presentSubscriptions is no longer available in SDK v6 (native subscriptions UI removed).")
     }
 
     private fun restoreAllProducts(callbackContext: CallbackContext) {
@@ -659,16 +676,17 @@ class PurchaselyPlugin : CordovaPlugin() {
         )
     }
 
-    private fun isDeeplinkHandled(deeplink: String?, callbackContext: CallbackContext) {
+    private fun handleDeeplink(deeplink: String?, callbackContext: CallbackContext) {
         if (deeplink == null) {
             callbackContext.error("Deeplink must not be null")
             return
         }
         val uri = Uri.parse(deeplink)
+        // v6: isDeeplinkHandled(uri) → handleDeeplink(uri, activity).
         callbackContext.sendPluginResult(
             PluginResult(
                 PluginResult.Status.OK,
-                Purchasely.isDeeplinkHandled(uri)
+                Purchasely.handleDeeplink(uri, cordova.activity)
             )
         )
     }
@@ -762,91 +780,113 @@ class PurchaselyPlugin : CordovaPlugin() {
     }
 
     private fun setPaywallActionInterceptor(callbackContext: CallbackContext) {
-        Purchasely.setPaywallActionsInterceptor { info, action, parameters, processAction ->
-            paywallActionHandler = processAction
-            paywallAction = action
+        // v6: the global setPaywallActionsInterceptor was removed. Register a typed
+        // interceptor per action and bridge them all to the single JS callback,
+        // keeping the v5 Cordova contract (setPaywallActionInterceptor + onProcessAction).
+        val actionClasses = listOf(
+            PLYPresentationAction.Login::class.java,
+            PLYPresentationAction.Purchase::class.java,
+            PLYPresentationAction.Close::class.java,
+            PLYPresentationAction.CloseAll::class.java,
+            PLYPresentationAction.Restore::class.java,
+            PLYPresentationAction.Navigate::class.java,
+            PLYPresentationAction.PromoCode::class.java,
+            PLYPresentationAction.OpenPresentation::class.java,
+            PLYPresentationAction.OpenPlacement::class.java,
+            PLYPresentationAction.WebCheckout::class.java
+        )
+        for (actionClass in actionClasses) {
+            Purchasely.interceptAction(actionClass, PLYActionInterceptorCallback { info, action, result ->
+                // Store the resolver so onProcessAction can complete it later.
+                interceptCompletion = result
+                interceptorActivity = WeakReference(info.activity)
 
-            interceptorActivity = WeakReference(info?.activity)
-
-            val parametersForCordova = hashMapOf<String, Any?>();
-            parametersForCordova["title"] = parameters.title
-            parametersForCordova["url"] = parameters.url?.toString()
-            parametersForCordova["plan"] = transformPlanToMap(parameters.plan)
-            parametersForCordova["offer"] = mapOf(
-                "vendorId" to parameters.offer?.vendorId,
-                "storeOfferId" to parameters.offer?.storeOfferId
-            )
-            parametersForCordova["subscriptionOffer"] = parameters.subscriptionOffer?.toMap()
-            parametersForCordova["presentation"] = parameters.presentation
-            parametersForCordova["placement"] = parameters.placement
-            parametersForCordova["closeReason"] = parameters.closeReason?.name
-            parametersForCordova["clientReferenceId"] = parameters?.clientReferenceId
-            parametersForCordova["queryParameterKey"] = parameters?.queryParameterKey
-            parametersForCordova["webCheckoutProvider"] = parameters?.webCheckoutProvider?.name
-
-            val result = PluginResult(
-                PluginResult.Status.OK,
-                JSONObject(
-                    hashMapOf<String, Any?>(
-                        Pair("info", mapOf(
-                            Pair("contentId", info?.contentId),
-                            Pair("presentationId", info?.presentationId),
-                            Pair("placementId", info?.placementId),
-                            Pair("abTestId", info?.abTestId),
-                            Pair("abTestVariantId", info?.abTestVariantId)
-                        )),
-                        Pair("action", action.value),
-                        Pair("parameters", parametersForCordova.filterNot { it.value == null })
+                val pluginResult = PluginResult(
+                    PluginResult.Status.OK,
+                    JSONObject(
+                        hashMapOf<String, Any?>(
+                            "info" to buildInterceptorInfo(info),
+                            "action" to action.value,
+                            "parameters" to buildInterceptorParameters(action).filterNot { it.value == null }
+                        )
                     )
                 )
-            )
-            result.keepCallback = true
-            callbackContext.sendPluginResult(result)
+                pluginResult.keepCallback = true
+                callbackContext.sendPluginResult(pluginResult)
+            })
         }
     }
 
+    private fun buildInterceptorInfo(info: PLYInterceptorInfo): Map<String, Any?> {
+        val presentation = info.presentation
+        return mapOf(
+            "contentId" to info.contentId,
+            "presentationId" to presentation?.screenId,
+            "placementId" to presentation?.placementId,
+            "abTestId" to presentation?.abTestId,
+            "abTestVariantId" to presentation?.abTestVariantId
+        )
+    }
+
+    private fun buildInterceptorParameters(action: PLYPresentationAction): HashMap<String, Any?> {
+        // v6: parameters now live on the typed action subclass (PLYPresentationActionParameters
+        // was removed). Map them back to the flat dictionary the JS layer expects.
+        val params = hashMapOf<String, Any?>()
+        when (action) {
+            is PLYPresentationAction.Navigate -> {
+                params["url"] = action.url.toString()
+                params["title"] = action.title
+            }
+            is PLYPresentationAction.Purchase -> {
+                params["plan"] = transformPlanToMap(action.plan)
+                params["subscriptionOffer"] = action.subscriptionOffer?.toMap()
+                params["offer"] = mapOf(
+                    "vendorId" to action.offer?.vendorId,
+                    "storeOfferId" to action.offer?.storeOfferId
+                )
+            }
+            is PLYPresentationAction.Close -> params["closeReason"] = action.closeReason.name
+            is PLYPresentationAction.CloseAll -> params["closeReason"] = action.closeReason.name
+            is PLYPresentationAction.OpenPresentation -> params["presentation"] = action.presentationId
+            is PLYPresentationAction.OpenPlacement -> params["placement"] = action.placementId
+            is PLYPresentationAction.WebCheckout -> {
+                params["url"] = action.url.toString()
+                params["clientReferenceId"] = action.clientReferenceId
+                params["queryParameterKey"] = action.queryParameterKey
+                params["webCheckoutProvider"] = action.webCheckoutProvider.name
+            }
+            else -> {}
+        }
+        return params
+    }
+
     private fun closePresentation(callbackContext: CallbackContext) {
-        val openedPaywall = productActivity?.activity?.get()
-        openedPaywall?.finish()
-        productActivity = null
+        // v6: closeAllScreens dismisses every displayed screen (handles Flows too).
+        Purchasely.closeAllScreens()
     }
 
     private fun onProcessAction(processAction: Boolean) {
-        val activityHandler = interceptorActivity?.get() ?: productActivity?.activity?.get() ?: cordova.activity
+        val activityHandler = interceptorActivity?.get() ?: cordova.activity
         activityHandler?.runOnUiThread {
-            paywallActionHandler?.invoke(processAction)
-
+            // v5 mapping: onProcessAction(true) = let Purchasely proceed = NOT_HANDLED;
+            // onProcessAction(false) = app handled the action = SUCCESS.
+            interceptCompletion?.invoke(if (processAction) PLYInterceptResult.NOT_HANDLED else PLYInterceptResult.SUCCESS)
+            interceptCompletion = null
             interceptorActivity?.clear()
             interceptorActivity = null
         }
     }
 
     private fun showPresentation() {
-        val currentActivity = interceptorActivity?.get()
-
-        if (currentActivity != null && !currentActivity.isFinishing && !currentActivity.isDestroyed) {
-            cordova.activity?.let {
-                it.startActivity(
-                    Intent(it, currentActivity::class.java).apply {
-                        //flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
-                    }
-                )
-            }
-        }
-        else {
-            productActivity?.relaunch(cordova)
-        }
+        // v6 has no native hide/show: re-display the last presentation we displayed
+        // (retained from present*/presentPresentation). hidePresentation closes it.
+        val activity = cordova.activity ?: return
+        displayedPresentation?.display(activity) { outcome -> sendPurchaseResult(outcome) }
     }
 
     private fun hidePresentation() {
-        val cordovaActivity = cordova.activity
-        val activity = productActivity?.activity?.get() ?: cordovaActivity
-        cordovaActivity?.startActivity(
-            Intent(activity, cordovaActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
-            }
-        )
+        // v6 has no hide/reopen for a single presentation; closeAllScreens is the closest behavior.
+        Purchasely.closeAllScreens()
     }
 
     fun setUserAttributeWithStringArray(key: String?, value: JSONArray?, legalBasisString: String?) {
@@ -1035,7 +1075,7 @@ class PurchaselyPlugin : CordovaPlugin() {
     private fun isEligibleForIntroOffer(planId: String?, callbackContext: CallbackContext) {
         Purchasely.plan(planId,
             onSuccess = { plan ->
-                callbackContext.sendPluginResult(PluginResult(PluginResult.Status.OK, plan?.isEligibleToIntroOffer(null) ?: false))
+                callbackContext.sendPluginResult(PluginResult(PluginResult.Status.OK, plan?.isEligibleToOffer(null) ?: false))
             },
             onError = { error ->
                 callbackContext.error(error.message ?: "Unable to fetch plan")
@@ -1074,78 +1114,33 @@ class PurchaselyPlugin : CordovaPlugin() {
         Purchasely.debugMode = enabled
     }
 
-    class ProductActivity {
-        var presentationId: String? = null
-        var placementId: String? = null
-        var productId: String? = null
-        var planId: String? = null
-        var contentId: String? = null
-        var presentation: PLYPresentation? = null
-        var isFullScreen = false
-        var loadingBackgroundColor: String? = null
-        var activity: WeakReference<PLYProductActivity>? = null
-        fun relaunch(cordova: CordovaInterface): Boolean {
-            var backgroundActivity: PLYProductActivity? = null
-            if (activity != null) {
-                backgroundActivity = activity?.get()
-            }
-            return if (backgroundActivity != null && !backgroundActivity.isFinishing
-                && !backgroundActivity.isDestroyed
-            ) {
-                val intent = Intent(cordova.activity, PLYProductActivity::class.java)
-                intent.putExtra("presentation", presentation)
-                intent.putExtra("presentationId", presentationId)
-                intent.putExtra("placementId", placementId)
-                intent.putExtra("productId", productId)
-                intent.putExtra("planId", planId)
-                intent.putExtra("contentId", contentId)
-                intent.putExtra("isFullScreen", isFullScreen)
-                intent.putExtra("background_color", loadingBackgroundColor)
-                intent.flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
-                cordova.activity.startActivity(intent)
-                true
-            } else {
-                val intent = PLYProductActivity.newIntent(cordova.activity)
-                intent.putExtra("presentation", presentation)
-                intent.putExtra("presentationId", presentationId)
-                intent.putExtra("placementId", placementId)
-                intent.putExtra("productId", productId)
-                intent.putExtra("planId", planId)
-                intent.putExtra("contentId", contentId)
-                intent.putExtra("isFullScreen", isFullScreen)
-                intent.putExtra("background_color", loadingBackgroundColor)
-                cordova.activity.startActivity(intent)
-                false
-            }
-        }
-    }
-
     companion object {
         var defaultCallback: CallbackContext? = null
         var purchaseCallback: CallbackContext? = null
         var eventsCallback: CallbackContext? = null
         var attributesCallback: CallbackContext? = null
-        var productActivity: ProductActivity? = null
 
         var interceptorActivity: WeakReference<Activity>? = null
 
         val presentationsLoaded = mutableListOf<PLYPresentation>()
+        // Last presentation displayed — retained so showPresentation can re-display it.
+        var displayedPresentation: PLYPresentation? = null
 
-        private const val runningModePaywallObserver = 2
+        private const val runningModeObserver = 2
         private const val runningModeFull = 3
 
-        fun sendPurchaseResult(result: PLYProductViewResult, plan: PLYPlan?) {
-            var productViewResult = 0
-            if (result == PLYProductViewResult.PURCHASED) {
-                productViewResult = PLYProductViewResult.PURCHASED.ordinal
-            } else if (result == PLYProductViewResult.CANCELLED) {
-                productViewResult = PLYProductViewResult.CANCELLED.ordinal
-            } else if (result == PLYProductViewResult.RESTORED) {
-                productViewResult = PLYProductViewResult.RESTORED.ordinal
-            }
+        // v6: dismissal delivers a single PLYPresentationOutcome. PLYPurchaseResult
+        // ordinals (PURCHASED=0, CANCELLED=1, RESTORED=2) match the JS PurchaseResult
+        // enum, but we map explicitly to stay robust and handle the null (no-purchase) case.
+        fun sendPurchaseResult(outcome: PLYPresentationOutcome) {
             val map = HashMap<String?, Any?>()
-            map["result"] = productViewResult
-            map["plan"] = transformPlanToMap(plan)
+            map["result"] = when (outcome.purchaseResult) {
+                PLYPurchaseResult.PURCHASED -> 0
+                PLYPurchaseResult.CANCELLED -> 1
+                PLYPurchaseResult.RESTORED -> 2
+                null -> 1
+            }
+            map["plan"] = transformPlanToMap(outcome.plan)
             if (purchaseCallback != null) {
                 purchaseCallback?.success(JSONObject(map))
                 purchaseCallback = null
@@ -1170,7 +1165,7 @@ class PurchaselyPlugin : CordovaPlugin() {
             } else if (plan.type == DistributionType.UNKNOWN) {
                 map["type"] = DistributionType.UNKNOWN.ordinal
             }
-            map["isEligibleForIntroOffer"] = plan.isEligibleToIntroOffer(null)
+            map["isEligibleForIntroOffer"] = plan.isEligibleToOffer(null)
             return map
         }
     }

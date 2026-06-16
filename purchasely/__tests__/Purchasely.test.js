@@ -98,7 +98,7 @@ describe('Purchasely', () => {
 
     describe('RunningMode', () => {
       it('should have correct running mode values', () => {
-        expect(Purchasely.RunningMode.paywallObserver).toBe(2);
+        expect(Purchasely.RunningMode.observer).toBe(2);
         expect(Purchasely.RunningMode.full).toBe(3);
       });
     });
@@ -270,15 +270,15 @@ describe('Purchasely', () => {
     });
   });
 
-  describe('readyToOpenDeeplink', () => {
+  describe('allowDeeplink', () => {
     it('should call exec with correct parameters', () => {
-      Purchasely.readyToOpenDeeplink(true);
+      Purchasely.allowDeeplink(true);
 
       expect(mockExec).toHaveBeenCalledWith(
         expect.any(Function),
         expect.any(Function),
         'Purchasely',
-        'readyToOpenDeeplink',
+        'allowDeeplink',
         [true]
       );
     });
@@ -296,12 +296,27 @@ describe('Purchasely', () => {
   });
 
   describe('synchronize', () => {
-    it('should call exec with correct parameters', () => {
+    it('should call exec with default callbacks when none provided', () => {
       Purchasely.synchronize();
 
       expect(mockExec).toHaveBeenCalledWith(
         expect.any(Function),
         expect.any(Function),
+        'Purchasely',
+        'synchronize',
+        []
+      );
+    });
+
+    it('should forward the success and error callbacks (v6)', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.synchronize(success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        success,
+        error,
         'Purchasely',
         'synchronize',
         []
@@ -493,18 +508,18 @@ describe('Purchasely', () => {
     });
   });
 
-  describe('isDeeplinkHandled', () => {
+  describe('handleDeeplink', () => {
     it('should call exec with correct parameters', () => {
       const success = jest.fn();
       const error = jest.fn();
 
-      Purchasely.isDeeplinkHandled('https://example.com/deeplink', success, error);
+      Purchasely.handleDeeplink('https://example.com/deeplink', success, error);
 
       expect(mockExec).toHaveBeenCalledWith(
         success,
         error,
         'Purchasely',
-        'isDeeplinkHandled',
+        'handleDeeplink',
         ['https://example.com/deeplink']
       );
     });

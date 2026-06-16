@@ -139,7 +139,7 @@ function onPurchaselySdkReady() {
 	Purchasely.setAttribute(Purchasely.Attribute.BATCH_CUSTOM_USER_ID, "batch_custom_user_id");
 	Purchasely.setAttribute(Purchasely.Attribute.BATCH_INSTALLATION_ID, "testBatch1");
 
-	Purchasely.readyToOpenDeeplink(true);
+	Purchasely.allowDeeplink(true);
 
 	Purchasely.planWithIdentifier('PURCHASELY_PLUS_MONTHLY', (plan) => {
 		console.log(' ==> Plan');
@@ -260,7 +260,7 @@ function onPurchaselySdkReady() {
 		} else if (result.action === Purchasely.PaywallAction.login) {
 			console.log('User wants to login');
 			//Present your own screen for user to log in
-			Purchasely.closePaywall();
+			Purchasely.closePresentation();
 			Purchasely.userLogin('MY_USER_ID');
 			//Call this method to update Purchasely Paywall
 			Purchasely.onProcessAction(true);
@@ -416,7 +416,7 @@ function signPromotionalOffer() {
 }
 
 function openDeeplink() {
-	Purchasely.isDeeplinkHandled(
+	Purchasely.handleDeeplink(
 		"purchasely://ply/presentations/CAROUSEL",
 		isHandled => {
 			console.log("Deeplink is handled ? " + isHandled)

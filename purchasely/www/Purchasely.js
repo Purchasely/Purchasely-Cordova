@@ -5,7 +5,7 @@ var defaultError = (e) => { console.log(e); }
 exports.start = function (apiKey, stores, storekit1, userId, logLevel, runningMode, success, error) {
     var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
     if(!cordovaSdkVersion) {
-        cordovaSdkVersion = "5.7.3";
+        cordovaSdkVersion = "6.0.0-rc.1";
     }
     exec(success, error, 'Purchasely', 'start', [apiKey, stores, storekit1, userId, logLevel, runningMode, cordovaSdkVersion]);
 };
@@ -46,16 +46,16 @@ exports.setAttribute = function (attribute, value) {
     exec(() => {}, defaultError, 'Purchasely', 'setAttribute', [attribute, value]);
 };
 
-exports.readyToOpenDeeplink = function (isReady) {
-    exec(() => {}, defaultError, 'Purchasely', 'readyToOpenDeeplink', [isReady]);
+exports.allowDeeplink = function (isAllowed) {
+    exec(() => {}, defaultError, 'Purchasely', 'allowDeeplink', [isAllowed]);
 };
 
 exports.setDefaultPresentationResultHandler = function (success, error) {
     exec(success, error, 'Purchasely', 'setDefaultPresentationResultHandler', []);
 };
 
-exports.synchronize = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'synchronize', []);
+exports.synchronize = function (success, error) {
+    exec(success || (() => {}), error || defaultError, 'Purchasely', 'synchronize', []);
 };
 
 exports.presentPresentationWithIdentifier = function (presentationId, contentId, isFullscreen, success, error) {
@@ -106,8 +106,8 @@ exports.purchasedSubscription = function (success, error) {
     exec(success, error, 'Purchasely', 'purchasedSubscription', []);
 };
 
-exports.isDeeplinkHandled = function (deepLink, success, error) {
-    exec(success, error, 'Purchasely', 'isDeeplinkHandled', [deepLink]);
+exports.handleDeeplink = function (deepLink, success, error) {
+    exec(success, error, 'Purchasely', 'handleDeeplink', [deepLink]);
 };
 
 exports.allProducts = function (success, error) {
@@ -298,7 +298,7 @@ exports.PlanType = {
 }
 
 exports.RunningMode = {
-    paywallObserver: 2,
+    observer: 2,
     full: 3
 }
 
