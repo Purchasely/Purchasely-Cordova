@@ -12,7 +12,9 @@
         </config-file>
         <config-file parent="/*" target="AndroidManifest.xml">
         </config-file>
-        <framework src="io.purchasely:google-play:6.0.0-rc.1" />
+        <!-- v6 testing pin: kept in lockstep with io.purchasely:core:6.0.0-beta.12
+             (resolved from mavenLocal). Restore to the published 6.0.0 string before release. -->
+        <framework src="io.purchasely:google-play:6.0.0-beta.12" />
         <source-file src="src/android/PurchaselyGoogle.java" target-dir="src/cordova-plugin-purchasely-google/PurchaselyGoogle" />
     </platform>
 </plugin>

@@ -33,7 +33,7 @@
 - (void)setAttribute:(CDVInvokedUrlCommand*)command;
 - (void)getAnonymousUserId:(CDVInvokedUrlCommand*)command;
 - (void)allowDeeplink:(CDVInvokedUrlCommand*)command;
-- (void)setDefaultPresentationResultHandler:(CDVInvokedUrlCommand*)command;
+- (void)setDefaultPresentationDismissHandler:(CDVInvokedUrlCommand*)command;
 - (void)presentPresentationWithIdentifier:(CDVInvokedUrlCommand*)command;
 - (void)presentPresentationForPlacement:(CDVInvokedUrlCommand*)command;
 - (void)presentPlanWithIdentifier:(CDVInvokedUrlCommand*)command;

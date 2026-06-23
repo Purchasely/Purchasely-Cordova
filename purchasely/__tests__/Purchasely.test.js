@@ -284,14 +284,14 @@ describe('Purchasely', () => {
     });
   });
 
-  describe('setDefaultPresentationResultHandler', () => {
+  describe('setDefaultPresentationDismissHandler', () => {
     it('should call exec with correct parameters', () => {
       const success = jest.fn();
       const error = jest.fn();
 
-      Purchasely.setDefaultPresentationResultHandler(success, error);
+      Purchasely.setDefaultPresentationDismissHandler(success, error);
 
-      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'setDefaultPresentationResultHandler', []);
+      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'setDefaultPresentationDismissHandler', []);
     });
   });
 

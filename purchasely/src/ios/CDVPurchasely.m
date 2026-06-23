@@ -166,9 +166,13 @@
     [Purchasely allowDeeplink: allow];
 }
 
-- (void)setDefaultPresentationResultHandler:(CDVInvokedUrlCommand*)command {
-    [Purchasely setDefaultPresentationResultHandler:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
-        NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
+// v6: renamed from setDefaultPresentationResultHandler (breaking change). The
+// native handler now delivers a single PLYPresentationOutcome (purchaseResult +
+// closeReason + plan + the presentation that produced it) instead of the legacy
+// (result, plan) pair — aligned on the PLYPresentationBuilder onDismissed callback.
+- (void)setDefaultPresentationDismissHandler:(CDVInvokedUrlCommand*)command {
+    [Purchasely setDefaultPresentationDismissHandler:^(PLYPresentationOutcome * _Nonnull outcome) {
+        NSDictionary *resultDict = [self resultDictionaryForOutcome:outcome];
 
         CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:resultDict];
         [pluginResult setKeepCallbackAsBool:YES];
@@ -482,30 +486,6 @@
 
 // Helpers
 
-- (NSDictionary<NSString *, NSObject *> *) resultDictionaryForPresentationController:(PLYProductViewControllerResult)result plan:(PLYPlan * _Nullable)plan {
-    NSMutableDictionary<NSString *, NSObject *> *productViewResult = [NSMutableDictionary new];
-    int resultString;
-
-    switch (result) {
-        case PLYProductViewControllerResultPurchased:
-            resultString = PLYProductViewControllerResultPurchased;
-            break;
-        case PLYProductViewControllerResultRestored:
-            resultString = PLYProductViewControllerResultRestored;
-            break;
-        case PLYProductViewControllerResultCancelled:
-            resultString = PLYProductViewControllerResultCancelled;
-            break;
-    }
-
-    [productViewResult setObject:[NSNumber numberWithInt:resultString] forKey:@"result"];
-
-    if (plan != nil) {
-        [productViewResult setObject:[plan asDictionary] forKey:@"plan"];
-    }
-    return productViewResult;
-}
-
 // v6: dismissal now delivers a PLYPresentationOutcome whose PLYPurchaseResult enum
 // is ordered (cancelled=0, purchased=1, restored=2, none=3) — different from the JS
 // PurchaseResult enum (PURCHASED=0, CANCELLED=1, RESTORED=2). Map explicitly so the
@@ -513,16 +493,38 @@
 - (NSDictionary<NSString *, NSObject *> *) resultDictionaryForOutcome:(PLYPresentationOutcome * _Nonnull)outcome {
     NSMutableDictionary<NSString *, NSObject *> *result = [NSMutableDictionary new];
     int code;
+    NSString *purchaseResultString = nil;
     switch (outcome.purchaseResult) {
-        case PLYPurchaseResultPurchased: code = 0; break; // JS PURCHASED
-        case PLYPurchaseResultCancelled: code = 1; break; // JS CANCELLED
-        case PLYPurchaseResultRestored:  code = 2; break; // JS RESTORED
-        case PLYPurchaseResultNone:      code = 1; break; // dismissed without a purchase
-        default:                         code = 1; break;
+        case PLYPurchaseResultPurchased: code = 0; purchaseResultString = @"purchased"; break; // JS PURCHASED
+        case PLYPurchaseResultCancelled: code = 1; purchaseResultString = @"cancelled"; break; // JS CANCELLED
+        case PLYPurchaseResultRestored:  code = 2; purchaseResultString = @"restored";  break; // JS RESTORED
+        case PLYPurchaseResultNone:      code = 1; purchaseResultString = nil;          break; // dismissed without a purchase
+        default:                         code = 1; purchaseResultString = nil;          break;
     }
+    // Legacy fields, kept for source compatibility with existing integrations.
     [result setObject:[NSNumber numberWithInt:code] forKey:@"result"];
     if (outcome.plan != nil) {
         [result setObject:[outcome.plan asDictionary] forKey:@"plan"];
+    }
+    // v6 rich outcome (parity with Flutter / React Native): string purchaseResult,
+    // closeReason, and the presentation that produced the outcome — always populated
+    // for the default dismiss handler so the app can identify the campaign/deeplink.
+    if (purchaseResultString != nil) {
+        [result setObject:purchaseResultString forKey:@"purchaseResult"];
+    }
+    NSString *closeReasonString = nil;
+    switch (outcome.closeReason) {
+        case PLYCloseReasonButton:             closeReasonString = @"button"; break;
+        case PLYCloseReasonInteractiveDismiss: closeReasonString = @"interactiveDismiss"; break; // distinguishable on iOS (parity with Flutter)
+        case PLYCloseReasonProgrammatic:       closeReasonString = @"programmatic"; break;
+        case PLYCloseReasonNone:               closeReasonString = nil; break; // no close (e.g. a purchase/restore)
+        default:                               closeReasonString = nil; break;
+    }
+    if (closeReasonString != nil) {
+        [result setObject:closeReasonString forKey:@"closeReason"];
+    }
+    if (outcome.presentation != nil) {
+        [result setObject:[self resultDictionaryForFetchPresentation:outcome.presentation] forKey:@"presentation"];
     }
     return result;
 }

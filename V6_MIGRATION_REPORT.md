@@ -84,8 +84,11 @@ inchangé. `synchronize` gagne des callbacks succès/erreur.
 | **PLYPresentation** | `PLYPresentation *` (classe) | `id<PLYPresentation>` (protocole) |
 | **PurchaseResult** | enum `PLYProductViewControllerResult` (purchased=0,cancelled=1,restored=2 → matche JS) gardé pour `setDefaultPresentationResultHandler` | nouveau `resultDictionaryForOutcome:` mappe `PLYPurchaseResult` (cancelled=0,purchased=1,restored=2) **explicitement** vers les codes JS (PURCHASED=0, CANCELLED=1, RESTORED=2) |
 
-`setDefaultPresentationResultHandler:` est **inchangé en v6** (toujours
-`PLYProductViewControllerCompletionBlock`) → conservé tel quel.
+> ⚠️ **Mis à jour (cf. §11)** : `setDefaultPresentationResultHandler:` a depuis été
+> **renommé `setDefaultPresentationDismissHandler:`** (breaking change natif v6). La
+> closure reçoit désormais un `PLYPresentationOutcome` unique (au lieu du couple
+> `(PLYProductViewControllerResult, PLYPlan?)`), sérialisé via `resultDictionaryForOutcome:`.
+> Le helper `resultDictionaryForPresentationController:plan:` a été supprimé.
 
 ---
 
@@ -251,3 +254,82 @@ transition). Vérification manuelle recommandée avec un placement live.
   natifs iOS `6.0.0-rc.1` / Android `6.0.0-rc.1`.
 - Docs publiques (`../Documentation`) : guide d'intégration Cordova + guide de
   migration 5→6 Cordova, en miroir des guides Android/iOS/RN/Flutter.
+
+---
+
+## 11. Mise à jour — rename `setDefaultPresentationDismissHandler` + outcome enrichi (2026-06-23)
+
+Alignement sur le **breaking change natif v6** : la méthode globale qui gère le
+résultat des présentations que l'app n'a **pas** instanciées elle‑même (campagnes,
+deeplinks, Promoted IAP) a été renommée et délivre désormais un
+`PLYPresentationOutcome` unique. Mirroir de ce qui a été fait sur Flutter
+(`../Flutter`, branche `feat/sdk-v6-migration`).
+
+### 11.1 Rename de la méthode publique (sans alias)
+
+`setDefaultPresentationResultHandler` → **`setDefaultPresentationDismissHandler`**,
+identique sur les deux plateformes (parité). Touche :
+
+| Couche | Fichier | Changement |
+|---|---|---|
+| JS | `purchasely/www/Purchasely.js` | `exports.setDefaultPresentationDismissHandler` → action `setDefaultPresentationDismissHandler` |
+| Android | `purchasely/src/android/PurchaselyPlugin.kt` | case `when` + fun renommés ; appelle `Purchasely.setDefaultPresentationDismissHandler { outcome -> }` |
+| iOS | `purchasely/src/ios/CDVPurchasely.{h,m}` | méthode renommée ; closure `^(PLYPresentationOutcome *outcome)` (était `^(PLYProductViewControllerResult, PLYPlan*)`) ; appelle `[Purchasely setDefaultPresentationDismissHandler:]` |
+| Test | `purchasely/__tests__/Purchasely.test.js` | assertion renommée |
+| Exemple | `purchasely/example/www/js/index.js` | appel renommé + log des champs enrichis |
+
+### 11.2 Outcome enrichi (parité RN/Flutter, rétro‑compatible)
+
+L'objet livré au callback JS conserve les champs historiques **`result`** (code
+`PurchaseResult` 0/1/2) et **`plan`** (dictionnaire complet) — aucune intégration
+existante ne casse — et ajoute trois champs v6 :
+
+| Champ | Type | Source native |
+|---|---|---|
+| `purchaseResult` | `string \| null` | Android `outcome.purchaseResult?.name?.lowercase()` ; iOS switch `PLYPurchaseResult` → `'purchased' / 'cancelled' / 'restored' / null` |
+| `closeReason` | `string \| null` | Android `outcome.closeReason?.value` ; iOS switch `PLYCloseReason` → `'button' / 'interactiveDismiss' / 'programmatic' / null` |
+| `presentation` | `object \| null` | `outcome.presentation` → `screenId, placementId, contentId, audienceId, abTestId, abTestVariantId, campaignId, flowId, language` (Android) / `resultDictionaryForFetchPresentation:` (iOS). **Toujours peuplé** pour ce handler → identifie la campagne/deeplink fermée. |
+
+`error` reste `nil/null` en 6.0 (réservé). La sérialisation est centralisée dans
+`sendPurchaseResult(outcome)` (Android) et `resultDictionaryForOutcome:` (iOS), donc
+le chemin d'affichage direct (`presentPresentation*`) bénéficie aussi de l'outcome
+enrichi. L'ancien helper iOS `resultDictionaryForPresentationController:plan:`
+(couple v5) a été **supprimé** (mort).
+
+### 11.3 Dépendances natives — pin de test beta.12 + mavenLocal
+
+Le rename natif vit dans `io.purchasely:*:6.0.0-beta.12` (non publié, présent dans
+`~/.m2`). Pour tester Android, alignement sur Flutter :
+
+| Fichier | Avant | Après |
+|---|---|---|
+| `purchasely/plugin.xml` (Android) | `io.purchasely:core:6.0.0-rc.1` | `io.purchasely:core:6.0.0-beta.12` |
+| `purchasely-google/plugin.xml` (Android) | `io.purchasely:google-play:6.0.0-rc.1` | `io.purchasely:google-play:6.0.0-beta.12` |
+| `purchasely/src/android/build-extras.gradle` | — | ajout `repositories { mavenLocal() }` |
+
+> ⚠️ **Pin temporaire de test.** Le pod iOS (`Purchasely 6.0.0-rc.1`) et la version
+> du plugin Cordova (`6.0.0-rc.1`) sont **inchangés** — d'où un skew iOS(rc.1)/
+> Android(beta.12) volontaire, identique à l'état actuel de la branche Flutter.
+> À restaurer vers la version publiée (string `6.0.0` finale) avant release, une
+> fois le rename disponible dans un artefact publié.
+
+### 11.4 iOS — code écrit mais non compilé (par décision)
+
+Le SDK iOS local (`../iOS`, branche `develop`) expose **encore**
+`setDefaultPresentationResultHandler(PLYProductViewControllerCompletionBlock?)` :
+le rename (PR iOS #652) n'y est **pas encore mergé/publié**. Les types
+`PLYPresentationOutcome` (`purchaseResult/plan/presentation/closeReason/error`) et
+`PLYCloseReason` (`@objc enum`, `rawDescription` Swift‑only → mapping ObjC hardcodé,
+`interactiveDismiss` distinguable comme sur Flutter) **existent** déjà dans `develop`,
+donc l'enrichissement de `resultDictionaryForOutcome:` compile contre la source
+locale ; seul l'appel `[Purchasely setDefaultPresentationDismissHandler:]` ne
+compilera qu'une fois #652 livré. **iOS non rebuildé cette session** (décision
+utilisateur : « fais le code comme Android, on vérifiera et ajustera plus tard »).
+
+### 11.5 Vérifications exécutées (preuves)
+
+| Vérification | Commande | Résultat |
+|---|---|---|
+| Tests JS unitaires | `./node_modules/.bin/jest` (dans `purchasely/`) | ✅ **68/68** (dont `setDefaultPresentationDismissHandler`) |
+| Build Android | `tools/gradlew :app:assembleDebug` (résolu `jetified-core-6.0.0-beta.12` depuis **mavenLocal**) | ✅ **BUILD SUCCESSFUL** (14 s), `app-debug.apk` produit ; `:app:compileDebugKotlin` compile le `.kt` renommé + `sendPurchaseResult` enrichi (0 erreur, warnings pré‑existants seulement) → confirme la présence de `setDefaultPresentationDismissHandler`, `closeReason`, `presentation.{screenId,…}` en beta.12 |
+| Build iOS | — | ⏳ **non exécuté** (cf. §11.4 — rename non disponible dans le pod) |

@@ -21,6 +21,7 @@ actions. This guide lists the **only** JS‑visible changes a host app must make
 | `Purchasely.RunningMode.paywallObserver` | `Purchasely.RunningMode.observer` |
 | `Purchasely.synchronize()` (fire‑and‑forget) | `Purchasely.synchronize(success, error)` (resolves on completion) |
 | `Purchasely.presentSubscriptions()` | **no‑op** (native subscriptions UI removed) |
+| `Purchasely.setDefaultPresentationResultHandler(cb)` | `Purchasely.setDefaultPresentationDismissHandler(cb)` (richer outcome — see §8) |
 
 Everything else — `start`, `fetchPresentation` / `fetchPresentationForPlacement`,
 `presentPresentation`, `presentPresentationForPlacement`,
@@ -168,4 +169,42 @@ Purchasely.setPaywallActionInterceptor((result) => {
     Purchasely.onProcessAction(true);  // let Purchasely proceed
   }
 });
+```
+
+---
+
+## 8. Default presentation dismiss handler renamed (+ richer outcome)
+
+The global handler for presentations the app did **not** open itself — campaigns,
+deeplinks, Promoted In‑App Purchases — was renamed (native v6 breaking change, no
+alias):
+
+```js
+// Before (v5)
+Purchasely.setDefaultPresentationResultHandler(onResult, onError);
+
+// After (v6)
+Purchasely.setDefaultPresentationDismissHandler(onResult, onError);
+```
+
+The success callback now receives a **richer outcome object**. The legacy `result`
+(PurchaseResult code) and `plan` fields are **kept** for source compatibility, and
+three v6 fields are added for parity with the React Native / Flutter SDKs:
+
+| Field | Type | Notes |
+|---|---|---|
+| `result` | int | Legacy `PurchaseResult` code (`0`=PURCHASED, `1`=CANCELLED, `2`=RESTORED). Unchanged. |
+| `plan` | object | The purchased/restored plan (unchanged shape). |
+| `purchaseResult` | string \| null | `'purchased'` \| `'cancelled'` \| `'restored'` \| `null` (no purchase). |
+| `closeReason` | string \| null | `'button'`, `'back_system'` (Android system back / interactive dismiss), `'interactiveDismiss'` (iOS), `'programmatic'`, or `null`. |
+| `presentation` | object \| null | The presentation that produced the outcome — **always populated** for this handler, so you can tell which campaign/deeplink closed (`screenId`, `placementId`, `campaignId`, `abTestId`, …). |
+
+```js
+Purchasely.setDefaultPresentationDismissHandler((outcome) => {
+  console.log('Dismissed:', outcome.presentation && outcome.presentation.screenId);
+  console.log('Purchase:', outcome.purchaseResult, '/ close:', outcome.closeReason);
+  if (outcome.result === Purchasely.PurchaseResult.PURCHASED) {
+    console.log('Purchased', outcome.plan && outcome.plan.vendorId);
+  }
+}, (error) => console.error(error));
 ```

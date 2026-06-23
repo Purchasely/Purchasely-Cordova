@@ -50,8 +50,19 @@ exports.allowDeeplink = function (isAllowed) {
     exec(() => {}, defaultError, 'Purchasely', 'allowDeeplink', [isAllowed]);
 };
 
-exports.setDefaultPresentationResultHandler = function (success, error) {
-    exec(success, error, 'Purchasely', 'setDefaultPresentationResultHandler', []);
+// v6: renamed from setDefaultPresentationResultHandler (breaking change, no alias).
+// Handles the dismissal of presentations the app did NOT open itself (campaigns,
+// deeplinks, promoted in-app purchases). The success callback receives a rich
+// outcome object:
+//   {
+//     result,          // legacy PurchaseResult code (0=PURCHASED, 1=CANCELLED, 2=RESTORED) — kept for compat
+//     plan,            // the purchased/restored plan (or {} / undefined)
+//     purchaseResult,  // 'purchased' | 'cancelled' | 'restored' | null
+//     closeReason,     // e.g. 'button' | 'back_system' (Android) | 'interactiveDismiss' (iOS) | null
+//     presentation     // the presentation that produced the outcome (screenId, placementId, campaignId, …)
+//   }
+exports.setDefaultPresentationDismissHandler = function (success, error) {
+    exec(success, error, 'Purchasely', 'setDefaultPresentationDismissHandler', []);
 };
 
 exports.synchronize = function (success, error) {

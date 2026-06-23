@@ -157,12 +157,15 @@ function onPurchaselySdkReady() {
 		console.log(error);
 	});
 
-	Purchasely.setDefaultPresentationResultHandler(callback => {
-		console.log(callback);
-		if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
-			console.log("User cancelled purchased");
+	Purchasely.setDefaultPresentationDismissHandler(outcome => {
+		console.log(outcome);
+		// v6: rich outcome. `presentation` identifies which campaign/deeplink closed.
+		console.log("Dismissed presentation: " + (outcome.presentation && outcome.presentation.screenId));
+		console.log("Purchase result: " + outcome.purchaseResult + " / close reason: " + outcome.closeReason);
+		if(outcome.result == Purchasely.PurchaseResult.CANCELLED) {
+			console.log("User cancelled purchase");
 		} else {
-			console.log("User purchased " + callback.plan.vendorId);
+			console.log("User purchased " + (outcome.plan && outcome.plan.vendorId));
 		}
 	},
 		(error) => {

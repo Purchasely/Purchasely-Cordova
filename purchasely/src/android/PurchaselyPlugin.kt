@@ -95,7 +95,7 @@ class PurchaselyPlugin : CordovaPlugin() {
                 "setLogLevel" -> setLogLevel(args.getInt(0))
                 "setThemeMode" -> setThemeMode(args.getInt(0))
                 "setAttribute" -> setAttribute(args.getInt(0), getStringFromJson(args.getString(1)))
-                "setDefaultPresentationResultHandler" -> setDefaultPresentationResultHandler(
+                "setDefaultPresentationDismissHandler" -> setDefaultPresentationDismissHandler(
                     callbackContext
                 )
 
@@ -420,10 +420,13 @@ class PurchaselyPlugin : CordovaPlugin() {
         }
     }
 
-    private fun setDefaultPresentationResultHandler(callbackContext: CallbackContext) {
+    private fun setDefaultPresentationDismissHandler(callbackContext: CallbackContext) {
         defaultCallback = callbackContext
-        // v6: the handler now receives a single PLYPresentationOutcome.
-        Purchasely.setDefaultPresentationResultHandler { outcome: PLYPresentationOutcome ->
+        // v6: renamed from setDefaultPresentationResultHandler. The handler now
+        // receives a single PLYPresentationOutcome (purchaseResult + closeReason +
+        // plan + the presentation that produced it — populated for campaign/deeplink
+        // presentations the app did not open itself).
+        Purchasely.setDefaultPresentationDismissHandler { outcome: PLYPresentationOutcome ->
             sendPurchaseResult(outcome)
         }
     }
@@ -1134,13 +1137,33 @@ class PurchaselyPlugin : CordovaPlugin() {
         // enum, but we map explicitly to stay robust and handle the null (no-purchase) case.
         fun sendPurchaseResult(outcome: PLYPresentationOutcome) {
             val map = HashMap<String?, Any?>()
+            // Legacy fields, kept for source compatibility with existing integrations.
             map["result"] = when (outcome.purchaseResult) {
                 PLYPurchaseResult.PURCHASED -> 0
                 PLYPurchaseResult.CANCELLED -> 1
                 PLYPurchaseResult.RESTORED -> 2
-                null -> 1
+                else -> 1 // none / null → dismissed without a purchase
             }
             map["plan"] = transformPlanToMap(outcome.plan)
+            // v6 rich outcome (parity with Flutter / React Native): a string
+            // purchaseResult, the closeReason, and the presentation that produced
+            // the outcome — always populated for the default dismiss handler so the
+            // app can identify which campaign/deeplink presentation closed.
+            map["purchaseResult"] = outcome.purchaseResult?.name?.lowercase()
+            map["closeReason"] = outcome.closeReason?.value
+            map["presentation"] = outcome.presentation?.let { p ->
+                HashMap<String?, Any?>().apply {
+                    put("screenId", p.screenId)
+                    put("placementId", p.placementId)
+                    put("contentId", p.contentId)
+                    put("audienceId", p.audienceId)
+                    put("abTestId", p.abTestId)
+                    put("abTestVariantId", p.abTestVariantId)
+                    put("campaignId", p.campaignId)
+                    put("flowId", p.flowId)
+                    put("language", p.language)
+                }
+            }
             if (purchaseCallback != null) {
                 purchaseCallback?.success(JSONObject(map))
                 purchaseCallback = null
