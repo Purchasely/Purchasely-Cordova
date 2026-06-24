@@ -103,18 +103,18 @@ describe('Purchasely', () => {
       });
     });
 
-    describe('PaywallAction', () => {
-      it('should have correct paywall action values', () => {
-        expect(Purchasely.PaywallAction.close).toBe('close');
-        expect(Purchasely.PaywallAction.close_all).toBe('close_all');
-        expect(Purchasely.PaywallAction.login).toBe('login');
-        expect(Purchasely.PaywallAction.navigate).toBe('navigate');
-        expect(Purchasely.PaywallAction.purchase).toBe('purchase');
-        expect(Purchasely.PaywallAction.restore).toBe('restore');
-        expect(Purchasely.PaywallAction.open_presentation).toBe('open_presentation');
-        expect(Purchasely.PaywallAction.open_placement).toBe('open_placement');
-        expect(Purchasely.PaywallAction.promo_code).toBe('promo_code');
-        expect(Purchasely.PaywallAction.web_checkout).toBe('web_checkout');
+    describe('PresentationAction', () => {
+      it('should have correct presentation action values', () => {
+        expect(Purchasely.PresentationAction.close).toBe('close');
+        expect(Purchasely.PresentationAction.close_all).toBe('close_all');
+        expect(Purchasely.PresentationAction.login).toBe('login');
+        expect(Purchasely.PresentationAction.navigate).toBe('navigate');
+        expect(Purchasely.PresentationAction.purchase).toBe('purchase');
+        expect(Purchasely.PresentationAction.restore).toBe('restore');
+        expect(Purchasely.PresentationAction.open_presentation).toBe('open_presentation');
+        expect(Purchasely.PresentationAction.open_placement).toBe('open_placement');
+        expect(Purchasely.PresentationAction.promo_code).toBe('promo_code');
+        expect(Purchasely.PresentationAction.web_checkout).toBe('web_checkout');
       });
     });
 
@@ -299,13 +299,29 @@ describe('Purchasely', () => {
   });
 
   describe('setDefaultPresentationDismissHandler', () => {
+    it('should call exec with wrapped handler', () => {
+      const handler = jest.fn();
+      Purchasely.setDefaultPresentationDismissHandler(handler);
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'setDefaultPresentationDismissHandler',
+        []
+      );
+    });
+  });
+
+  describe('removeDefaultPresentationDismissHandler', () => {
     it('should call exec with correct parameters', () => {
-      const success = jest.fn();
-      const error = jest.fn();
-
-      Purchasely.setDefaultPresentationDismissHandler(success, error);
-
-      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'setDefaultPresentationDismissHandler', []);
+      Purchasely.removeDefaultPresentationDismissHandler();
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'removeDefaultPresentationDismissHandler',
+        []
+      );
     });
   });
 
@@ -333,140 +349,6 @@ describe('Purchasely', () => {
         error,
         'Purchasely',
         'synchronize',
-        []
-      );
-    });
-  });
-
-  describe('presentPresentationWithIdentifier', () => {
-    it('should call exec with correct parameters', () => {
-      const success = jest.fn();
-      const error = jest.fn();
-
-      Purchasely.presentPresentationWithIdentifier('presentation1', 'content1', true, success, error);
-
-      expect(mockExec).toHaveBeenCalledWith(
-        success,
-        error,
-        'Purchasely',
-        'presentPresentationWithIdentifier',
-        ['presentation1', 'content1', true]
-      );
-    });
-  });
-
-  describe('presentPresentationForPlacement', () => {
-    it('should call exec with correct parameters', () => {
-      const success = jest.fn();
-      const error = jest.fn();
-
-      Purchasely.presentPresentationForPlacement('placement1', 'content1', false, success, error);
-
-      expect(mockExec).toHaveBeenCalledWith(
-        success,
-        error,
-        'Purchasely',
-        'presentPresentationForPlacement',
-        ['placement1', 'content1', false]
-      );
-    });
-  });
-
-  describe('presentProductWithIdentifier', () => {
-    it('should call exec with correct parameters', () => {
-      const success = jest.fn();
-      const error = jest.fn();
-
-      Purchasely.presentProductWithIdentifier('product1', 'presentation1', 'content1', true, success, error);
-
-      expect(mockExec).toHaveBeenCalledWith(
-        success,
-        error,
-        'Purchasely',
-        'presentProductWithIdentifier',
-        ['product1', 'presentation1', 'content1', true]
-      );
-    });
-  });
-
-  describe('presentPlanWithIdentifier', () => {
-    it('should call exec with correct parameters', () => {
-      const success = jest.fn();
-      const error = jest.fn();
-
-      Purchasely.presentPlanWithIdentifier('plan1', 'presentation1', 'content1', false, success, error);
-
-      expect(mockExec).toHaveBeenCalledWith(
-        success,
-        error,
-        'Purchasely',
-        'presentPlanWithIdentifier',
-        ['plan1', 'presentation1', 'content1', false]
-      );
-    });
-  });
-
-  describe('fetchPresentation', () => {
-    it('should call exec with correct parameters', () => {
-      const success = jest.fn();
-      const error = jest.fn();
-
-      Purchasely.fetchPresentation('presentation1', 'content1', success, error);
-
-      expect(mockExec).toHaveBeenCalledWith(
-        success,
-        error,
-        'Purchasely',
-        'fetchPresentation',
-        [null, 'presentation1', 'content1']
-      );
-    });
-  });
-
-  describe('fetchPresentationForPlacement', () => {
-    it('should call exec with correct parameters', () => {
-      const success = jest.fn();
-      const error = jest.fn();
-
-      Purchasely.fetchPresentationForPlacement('placement1', 'content1', success, error);
-
-      expect(mockExec).toHaveBeenCalledWith(
-        success,
-        error,
-        'Purchasely',
-        'fetchPresentation',
-        ['placement1', null, 'content1']
-      );
-    });
-  });
-
-  describe('presentPresentation', () => {
-    it('should call exec with correct parameters', () => {
-      const success = jest.fn();
-      const error = jest.fn();
-      const presentation = { id: 'test' };
-
-      Purchasely.presentPresentation(presentation, true, '#FFFFFF', success, error);
-
-      expect(mockExec).toHaveBeenCalledWith(
-        success,
-        error,
-        'Purchasely',
-        'presentPresentation',
-        [presentation, true, '#FFFFFF']
-      );
-    });
-  });
-
-  describe('presentSubscriptions', () => {
-    it('should call exec with correct parameters', () => {
-      Purchasely.presentSubscriptions();
-
-      expect(mockExec).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.any(Function),
-        'Purchasely',
-        'presentSubscriptions',
         []
       );
     });
@@ -647,48 +529,6 @@ describe('Purchasely', () => {
         'Purchasely',
         'setLanguage',
         ['fr']
-      );
-    });
-  });
-
-  describe('showPresentation', () => {
-    it('should call exec with correct parameters', () => {
-      Purchasely.showPresentation();
-
-      expect(mockExec).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.any(Function),
-        'Purchasely',
-        'showPresentation',
-        []
-      );
-    });
-  });
-
-  describe('hidePresentation', () => {
-    it('should call exec with correct parameters', () => {
-      Purchasely.hidePresentation();
-
-      expect(mockExec).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.any(Function),
-        'Purchasely',
-        'hidePresentation',
-        []
-      );
-    });
-  });
-
-  describe('closePresentation', () => {
-    it('should call exec with correct parameters', () => {
-      Purchasely.closePresentation();
-
-      expect(mockExec).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.any(Function),
-        'Purchasely',
-        'closePresentation',
-        []
       );
     });
   });
@@ -1021,6 +861,31 @@ describe('Purchasely', () => {
       expect(p.screenId).toBe('X');
       expect(p.placementId).toBe('P');
       expect(Purchasely.__test.normalizePresentation({})).toBeNull();
+    });
+  });
+
+  describe('default dismiss handler & removed flat API', () => {
+    it('delivers a 5-field outcome (no legacy result)', () => {
+      let cb;
+      mockExec.mockImplementation((success, error, service, action) => {
+        if (action === 'setDefaultPresentationDismissHandler') cb = success;
+      });
+      const handler = jest.fn();
+      Purchasely.setDefaultPresentationDismissHandler(handler);
+      cb({ presentation: { id: 'CAMP1', placementId: 'PL' }, purchaseResult: 2, closeReason: 'button' });
+      const outcome = handler.mock.calls[0][0];
+      expect(outcome.purchaseResult).toBe('restored');
+      expect(outcome.closeReason).toBe('button');
+      expect(outcome.presentation.screenId).toBe('CAMP1');
+      expect(outcome).not.toHaveProperty('result');
+    });
+    it('removed flat presentation API and presentSubscriptions are gone', () => {
+      ['presentSubscriptions', 'presentPresentationForPlacement', 'presentPresentationWithIdentifier',
+       'presentProductWithIdentifier', 'presentPlanWithIdentifier', 'fetchPresentation',
+       'fetchPresentationForPlacement', 'presentPresentation', 'showPresentation', 'hidePresentation']
+        .forEach((m) => expect(Purchasely[m]).toBeUndefined());
+      expect(Purchasely.PaywallAction).toBeUndefined();
+      expect(Purchasely.PresentationAction.web_checkout).toBe('web_checkout');
     });
   });
 

@@ -246,53 +246,19 @@ exports.allowDeeplink = function (isAllowed) {
 
 // v6: renamed from setDefaultPresentationResultHandler (breaking change, no alias).
 // Handles the dismissal of presentations the app did NOT open itself (campaigns,
-// deeplinks, promoted in-app purchases). The success callback receives a rich
-// outcome object:
-//   {
-//     result,          // legacy PurchaseResult code (0=PURCHASED, 1=CANCELLED, 2=RESTORED) — kept for compat
-//     plan,            // the purchased/restored plan (or {} / undefined)
-//     purchaseResult,  // 'purchased' | 'cancelled' | 'restored' | null
-//     closeReason,     // e.g. 'button' | 'back_system' (Android) | 'interactiveDismiss' (iOS) | null
-//     presentation     // the presentation that produced the outcome (screenId, placementId, campaignId, …)
-//   }
-exports.setDefaultPresentationDismissHandler = function (success, error) {
-    exec(success, error, 'Purchasely', 'setDefaultPresentationDismissHandler', []);
+// deeplinks, promoted in-app purchases). The handler receives a 5-field outcome:
+//   { presentation, purchaseResult, plan, closeReason, error }
+exports.setDefaultPresentationDismissHandler = function (handler) {
+  exec(function (event) {
+    handler(eventToOutcome(event, normalizePresentation(event.presentation)));
+  }, function (e) { console.log(e); }, 'Purchasely', 'setDefaultPresentationDismissHandler', []);
+};
+exports.removeDefaultPresentationDismissHandler = function () {
+  exec(function () {}, function () {}, 'Purchasely', 'removeDefaultPresentationDismissHandler', []);
 };
 
 exports.synchronize = function (success, error) {
     exec(success || (() => {}), error || defaultError, 'Purchasely', 'synchronize', []);
-};
-
-exports.presentPresentationWithIdentifier = function (presentationId, contentId, isFullscreen, success, error) {
-    exec(success, error, 'Purchasely', 'presentPresentationWithIdentifier', [presentationId, contentId, isFullscreen]);
-};
-
-exports.presentPresentationForPlacement = function (placementId, contentId, isFullscreen, success, error) {
-    exec(success, error, 'Purchasely', 'presentPresentationForPlacement', [placementId, contentId, isFullscreen]);
-};
-
-exports.presentProductWithIdentifier = function (productId, presentationId, contentId, isFullscreen, success, error) {
-    exec(success, error, 'Purchasely', 'presentProductWithIdentifier', [productId, presentationId, contentId, isFullscreen]);
-};
-
-exports.presentPlanWithIdentifier = function (planId, presentationId, contentId, isFullscreen, success, error) {
-    exec(success, error, 'Purchasely', 'presentPlanWithIdentifier', [planId, presentationId, contentId, isFullscreen]);
-};
-
-exports.fetchPresentation = function (presentationId, contentId, success, error) {
-    exec(success, error, 'Purchasely', 'fetchPresentation', [null, presentationId, contentId]);
-};
-
-exports.fetchPresentationForPlacement = function (placementId, contentId, success, error) {
-    exec(success, error, 'Purchasely', 'fetchPresentation', [placementId, null, contentId]);
-};
-
-exports.presentPresentation = function (presentation, isFullscreen, backgroundColor,success, error) {
-    exec(success, error, 'Purchasely', 'presentPresentation', [presentation, isFullscreen, backgroundColor]);
-};
-
-exports.presentSubscriptions = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'presentSubscriptions', []);
 };
 
 exports.purchaseWithPlanVendorId = function (planId, offerId, contentId, success, error) {
@@ -401,18 +367,6 @@ exports.userSubscriptionsHistory = function (success, error) {
 
 exports.setLanguage = function (language) {
     exec(() => {}, defaultError, 'Purchasely', 'setLanguage', [language]);
-};
-
-exports.showPresentation = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'showPresentation', []);
-};
-
-exports.hidePresentation = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'hidePresentation', []);
-};
-
-exports.closePresentation = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'closePresentation', []);
 };
 
 exports.setUserAttributeWithString = function (key, value, processLegalBasis) {
@@ -559,7 +513,7 @@ exports.RunningMode = {
     full: 3
 }
 
-exports.PaywallAction = {
+exports.PresentationAction = {
     close: 'close',
     close_all: 'close_all',
     login: 'login',
@@ -569,8 +523,11 @@ exports.PaywallAction = {
     open_presentation: 'open_presentation',
     open_placement: 'open_placement',
     promo_code: 'promo_code',
-    web_checkout: 'web_checkout'
-}
+    web_checkout: 'web_checkout',
+};
+exports.CloseReason = { button: 'button', backSystem: 'backSystem', programmatic: 'programmatic' };
+exports.InterceptResult = { success: 'success', failed: 'failed', notHandled: 'notHandled' };
+exports.TransitionType = { fullScreen: 'fullScreen', push: 'push', modal: 'modal', drawer: 'drawer', popin: 'popin', inlinePaywall: 'inlinePaywall' };
 
 exports.ThemeMode = {
 	light: 0,
