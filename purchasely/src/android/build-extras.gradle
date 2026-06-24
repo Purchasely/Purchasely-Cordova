@@ -1,11 +1,3 @@
-// v6 testing: the renamed setDefaultPresentationDismissHandler ships in the
-// unpublished io.purchasely:*:6.0.0-beta.12 native SDK, resolved from the local
-// Maven repository (~/.m2). Remove mavenLocal() once a published artifact carries
-// the rename and the plugin.xml pins are restored to the released version.
-repositories {
-    mavenLocal()
-}
-
 android {
     packaging {
         resources {

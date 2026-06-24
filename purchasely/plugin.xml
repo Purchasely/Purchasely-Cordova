@@ -52,10 +52,7 @@
             <preference name="GradlePluginKotlinCodeStyle" value="official" />
         </config-file>
         <framework src="src/android/build-extras.gradle" custom="true" type="gradleReference" />
-        <!-- v6 testing pin: 6.0.0-beta.12 carries the renamed setDefaultPresentationDismissHandler
-             and is resolved from mavenLocal (see build-extras.gradle) until a published artifact
-             contains the rename. Restore to the published 6.0.0 string before release. -->
-        <framework src="io.purchasely:core:6.0.0-beta.12" />
+        <framework src="io.purchasely:core:6.0.0-rc.2" />
         <source-file src="src/android/PurchaselyPlugin.kt" target-dir="java/cordova/plugin/purchasely" />
     </platform>
 </plugin>
