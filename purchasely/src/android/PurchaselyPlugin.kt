@@ -39,7 +39,6 @@ import io.purchasely.views.presentation.models.PLYDimensionType
 import io.purchasely.views.presentation.models.PLYTransition
 import io.purchasely.views.presentation.models.PLYTransitionDimension
 import io.purchasely.views.presentation.models.PLYTransitionType
-import io.purchasely.storage.userData.PLYDynamicOffering
 import io.purchasely.storage.userData.PLYUserAttributeSource
 import io.purchasely.storage.userData.PLYUserAttributeType
 import io.purchasely.models.PLYError
@@ -192,20 +191,6 @@ class PurchaselyPlugin : CordovaPlugin() {
                 "signPromotionalOffer" -> signPromotionalOffer(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), callbackContext)
                 "revokeDataProcessingConsent" -> revokeDataProcessingConsent(args.getJSONArray(0))
                 "setDebugMode" -> setDebugMode(args.getBoolean(0))
-                "setDynamicOffering" -> setDynamicOffering(
-                    getStringFromJson(args.getString(0)),
-                    getStringFromJson(args.getString(1)),
-                    getStringFromJson(args.optString(2)),
-                    callbackContext
-                )
-                "getDynamicOfferings" -> getDynamicOfferings(callbackContext)
-                "removeDynamicOffering" -> removeDynamicOffering(getStringFromJson(args.getString(0)))
-                "clearDynamicOfferings" -> clearDynamicOfferings()
-                "removeActionInterceptor" -> removeActionInterceptor(
-                    getStringFromJson(args.getString(0)),
-                    callbackContext
-                )
-                "removeAllActionInterceptors" -> removeAllActionInterceptors(callbackContext)
                 else -> return false
             }
         } catch (e: JSONException) {
@@ -1033,58 +1018,6 @@ class PurchaselyPlugin : CordovaPlugin() {
                 callbackContext.error(throwable.message)
             }
         })
-    }
-
-    private fun setDynamicOffering(
-        reference: String?,
-        planVendorId: String?,
-        offerVendorId: String?,
-        callbackContext: CallbackContext
-    ) {
-        if (reference == null || planVendorId == null) {
-            callbackContext.error("reference and planVendorId are required")
-            return
-        }
-        Purchasely.setDynamicOffering(reference, planVendorId, offerVendorId) { result: Boolean ->
-            if (result) callbackContext.success() else callbackContext.error("setDynamicOffering failed")
-        }
-    }
-
-    private fun getDynamicOfferings(callbackContext: CallbackContext) {
-        Purchasely.getDynamicOfferings { offerings: List<PLYDynamicOffering> ->
-            val array = org.json.JSONArray()
-            for (o in offerings) {
-                array.put(JSONObject().apply {
-                    put("offerId", o.offerId)
-                    put("planId", o.planId)
-                    put("reference", o.reference)
-                })
-            }
-            callbackContext.success(array)
-        }
-    }
-
-    private fun removeDynamicOffering(reference: String?) {
-        if (reference != null) Purchasely.removeDynamicOffering(reference)
-    }
-
-    private fun clearDynamicOfferings() {
-        Purchasely.clearDynamicOfferings()
-    }
-
-    private fun removeActionInterceptor(kind: String?, callbackContext: CallbackContext) {
-        val actionClass = kindToActionClass(kind ?: "")
-        if (actionClass == null) {
-            callbackContext.error("Unknown action kind: $kind")
-            return
-        }
-        Purchasely.removeActionInterceptor(actionClass)
-        callbackContext.success()
-    }
-
-    private fun removeAllActionInterceptors(callbackContext: CallbackContext) {
-        Purchasely.removeAllActionInterceptors()
-        callbackContext.success()
     }
 
     fun setUserAttributeWithStringArray(key: String?, value: JSONArray?, legalBasisString: String?) {
