@@ -588,35 +588,6 @@ describe('Purchasely', () => {
     });
   });
 
-  describe('setPaywallActionInterceptor', () => {
-    it('should call exec with correct parameters', () => {
-      const success = jest.fn();
-
-      Purchasely.setPaywallActionInterceptor(success);
-
-      expect(mockExec).toHaveBeenCalledWith(
-        success,
-        expect.any(Function),
-        'Purchasely',
-        'setPaywallActionInterceptor',
-        []
-      );
-    });
-  });
-
-  describe('onProcessAction', () => {
-    it('should call exec with correct parameters', () => {
-      Purchasely.onProcessAction(true);
-
-      expect(mockExec).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.any(Function),
-        'Purchasely',
-        'onProcessAction',
-        [true]
-      );
-    });
-  });
 
   describe('userDidConsumeSubscriptionContent', () => {
     it('should call exec with correct parameters', () => {
@@ -1050,6 +1021,33 @@ describe('Purchasely', () => {
       expect(p.screenId).toBe('X');
       expect(p.placementId).toBe('P');
       expect(Purchasely.__test.normalizePresentation({})).toBeNull();
+    });
+  });
+
+  describe('interceptAction', () => {
+    it('runs the handler and completes with its result', async () => {
+      let eventCb;
+      mockExec.mockImplementation((success, error, service, action) => {
+        if (action === 'registerActionInterceptor') eventCb = success;
+      });
+      const handler = jest.fn(() => 'success');
+      Purchasely.interceptAction('navigate', handler);
+      expect(mockExec.mock.calls.find((c) => c[3] === 'registerActionInterceptor')[4]).toEqual(['navigate']);
+
+      eventCb({ callbackId: 'cb1', kind: 'navigate',
+        info: { presentation: { id: 'S1' } }, payload: { url: 'https://x.y' } });
+      await Promise.resolve(); await Promise.resolve();
+
+      expect(handler).toHaveBeenCalledWith(
+        { contentId: null, presentation: expect.objectContaining({ screenId: 'S1' }) },
+        { kind: 'navigate', url: 'https://x.y', title: null });
+      const completeCall = mockExec.mock.calls.find((c) => c[3] === 'completeActionInterceptor');
+      expect(completeCall[4]).toEqual(['cb1', 'success']);
+    });
+
+    it('removed v5 surface no longer exists', () => {
+      expect(Purchasely.setPaywallActionInterceptor).toBeUndefined();
+      expect(Purchasely.onProcessAction).toBeUndefined();
     });
   });
 });

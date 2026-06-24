@@ -327,12 +327,64 @@ exports.productWithIdentifier = function (productId, success) {
     exec(success, defaultError, 'Purchasely', 'productWithIdentifier', [productId]);
 };
 
-exports.setPaywallActionInterceptor = function (success) {
-    exec(success, defaultError, 'Purchasely', 'setPaywallActionInterceptor', []);
+// ---------------------------------------------------------------------------
+// Per-action interceptor (v6 builder API)
+// ---------------------------------------------------------------------------
+
+var _interceptors = {};   // kind -> true (registered)
+
+function normalizeInfo(raw) {
+  if (!raw) return { contentId: null, presentation: null };
+  return {
+    contentId: raw.contentId != null ? raw.contentId : null,
+    presentation: raw.presentation ? normalizePresentation(raw.presentation) : null,
+  };
+}
+
+function normalizePayload(kind, raw) {
+  if (!raw) return null;
+  switch (kind) {
+    case 'navigate': return { kind: 'navigate', url: raw.url || '', title: raw.title != null ? raw.title : null };
+    case 'purchase': return { kind: 'purchase', plan: raw.plan,
+      subscriptionOffer: raw.subscriptionOffer != null ? raw.subscriptionOffer : null,
+      offer: raw.offer != null ? raw.offer : null };
+    case 'close': case 'closeAll': return { kind: kind, closeReason: raw.closeReason || 'programmatic' };
+    case 'openPresentation': return { kind: 'openPresentation', presentationId: raw.presentationId || raw.presentation || '' };
+    case 'openPlacement': return { kind: 'openPlacement', placementId: raw.placementId || raw.placement || '' };
+    case 'webCheckout': return { kind: 'webCheckout', url: raw.url || '',
+      clientReferenceId: raw.clientReferenceId || '', queryParameterKey: raw.queryParameterKey || '',
+      webCheckoutProvider: raw.webCheckoutProvider || 'other' };
+    default: return null;
+  }
+}
+
+exports.interceptAction = function (kind, handler) {
+  exports.removeActionInterceptor(kind);
+  _interceptors[kind] = true;
+  exec(function (event) {
+    if (event.kind !== kind) return;
+    var info = normalizeInfo(event.info);
+    var payload = normalizePayload(kind, event.payload);
+    Promise.resolve()
+      .then(function () { return handler(info, payload); })
+      .then(function (result) {
+        exec(function () {}, function () {}, 'Purchasely', 'completeActionInterceptor',
+          [event.callbackId, result || 'notHandled']);
+      })
+      .catch(function () {
+        exec(function () {}, function () {}, 'Purchasely', 'completeActionInterceptor',
+          [event.callbackId, 'failed']);
+      });
+  }, function (e) { console.log(e); }, 'Purchasely', 'registerActionInterceptor', [kind]);
 };
 
-exports.onProcessAction = function (processAction) {
-    exec(() => {}, defaultError, 'Purchasely', 'onProcessAction', [processAction]);
+exports.removeActionInterceptor = function (kind) {
+  delete _interceptors[kind];
+  exec(function () {}, function () {}, 'Purchasely', 'unregisterActionInterceptor', [kind]);
+};
+
+exports.removeAllActionInterceptors = function () {
+  Object.keys(_interceptors).forEach(function (k) { exports.removeActionInterceptor(k); });
 };
 
 exports.userDidConsumeSubscriptionContent = function () {
