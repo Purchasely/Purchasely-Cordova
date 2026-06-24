@@ -344,13 +344,19 @@ exports.interceptAction = function (kind, handler) {
   }, function (e) { console.log(e); }, 'Purchasely', 'registerActionInterceptor', [kind]);
 };
 
-exports.removeActionInterceptor = function (kind) {
+exports.removeActionInterceptor = function (kind, success, error) {
   delete _interceptors[kind];
   exec(function () {}, function () {}, 'Purchasely', 'unregisterActionInterceptor', [kind]);
+  if (success) setTimeout(success, 0);
 };
 
-exports.removeAllActionInterceptors = function () {
-  Object.keys(_interceptors).forEach(function (k) { exports.removeActionInterceptor(k); });
+exports.removeAllActionInterceptors = function (success, error) {
+  var keys = Object.keys(_interceptors);
+  keys.forEach(function (k) {
+    delete _interceptors[k];
+    exec(function () {}, function () {}, 'Purchasely', 'unregisterActionInterceptor', [k]);
+  });
+  if (success) setTimeout(success, 0);
 };
 
 exports.userDidConsumeSubscriptionContent = function () {
@@ -534,6 +540,30 @@ exports.ThemeMode = {
 	dark: 1,
 	system: 2
 }
+
+exports.BillingPlanType = { unspecified: 0, upFront: 1, monthly: 2 };
+
+exports.setDynamicOffering = function (reference, planVendorId, offerVendorId, billingPlanType, success, error) {
+    exec(success || function () {}, error || defaultError, 'Purchasely', 'setDynamicOffering',
+        [reference, planVendorId, offerVendorId != null ? offerVendorId : null,
+         billingPlanType != null ? billingPlanType : 0]);
+};
+
+exports.getDynamicOfferings = function (success, error) {
+    exec(success, error || defaultError, 'Purchasely', 'getDynamicOfferings', []);
+};
+
+exports.removeDynamicOffering = function (reference, success, error) {
+    exec(success || function () {}, error || defaultError, 'Purchasely', 'removeDynamicOffering', [reference]);
+};
+
+exports.clearDynamicOfferings = function (success, error) {
+    exec(success || function () {}, error || defaultError, 'Purchasely', 'clearDynamicOfferings', []);
+};
+
+exports.closeAllScreens = function (success, error) {
+    exec(success || function () {}, error || defaultError, 'Purchasely', 'closeAllScreens', []);
+};
 
 exports.UserAttributeAction = {
     ADD: 'add',

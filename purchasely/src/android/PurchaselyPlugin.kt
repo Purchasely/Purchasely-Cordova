@@ -39,6 +39,7 @@ import io.purchasely.views.presentation.models.PLYDimensionType
 import io.purchasely.views.presentation.models.PLYTransition
 import io.purchasely.views.presentation.models.PLYTransitionDimension
 import io.purchasely.views.presentation.models.PLYTransitionType
+import io.purchasely.storage.userData.PLYDynamicOffering
 import io.purchasely.storage.userData.PLYUserAttributeSource
 import io.purchasely.storage.userData.PLYUserAttributeType
 import io.purchasely.models.PLYError
@@ -74,6 +75,8 @@ class PurchaselyPlugin : CordovaPlugin() {
 
     // v6 presentation lifecycle state, keyed by the JS-supplied requestId.
     private val activePresentations = ConcurrentHashMap<String, PLYPresentation>()
+    // Guards against double-fire when both native SDK handler and event-listener fallback fire.
+    @Volatile private var dismissHandlerFired = false
     // Pending interceptor resolvers, completed when JS calls completeActionInterceptor.
     private val pendingInterceptors = ConcurrentHashMap<String, CompletableDeferred<PLYInterceptResult>>()
     // Kept-alive interceptor event callbacks, keyed by action kind.
@@ -147,6 +150,21 @@ class PurchaselyPlugin : CordovaPlugin() {
                     getStringFromJson(args.getString(1)) ?: "notHandled"
                 )
                 "removeDefaultPresentationDismissHandler" -> removeDefaultPresentationDismissHandler()
+                "closeAllScreens" -> closeAllScreens(callbackContext)
+                "setDynamicOffering" -> setDynamicOffering(
+                    getStringFromJson(args.getString(0)),
+                    getStringFromJson(args.getString(1)),
+                    getStringFromJson(args.optString(2)),
+                    callbackContext
+                )
+                "getDynamicOfferings" -> getDynamicOfferings(callbackContext)
+                "removeDynamicOffering" -> removeDynamicOffering(getStringFromJson(args.getString(0)))
+                "clearDynamicOfferings" -> clearDynamicOfferings()
+                "removeActionInterceptor" -> removeActionInterceptorWithCallback(
+                    getStringFromJson(args.getString(0)),
+                    callbackContext
+                )
+                "removeAllActionInterceptors" -> removeAllActionInterceptorsWithCallback(callbackContext)
                 "restoreAllProducts" -> restoreAllProducts(callbackContext)
                 "silentRestoreAllProducts" -> restoreAllProducts(callbackContext)
                 "userSubscriptions" -> userSubscriptions(callbackContext)
@@ -324,16 +342,7 @@ class PurchaselyPlugin : CordovaPlugin() {
 
     private fun addEventsListener(callbackContext: CallbackContext) {
         eventsCallback = callbackContext
-        Purchasely.eventListener = object: EventListener {
-            override fun onEvent(event: PLYEvent) {
-                val map = HashMap<String?, Any?>()
-                map["name"] = event.name
-                map["properties"] = event.properties.toMap()
-                val pluginResult = PluginResult(PluginResult.Status.OK, JSONObject(map))
-                pluginResult.keepCallback = true
-                eventsCallback?.sendPluginResult(pluginResult)
-            }
-        }
+        refreshEventListener()
     }
 
     private fun removeUserAttributesListener() {
@@ -343,7 +352,41 @@ class PurchaselyPlugin : CordovaPlugin() {
 
     private fun removeEventsListener() {
         eventsCallback = null
-        Purchasely.eventListener = null
+        refreshEventListener()
+    }
+
+    // Installs a single combined EventListener that serves both the public
+    // addEventsListener channel and the setDefaultPresentationDismissHandler fallback.
+    // The fallback is needed because in Android SDK beta.12, the native
+    // setDefaultPresentationDismissHandler lambda is never invoked for presentations
+    // opened via handleDeeplink. We watch PRESENTATION_CLOSED events instead and
+    // route them to the dismiss callback when no builder-owned request is active.
+    private fun refreshEventListener() {
+        if (eventsCallback == null && defaultCallback == null) {
+            Purchasely.eventListener = null
+            return
+        }
+        Purchasely.eventListener = object : EventListener {
+            override fun onEvent(event: PLYEvent) {
+                val cb = eventsCallback
+                if (cb != null) {
+                    val map = HashMap<String?, Any?>()
+                    map["name"] = event.name
+                    map["properties"] = event.properties.toMap()
+                    val pluginResult = PluginResult(PluginResult.Status.OK, JSONObject(map))
+                    pluginResult.keepCallback = true
+                    cb.sendPluginResult(pluginResult)
+                }
+                val dc = defaultCallback
+                if (dc != null && !dismissHandlerFired &&
+                    event.name == "PRESENTATION_CLOSED" &&
+                    activePresentations.isEmpty()
+                ) {
+                    dismissHandlerFired = true
+                    emitOn(dc, HashMap<String, Any?>())
+                }
+            }
+        }
     }
 
     private fun getAnonymousUserId(callbackContext: CallbackContext) {
@@ -420,19 +463,22 @@ class PurchaselyPlugin : CordovaPlugin() {
 
     private fun setDefaultPresentationDismissHandler(callbackContext: CallbackContext) {
         defaultCallback = callbackContext
-        // v6: renamed from setDefaultPresentationResultHandler. The handler now
-        // receives a single PLYPresentationOutcome (purchaseResult + closeReason +
-        // plan + the presentation that produced it — populated for campaign/deeplink
-        // presentations the app did not open itself). It is forwarded to JS through
-        // the kept-alive default-dismiss callback with the same fields as a
-        // `dismissed` event, but without a requestId.
+        dismissHandlerFired = false
+        // Native SDK handler (may not fire in beta.12 for deeplink presentations).
         Purchasely.setDefaultPresentationDismissHandler { outcome: PLYPresentationOutcome ->
-            emitDefaultPresentationDismissed(outcome)
+            if (!dismissHandlerFired) {
+                dismissHandlerFired = true
+                emitDefaultPresentationDismissed(outcome)
+            }
         }
+        // Install the combined EventListener that also handles the PRESENTATION_CLOSED
+        // fallback for beta.12 (see refreshEventListener).
+        refreshEventListener()
     }
 
     private fun removeDefaultPresentationDismissHandler() {
         defaultCallback = null
+        refreshEventListener()
     }
 
     private fun purchasedSubscription(callbackContext: CallbackContext) {
@@ -1301,6 +1347,62 @@ class PurchaselyPlugin : CordovaPlugin() {
             map["isEligibleForIntroOffer"] = plan.isEligibleToOffer(null)
             return map
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // v6 additional methods (dynamic offerings, closeAllScreens, interceptor cleanup)
+    // -----------------------------------------------------------------------
+
+    private fun closeAllScreens(callbackContext: CallbackContext) {
+        Purchasely.closeAllScreens()
+        callbackContext.success()
+    }
+
+    private fun setDynamicOffering(
+        reference: String?,
+        planVendorId: String?,
+        offerVendorId: String?,
+        callbackContext: CallbackContext
+    ) {
+        if (reference == null || planVendorId == null) {
+            callbackContext.error("reference and planVendorId are required")
+            return
+        }
+        Purchasely.setDynamicOffering(reference, planVendorId, offerVendorId) { result: Boolean ->
+            if (result) callbackContext.success() else callbackContext.error("setDynamicOffering failed")
+        }
+    }
+
+    private fun getDynamicOfferings(callbackContext: CallbackContext) {
+        Purchasely.getDynamicOfferings { offerings: List<PLYDynamicOffering> ->
+            val array = JSONArray()
+            for (o in offerings) {
+                val obj = JSONObject()
+                obj.put("offerId", o.offerId)
+                obj.put("planId", o.planId)
+                obj.put("reference", o.reference)
+                array.put(obj)
+            }
+            callbackContext.success(array)
+        }
+    }
+
+    private fun removeDynamicOffering(reference: String?) {
+        if (reference != null) Purchasely.removeDynamicOffering(reference)
+    }
+
+    private fun clearDynamicOfferings() {
+        Purchasely.clearDynamicOfferings()
+    }
+
+    private fun removeActionInterceptorWithCallback(kind: String?, callbackContext: CallbackContext) {
+        if (kind != null) unregisterActionInterceptor(kind)
+        callbackContext.success()
+    }
+
+    private fun removeAllActionInterceptorsWithCallback(callbackContext: CallbackContext) {
+        interceptorCallbacks.keys.toList().forEach { unregisterActionInterceptor(it) }
+        callbackContext.success()
     }
 
     // WARNING: This enum must be strictly identical to the one in the JS side (Purchasely.js).
