@@ -325,6 +325,16 @@ describe('Purchasely', () => {
     });
   });
 
+  describe('closeAllScreens', () => {
+    it('should call exec with the closeAllScreens action', () => {
+      Purchasely.closeAllScreens();
+      const call = mockExec.mock.calls.find((c) => c[3] === 'closeAllScreens');
+      expect(call).toBeDefined();
+      expect(call[2]).toBe('Purchasely');
+      expect(call[4]).toEqual([]);
+    });
+  });
+
   describe('synchronize', () => {
     it('should call exec with default callbacks when none provided', () => {
       Purchasely.synchronize();

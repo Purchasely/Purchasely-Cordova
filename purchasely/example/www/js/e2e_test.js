@@ -120,19 +120,9 @@ document.addEventListener('deviceready', function() {
     });
   })
 
-  // ── T4: getDynamicOfferings ──────────────────────────────────────────────────
-  .then(function() {
-    return runTest('T4_getDynamicOfferings', function() {
-      return withTimeout(10000, new Promise(function(resolve, reject) {
-        Purchasely.getDynamicOfferings(resolve, reject);
-      }), 'getDynamicOfferings')
-      .then(function(offerings) {
-        assert(Array.isArray(offerings),
-          'offerings must be an array, got: ' + typeof offerings);
-        e2e('T4_VALUE: count=' + offerings.length);
-      });
-    });
-  })
+  // ── T4: getDynamicOfferings — REMOVED ────────────────────────────────────────
+  // Dynamic offerings are not part of the Cordova v6 SDK surface (no JS export,
+  // no native action). Skipped intentionally.
 
   // ── T5 ──────────────────────────────────────────────────────────────────────
   .then(function() {
@@ -167,21 +157,14 @@ document.addEventListener('deviceready', function() {
   // ── T7: interceptorCleanup ───────────────────────────────────────────────────
   .then(function() {
     return runTest('T7_interceptorCleanup', function() {
-      // Register a purchase interceptor then remove it.
+      // Register a purchase interceptor then remove it. removeActionInterceptor /
+      // removeAllActionInterceptors are synchronous fire-and-forget (no callbacks).
       Purchasely.interceptAction('purchase', function() { return 'notHandled'; });
-      return withTimeout(5000, new Promise(function(resolve, reject) {
-        Purchasely.removeActionInterceptor('purchase', resolve, reject);
-      }), 'removeActionInterceptor(purchase)')
-      .then(function() {
-        return withTimeout(5000, new Promise(function(resolve, reject) {
-          Purchasely.removeActionInterceptor('navigate', resolve, reject);
-        }), 'removeActionInterceptor(navigate)');
-      })
-      .then(function() {
-        return withTimeout(5000, new Promise(function(resolve, reject) {
-          Purchasely.removeAllActionInterceptors(resolve, reject);
-        }), 'removeAllActionInterceptors');
-      });
+      Purchasely.removeActionInterceptor('purchase');
+      Purchasely.removeActionInterceptor('navigate');
+      Purchasely.removeAllActionInterceptors();
+      e2e('T7_VALUE: interceptors removed');
+      return Promise.resolve();
     });
   })
 

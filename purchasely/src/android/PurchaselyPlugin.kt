@@ -1335,9 +1335,9 @@ class PurchaselyPlugin : CordovaPlugin() {
             val map = HashMap(plan.toMap())
             if (plan.type == DistributionType.CONSUMABLE) {
                 map["type"] = DistributionType.CONSUMABLE.ordinal
-            } else if (plan.type == DistributionType.CONSUMABLE) {
-                map["type"] = DistributionType.NON_CONSUMABLE.ordinal
             } else if (plan.type == DistributionType.NON_CONSUMABLE) {
+                map["type"] = DistributionType.NON_CONSUMABLE.ordinal
+            } else if (plan.type == DistributionType.RENEWING_SUBSCRIPTION) {
                 map["type"] = DistributionType.RENEWING_SUBSCRIPTION.ordinal
             } else if (plan.type == DistributionType.NON_RENEWING_SUBSCRIPTION) {
                 map["type"] = DistributionType.NON_RENEWING_SUBSCRIPTION.ordinal

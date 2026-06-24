@@ -257,6 +257,14 @@ exports.removeDefaultPresentationDismissHandler = function () {
   exec(function () {}, function () {}, 'Purchasely', 'removeDefaultPresentationDismissHandler', []);
 };
 
+// Programmatically dismiss all currently displayed presentations, including
+// SDK-driven ones (campaigns, deeplinks, promoted in-app purchases) for which
+// the app holds no PresentationRequest handle. For app-opened presentations
+// prefer request.close().
+exports.closeAllScreens = function (success, error) {
+  exec(success || function () {}, error || defaultError, 'Purchasely', 'closeAllScreens', []);
+};
+
 exports.synchronize = function (success, error) {
     exec(success || (() => {}), error || defaultError, 'Purchasely', 'synchronize', []);
 };
