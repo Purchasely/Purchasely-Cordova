@@ -17,14 +17,8 @@
 @property CDVInvokedUrlCommand* eventCommand;
 @property CDVInvokedUrlCommand* attributeCommand;
 
-@property (nonatomic) NSMutableArray<id<PLYPresentation>> *presentationsLoaded;
-@property (nonatomic) id<PLYPresentation> displayedPresentation;
-@property (nonatomic, assign) Boolean shouldReopenPaywall;
-
-@property (nonatomic) CDVInvokedUrlCommand* purchaseResolve;
-
-@property CDVInvokedUrlCommand* paywallActionInterceptorCommand;
-@property (nonatomic, copy) void (^interceptCompletion)(enum PLYInterceptResult);
+/// callbackId of the kept-alive `setDefaultPresentationDismissHandler` command.
+@property (nonatomic, copy) NSString* defaultDismissCallbackId;
 
 - (void)start:(CDVInvokedUrlCommand*)command;
 - (void)setLogLevel:(CDVInvokedUrlCommand*)command;
@@ -33,12 +27,21 @@
 - (void)setAttribute:(CDVInvokedUrlCommand*)command;
 - (void)getAnonymousUserId:(CDVInvokedUrlCommand*)command;
 - (void)allowDeeplink:(CDVInvokedUrlCommand*)command;
+
+// v6 builder API — presentation lifecycle
+- (void)applyStartOptions:(CDVInvokedUrlCommand*)command;
+- (void)preloadPresentation:(CDVInvokedUrlCommand*)command;
+- (void)displayPresentation:(CDVInvokedUrlCommand*)command;
+- (void)closePresentation:(CDVInvokedUrlCommand*)command;
+- (void)goBackToPreviousScreen:(CDVInvokedUrlCommand*)command;
 - (void)setDefaultPresentationDismissHandler:(CDVInvokedUrlCommand*)command;
-- (void)presentPresentationWithIdentifier:(CDVInvokedUrlCommand*)command;
-- (void)presentPresentationForPlacement:(CDVInvokedUrlCommand*)command;
-- (void)presentPlanWithIdentifier:(CDVInvokedUrlCommand*)command;
-- (void)presentProductWithIdentifier:(CDVInvokedUrlCommand*)command;
-- (void)presentSubscriptions:(CDVInvokedUrlCommand*)command;
+- (void)removeDefaultPresentationDismissHandler:(CDVInvokedUrlCommand*)command;
+
+// v6 per-action interceptors
+- (void)registerActionInterceptor:(CDVInvokedUrlCommand*)command;
+- (void)unregisterActionInterceptor:(CDVInvokedUrlCommand*)command;
+- (void)completeActionInterceptor:(CDVInvokedUrlCommand*)command;
+
 - (void)purchaseWithPlanVendorId:(CDVInvokedUrlCommand*)command;
 - (void)restoreAllProducts:(CDVInvokedUrlCommand*)command;
 - (void)silentRestoreAllProducts:(CDVInvokedUrlCommand*)command;
@@ -52,11 +55,6 @@
 - (void)addEventsListener:(CDVInvokedUrlCommand*)command;
 - (void)removeEventsListener:(CDVInvokedUrlCommand*)command;
 - (void)handleDeeplink:(CDVInvokedUrlCommand*)command;
-- (void)setPaywallActionInterceptor:(CDVInvokedUrlCommand*)command;
-- (void)onProcessAction:(CDVInvokedUrlCommand*)command;
-- (void)closePresentation:(CDVInvokedUrlCommand*)command;
-- (void)hidePresentation:(CDVInvokedUrlCommand*)command;
-- (void)showPresentation:(CDVInvokedUrlCommand*)command;
 - (void)userDidConsumeSubscriptionContent:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithStringArray:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithIntArray:(CDVInvokedUrlCommand*)command;
@@ -71,8 +69,6 @@
 - (void)clearUserAttribute:(CDVInvokedUrlCommand*)command;
 - (void)clearUserAttributes:(CDVInvokedUrlCommand*)command;
 - (void)clearBuiltInAttributes:(CDVInvokedUrlCommand*)command;
-- (void)fetchPresentation:(CDVInvokedUrlCommand*)command;
-- (void)presentPresentation:(CDVInvokedUrlCommand*)command;
 - (void)signPromotionalOffer:(CDVInvokedUrlCommand*)command;
 - (void)isEligibleForIntroOffer:(CDVInvokedUrlCommand*)command;
 - (void)setThemeMode:(CDVInvokedUrlCommand*)command;

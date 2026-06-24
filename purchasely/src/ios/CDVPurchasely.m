@@ -10,16 +10,197 @@
 #import "CDVPurchasely+Events.h"
 #import "UIColor+PLYHelper.h"
 
+// v6: `setDefaultPresentationDismissHandler:` (block: PLYPresentationOutcome) was
+// renamed from `setDefaultPresentationResultHandler:` in iOS PR #652. The pod we
+// build against (6.0.0-rc.1) may predate that rename, so forward-declare it here.
+// The call site is guarded with `respondsToSelector:`. // gated by iOS PR #652
+@interface Purchasely (PLYDefaultDismissHandler)
++ (void)setDefaultPresentationDismissHandler:(void (^)(PLYPresentationOutcome *outcome))handler;
+@end
+
+#pragma mark - internal state (shared across presentation methods)
+
+/// requestId → captured PLYPresentation (so we can replay it in events).
+static NSMutableDictionary<NSString *, id<PLYPresentation>> *kPresentationsByRequest;
+/// callbackId (UUID string) → kept-alive CDVInvokedUrlCommand callbackId string for display/preload.
+static NSMutableDictionary<NSString *, NSString *> *kCallbacksByRequest;
+/// callbackId → completion block to call once JS replies with an InterceptResult.
+static NSMutableDictionary<NSString *, void (^)(NSString *)> *kInterceptorCallbacks;
+/// kind → BOOL : tracks which interceptor kinds JS has registered.
+static NSMutableSet<NSString *> *kInterceptorKinds;
+/// Serialises every access to the mutable collections above.
+static NSObject *kPresentationStateLock;
+
+static void ensurePresentationState(void) {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        kPresentationsByRequest = [NSMutableDictionary new];
+        kCallbacksByRequest = [NSMutableDictionary new];
+        kInterceptorCallbacks = [NSMutableDictionary new];
+        kInterceptorKinds = [NSMutableSet new];
+        kPresentationStateLock = [NSObject new];
+    });
+}
+
+#pragma mark - static helpers (mirrors PurchaselyRN.m verbatim)
+
+/// Map a `PLYCloseReason` to the cross-platform wire string.
+/// iOS interactive dismiss (swipe-down / nav pop) → `backSystem` (RN parity).
+static NSString *closeReasonToString(PLYCloseReason reason) {
+    switch (reason) {
+        case PLYCloseReasonButton:             return @"button";
+        case PLYCloseReasonInteractiveDismiss: return @"backSystem"; // RN parity
+        case PLYCloseReasonProgrammatic:       return @"programmatic";
+        default:                               return nil;           // PLYCloseReasonNone
+    }
+}
+
+/// Convert a `PLYPurchaseResult` to the ordinal JS expects.
+/// `none` carries no purchase outcome → nil (omitted from the event dict).
+static NSNumber *purchaseResultOrdinal(PLYPurchaseResult result) {
+    switch (result) {
+        case PLYPurchaseResultPurchased: return @(0);
+        case PLYPurchaseResultCancelled: return @(1);
+        case PLYPurchaseResultRestored:  return @(2);
+        default:                         return nil; // PLYPurchaseResultNone
+    }
+}
+
+/// Map a `PLYPresentationAction` to its string kind (mirrors Android bridge).
+static NSString *stringFromPresentationAction(PLYPresentationAction action) {
+    switch (action) {
+        case PLYPresentationActionLogin:            return @"login";
+        case PLYPresentationActionPurchase:         return @"purchase";
+        case PLYPresentationActionClose:            return @"close";
+        case PLYPresentationActionCloseAll:         return @"closeAll";
+        case PLYPresentationActionRestore:          return @"restore";
+        case PLYPresentationActionNavigate:         return @"navigate";
+        case PLYPresentationActionPromoCode:        return @"promoCode";
+        case PLYPresentationActionOpenPresentation: return @"openPresentation";
+        case PLYPresentationActionOpenPlacement:    return @"openPlacement";
+        case PLYPresentationActionWebCheckout:      return @"webCheckout";
+    }
+    return @"unknown";
+}
+
+static BOOL presentationActionFromString(NSString *kind, PLYPresentationAction *action) {
+    if ([kind isEqualToString:@"login"])            { *action = PLYPresentationActionLogin;            return YES; }
+    if ([kind isEqualToString:@"purchase"])         { *action = PLYPresentationActionPurchase;         return YES; }
+    if ([kind isEqualToString:@"close"])            { *action = PLYPresentationActionClose;            return YES; }
+    if ([kind isEqualToString:@"closeAll"])         { *action = PLYPresentationActionCloseAll;         return YES; }
+    if ([kind isEqualToString:@"restore"])          { *action = PLYPresentationActionRestore;          return YES; }
+    if ([kind isEqualToString:@"navigate"])         { *action = PLYPresentationActionNavigate;         return YES; }
+    if ([kind isEqualToString:@"promoCode"])        { *action = PLYPresentationActionPromoCode;        return YES; }
+    if ([kind isEqualToString:@"openPresentation"]) { *action = PLYPresentationActionOpenPresentation; return YES; }
+    if ([kind isEqualToString:@"openPlacement"])    { *action = PLYPresentationActionOpenPlacement;    return YES; }
+    if ([kind isEqualToString:@"webCheckout"])      { *action = PLYPresentationActionWebCheckout;      return YES; }
+    return NO;
+}
+
+/// String representation of `PLYWebCheckoutProvider` for the JS payload.
+static NSString *stringFromWebCheckoutProvider(PLYWebCheckoutProvider provider) {
+    switch (provider) {
+        case PLYWebCheckoutProviderStripe: return @"stripe";
+        case PLYWebCheckoutProviderOther:  return @"other";
+        default:                           return @"unknown";
+    }
+}
+
+/// Convert a `PLYPresentation` to the cross-platform map.
+/// Maps `presentation.id` → both `screenId` and `id` (P1.1 parity with RN).
+static NSDictionary *presentationToMap(id<PLYPresentation> presentation) {
+    if (presentation == nil) { return nil; }
+    NSMutableDictionary *map = [NSMutableDictionary new];
+    if (presentation.id != nil) {
+        map[@"screenId"] = presentation.id;
+        map[@"id"]       = presentation.id;
+    }
+    if (presentation.placementId != nil)     { map[@"placementId"]     = presentation.placementId; }
+    if (presentation.audienceId != nil)      { map[@"audienceId"]      = presentation.audienceId; }
+    if (presentation.abTestId != nil)        { map[@"abTestId"]        = presentation.abTestId; }
+    if (presentation.abTestVariantId != nil) { map[@"abTestVariantId"] = presentation.abTestVariantId; }
+    if (presentation.language != nil)        { map[@"language"]        = presentation.language; }
+    map[@"type"]   = @(presentation.type);
+    map[@"height"] = @(presentation.height);
+    if (presentation.plans != nil) {
+        NSMutableArray *plans = [NSMutableArray new];
+        for (PLYPresentationPlan *plan in presentation.plans) {
+            [plans addObject:plan.asDictionary];
+        }
+        map[@"plans"] = plans;
+    }
+    if (presentation.metadata != nil) {
+        map[@"metadata"] = [presentation.metadata getRawMetadata];
+    }
+    return map;
+}
+
+/// Wrap an `NSError` into the `PresentationError` shape.
+static NSDictionary *presentationErrorToMap(NSError *error) {
+    if (error == nil) { return nil; }
+    return @{
+        @"code":    @(error.code),
+        @"domain":  error.domain ?: @"",
+        @"message": error.localizedDescription ?: @"Unknown error",
+    };
+}
+
+/// Build a `PLYPresentationBuilder` from the cross-platform builder payload.
+/// `placementId` wins over `presentationId` (screenId) wins over default.
+static PLYPresentationBuilder *presentationBuilderFor(NSString *placementId,
+                                                      NSString *presentationId,
+                                                      NSString *contentId,
+                                                      BOOL isDefault) {
+    PLYPresentationBuilder *builder = nil;
+    if (placementId != nil) {
+        builder = [PLYPresentationBuilder forPlacementId:placementId];
+    } else if (presentationId != nil) {
+        builder = [PLYPresentationBuilder forScreenId:presentationId];
+    } else if (isDefault) {
+        builder = [[PLYPresentationBuilder alloc] init];
+    }
+    if (builder != nil && contentId != nil) {
+        [builder contentId:contentId];
+    }
+    return builder;
+}
+
 @implementation CDVPurchasely
 
 - (instancetype)init {
     self = [super init];
 
-    self.presentationsLoaded = [NSMutableArray new];
-    self.shouldReopenPaywall = NO;
-
     return self;
 }
+
+#pragma mark - transport helper (kept-alive emit)
+
+/// Emit `dict` on the kept-alive Cordova callback identified by `callbackId`.
+- (void)emitOn:(NSString *)callbackId dict:(NSDictionary *)dict {
+    if (callbackId == nil) { return; }
+    CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:dict];
+    [result setKeepCallbackAsBool:YES];
+    [self.commandDelegate sendPluginResult:result callbackId:callbackId];
+}
+
+#pragma mark - payload parsing
+
+- (void)extractPresentationTargets:(NSDictionary *)payload
+                       toPlacement:(NSString * __autoreleasing *)placementId
+                    toPresentation:(NSString * __autoreleasing *)presentationId
+                       toContentId:(NSString * __autoreleasing *)contentId
+                       toIsDefault:(BOOL *)isDefault {
+    id p = payload[@"placementId"];
+    if (p != nil && p != [NSNull null]) { *placementId = p; }
+    id s = payload[@"presentationId"];
+    if (s != nil && s != [NSNull null]) { *presentationId = s; }
+    id c = payload[@"contentId"];
+    if (c != nil && c != [NSNull null]) { *contentId = c; }
+    id d = payload[@"isDefault"];
+    if ([d isKindOfClass:[NSNumber class]]) { *isDefault = [d boolValue]; }
+}
+
+#pragma mark - start
 
 - (void)start:(CDVInvokedUrlCommand*)command {
     NSString *apiKey = [command argumentAtIndex:0];
@@ -29,10 +210,7 @@
     NSInteger runningMode = [[command argumentAtIndex:5] intValue];
     NSString *purchaselySdkVersion = [command argumentAtIndex:6];
 
-    // SDK v6: the single startWithAPIKey:... call is replaced by the fluent
-    // PurchaselyBuilder chain. runningMode is passed through from JS as
-    // PLYRunningMode raw value (observer = 2, full = 3). Note the default
-    // running mode changed to .observer in v6 — the JS layer always passes one.
+    // SDK v6: fluent PurchaselyBuilder chain.
     PurchaselyBuilder *builder = [Purchasely apiKey:apiKey];
     [builder appUserId:userId];
     [builder runningMode:runningMode];
@@ -48,6 +226,470 @@
         }
     }];
 }
+
+#pragma mark - applyStartOptions
+
+- (void)applyStartOptions:(CDVInvokedUrlCommand*)command {
+    NSDictionary *options = [command argumentAtIndex:0];
+    if (![options isKindOfClass:[NSDictionary class]]) { return; }
+    id allowDeeplink = options[@"allowDeeplink"];
+    if ([allowDeeplink isKindOfClass:[NSNumber class]]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [Purchasely allowDeeplink:[allowDeeplink boolValue]];
+        });
+    }
+    // `allowCampaigns` is honored on Android via the consent manager; on iOS
+    // the equivalent is not yet exposed publicly — JS clients receive the value
+    // but iOS does not yet act on it.
+    id allowCampaigns = options[@"allowCampaigns"];
+    if ([allowCampaigns isKindOfClass:[NSNumber class]] && ![allowCampaigns boolValue]) {
+        NSLog(@"[Purchasely] allowCampaigns(false) is not bridged on iOS yet");
+    }
+}
+
+#pragma mark - preloadPresentation
+
+- (void)preloadPresentation:(CDVInvokedUrlCommand*)command {
+    ensurePresentationState();
+
+    NSString *requestId = [command argumentAtIndex:0];
+    NSDictionary *payload = [command argumentAtIndex:1];
+
+    NSString *placementId = nil, *presentationId = nil, *contentId = nil;
+    BOOL isDefault = NO;
+    [self extractPresentationTargets:payload
+                         toPlacement:&placementId
+                      toPresentation:&presentationId
+                         toContentId:&contentId
+                         toIsDefault:&isDefault];
+
+    // Store the kept-alive callbackId so we can emit events for this requestId.
+    @synchronized (kPresentationStateLock) {
+        kCallbacksByRequest[requestId] = command.callbackId;
+    }
+
+    __weak CDVPurchasely *weakSelf = self;
+    void (^onFetchCompletion)(id<PLYPresentation> _Nullable, NSError * _Nullable) =
+    ^(id<PLYPresentation> _Nullable presentation, NSError * _Nullable error) {
+        CDVPurchasely *strongSelf = weakSelf;
+        if (!strongSelf) { return; }
+
+        NSMutableDictionary *event = [NSMutableDictionary new];
+        event[@"type"]      = @"loaded";
+        event[@"requestId"] = requestId;
+        if (presentation != nil) {
+            event[@"presentation"] = presentationToMap(presentation);
+            @synchronized (kPresentationStateLock) {
+                kPresentationsByRequest[requestId] = presentation;
+            }
+        }
+        if (error != nil) {
+            event[@"error"] = presentationErrorToMap(error);
+        }
+        NSString *cbId = nil;
+        @synchronized (kPresentationStateLock) {
+            cbId = kCallbacksByRequest[requestId];
+        }
+        [strongSelf emitOn:cbId dict:event];
+    };
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        PLYPresentationBuilder *builder = presentationBuilderFor(placementId, presentationId, contentId, isDefault);
+        if (builder == nil) {
+            NSError *error = [NSError errorWithDomain:@"io.purchasely.presentation"
+                                                 code:400
+                                             userInfo:@{NSLocalizedDescriptionKey: @"No placementId or screenId provided"}];
+            onFetchCompletion(nil, error);
+            return;
+        }
+        id<PLYPresentationRequest> request = [builder build];
+        [request preloadWithCompletion:onFetchCompletion];
+    });
+}
+
+#pragma mark - displayPresentation
+
+- (void)displayPresentation:(CDVInvokedUrlCommand*)command {
+    ensurePresentationState();
+
+    NSString *requestId   = [command argumentAtIndex:0];
+    NSDictionary *payload    = [command argumentAtIndex:1];
+    NSDictionary *transition = [command argumentAtIndex:2];
+
+    NSString *placementId = nil, *presentationId = nil, *contentId = nil;
+    BOOL isDefault = NO;
+    [self extractPresentationTargets:payload
+                         toPlacement:&placementId
+                      toPresentation:&presentationId
+                         toContentId:&contentId
+                         toIsDefault:&isDefault];
+
+    // Store kept-alive callbackId for this request.
+    @synchronized (kPresentationStateLock) {
+        kCallbacksByRequest[requestId] = command.callbackId;
+    }
+
+    __weak CDVPurchasely *weakSelf = self;
+    __block id<PLYPresentation> capturedPresentation = nil;
+    __block PLYPurchaseResult   capturedResult       = PLYPurchaseResultCancelled;
+    __block PLYPlan             *capturedPlan        = nil;
+    __block BOOL                hasPurchaseOutcome   = NO;
+    __block PLYCloseReason      capturedCloseReason  = PLYCloseReasonNone;
+
+    void (^emitDismissed)(NSError * _Nullable) = ^(NSError * _Nullable error) {
+        CDVPurchasely *strongSelf = weakSelf;
+        if (!strongSelf) { return; }
+        NSMutableDictionary *body = [NSMutableDictionary new];
+        body[@"type"]      = @"dismissed";
+        body[@"requestId"] = requestId;
+        if (capturedPresentation != nil) {
+            body[@"presentation"] = presentationToMap(capturedPresentation);
+        }
+        if (hasPurchaseOutcome) {
+            NSNumber *ordinal = purchaseResultOrdinal(capturedResult);
+            if (ordinal != nil) { body[@"purchaseResult"] = ordinal; }
+            if (capturedPlan != nil) { body[@"plan"] = [capturedPlan asDictionary]; }
+        }
+        if (error != nil) {
+            body[@"error"] = presentationErrorToMap(error);
+        } else {
+            // Exclusion rule: only surface closeReason when there is no error.
+            NSString *reason = closeReasonToString(capturedCloseReason);
+            if (reason != nil) { body[@"closeReason"] = reason; }
+        }
+        NSString *cbId = nil;
+        @synchronized (kPresentationStateLock) {
+            cbId = kCallbacksByRequest[requestId];
+            [kPresentationsByRequest removeObjectForKey:requestId];
+            [kCallbacksByRequest removeObjectForKey:requestId];
+        }
+        [strongSelf emitOn:cbId dict:body];
+    };
+
+    void (^onFetchCompletion)(id<PLYPresentation> _Nullable, NSError * _Nullable) =
+    ^(id<PLYPresentation> _Nullable presentation, NSError * _Nullable error) {
+        CDVPurchasely *strongSelf = weakSelf;
+        if (!strongSelf) { return; }
+
+        NSString *cbId = nil;
+        @synchronized (kPresentationStateLock) {
+            cbId = kCallbacksByRequest[requestId];
+        }
+
+        // Emit `loaded`.
+        NSMutableDictionary *loaded = [NSMutableDictionary new];
+        loaded[@"type"]      = @"loaded";
+        loaded[@"requestId"] = requestId;
+        if (presentation != nil) { loaded[@"presentation"] = presentationToMap(presentation); }
+        if (error != nil)        { loaded[@"error"]        = presentationErrorToMap(error); }
+        [strongSelf emitOn:cbId dict:loaded];
+
+        if (error != nil) {
+            // P0.4: synthesize an onPresented(null, error).
+            NSMutableDictionary *presented = [NSMutableDictionary new];
+            presented[@"type"]      = @"presented";
+            presented[@"requestId"] = requestId;
+            presented[@"error"]     = presentationErrorToMap(error);
+            [strongSelf emitOn:cbId dict:presented];
+            emitDismissed(error);
+            return;
+        }
+
+        if (presentation == nil) {
+            NSError *missing = [NSError errorWithDomain:@"io.purchasely.presentation"
+                                                   code:404
+                                               userInfo:@{NSLocalizedDescriptionKey: @"Presentation not found"}];
+            NSMutableDictionary *presented = [NSMutableDictionary new];
+            presented[@"type"]      = @"presented";
+            presented[@"requestId"] = requestId;
+            presented[@"error"]     = presentationErrorToMap(missing);
+            [strongSelf emitOn:cbId dict:presented];
+            emitDismissed(missing);
+            return;
+        }
+
+        capturedPresentation = presentation;
+        @synchronized (kPresentationStateLock) {
+            kPresentationsByRequest[requestId] = presentation;
+        }
+
+        // Emit `presented`.
+        NSMutableDictionary *presented = [NSMutableDictionary new];
+        presented[@"type"]         = @"presented";
+        presented[@"requestId"]    = requestId;
+        presented[@"presentation"] = presentationToMap(presentation);
+        [strongSelf emitOn:cbId dict:presented];
+
+        UIViewController *controller = presentation.controller;
+        if (controller == nil) {
+            NSError *err = [NSError errorWithDomain:@"io.purchasely.presentation"
+                                               code:500
+                                           userInfo:@{NSLocalizedDescriptionKey: @"Presentation has no controller"}];
+            emitDismissed(err);
+            return;
+        }
+
+        // Apply the transition `dismissible` flag if provided.
+        if ([transition isKindOfClass:[NSDictionary class]]) {
+            id dismissible = transition[@"dismissible"];
+            if ([dismissible isKindOfClass:[NSNumber class]]) {
+                controller.modalInPresentation = ![dismissible boolValue];
+            }
+        }
+
+        strongSelf.presentedPresentationViewController = controller;
+        [Purchasely showController:controller type:PLYUIControllerTypeProductPage from:nil];
+    };
+
+    // v6: dismiss outcome is delivered through the builder's `onDismissed` handler.
+    void (^onDismissed)(PLYPresentationOutcome *) = ^(PLYPresentationOutcome *outcome) {
+        capturedResult      = outcome.purchaseResult;
+        capturedPlan        = outcome.plan;
+        hasPurchaseOutcome  = YES;
+        capturedCloseReason = outcome.closeReason;
+        if (outcome.presentation != nil) {
+            capturedPresentation = outcome.presentation;
+        }
+        emitDismissed(outcome.error);
+    };
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        PLYPresentationBuilder *builder = presentationBuilderFor(placementId, presentationId, contentId, isDefault);
+        if (builder == nil) {
+            NSError *error = [NSError errorWithDomain:@"io.purchasely.presentation"
+                                                 code:400
+                                             userInfo:@{NSLocalizedDescriptionKey: @"No placementId or screenId provided"}];
+            onFetchCompletion(nil, error);
+            return;
+        }
+        [builder onDismissed:onDismissed];
+        id<PLYPresentationRequest> request = [builder build];
+        [request preloadWithCompletion:onFetchCompletion];
+    });
+}
+
+#pragma mark - closePresentation / goBackToPreviousScreen
+
+- (void)closePresentation:(CDVInvokedUrlCommand*)command {
+    ensurePresentationState();
+    NSString *requestId = [command argumentAtIndex:0];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        // Notify JS so the host app can react before the native dismissal happens.
+        NSString *cbId = nil;
+        @synchronized (kPresentationStateLock) {
+            cbId = kCallbacksByRequest[requestId];
+        }
+        [self emitOn:cbId dict:@{ @"type": @"closeRequested", @"requestId": requestId ?: @"" }];
+
+        id<PLYPresentation> presentation = nil;
+        @synchronized (kPresentationStateLock) {
+            presentation = kPresentationsByRequest[requestId];
+        }
+        self.presentedPresentationViewController = nil;
+        if (presentation != nil) {
+            [presentation close];
+        } else {
+            [Purchasely closeAllScreens];
+        }
+        @synchronized (kPresentationStateLock) {
+            [kPresentationsByRequest removeObjectForKey:requestId];
+        }
+    });
+}
+
+- (void)goBackToPreviousScreen:(CDVInvokedUrlCommand*)command {
+    // The iOS SDK does not expose a `back()` primitive on the presentation
+    // controller. Bridge contract says: noop with a warn (mirrors RN).
+    NSString *requestId = [command argumentAtIndex:0];
+    NSLog(@"[Purchasely] goBackToPreviousScreen(%@) is not yet bridged on iOS", requestId);
+}
+
+#pragma mark - setDefaultPresentationDismissHandler / removeDefaultPresentationDismissHandler
+
+// Global handler for presentations the app did NOT instantiate itself
+// (campaigns, deeplinks, Promoted In-App Purchases). v6 renamed the native
+// `setDefaultPresentationResultHandler:` → `setDefaultPresentationDismissHandler:`.
+// The single call below will NOT compile until iOS PR #652 ships. // gated by iOS PR #652
+- (void)setDefaultPresentationDismissHandler:(CDVInvokedUrlCommand*)command {
+    ensurePresentationState();
+    self.defaultDismissCallbackId = command.callbackId;
+
+    __weak CDVPurchasely *weakSelf = self;
+    void (^handler)(PLYPresentationOutcome *) = ^(PLYPresentationOutcome *outcome) {
+        CDVPurchasely *strongSelf = weakSelf;
+        if (!strongSelf) { return; }
+
+        NSMutableDictionary *body = [NSMutableDictionary new];
+        // `presentation` is always populated for this handler.
+        if (outcome.presentation != nil) {
+            body[@"presentation"] = presentationToMap(outcome.presentation);
+        }
+        NSNumber *ordinal = purchaseResultOrdinal(outcome.purchaseResult);
+        if (ordinal != nil) { body[@"purchaseResult"] = ordinal; }
+        if (outcome.plan != nil) { body[@"plan"] = [outcome.plan asDictionary]; }
+        NSString *closeReason = closeReasonToString(outcome.closeReason);
+        if (closeReason != nil) { body[@"closeReason"] = closeReason; }
+        if (outcome.error != nil) { body[@"error"] = presentationErrorToMap(outcome.error); }
+
+        [strongSelf emitOn:strongSelf.defaultDismissCallbackId dict:body];
+    };
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        // Guard against SDK builds that predate the v6 rename (#652). // gated by iOS PR #652
+        if ([Purchasely respondsToSelector:@selector(setDefaultPresentationDismissHandler:)]) {
+            [Purchasely setDefaultPresentationDismissHandler:handler];
+        } else {
+            NSLog(@"[Purchasely] setDefaultPresentationDismissHandler is unavailable in this native SDK build; the global default dismiss handler will not fire.");
+        }
+    });
+}
+
+- (void)removeDefaultPresentationDismissHandler:(CDVInvokedUrlCommand*)command {
+    self.defaultDismissCallbackId = nil;
+    // No native API to de-register; setting nil block effectively silences it.
+}
+
+#pragma mark - per-action interceptors
+
+- (void)registerActionInterceptor:(CDVInvokedUrlCommand*)command {
+    ensurePresentationState();
+    NSString *kind = [command argumentAtIndex:0];
+
+    PLYPresentationAction nativeAction;
+    if (!presentationActionFromString(kind, &nativeAction)) {
+        NSLog(@"[Purchasely] unknown interceptor kind: %@", kind);
+        return;
+    }
+
+    @synchronized (kPresentationStateLock) {
+        [kInterceptorKinds addObject:kind];
+    }
+
+    // Store the kept-alive callbackId so the interceptor block can emit events.
+    NSString *interceptCallbackId = command.callbackId;
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        __weak CDVPurchasely *weakSelf = self;
+        [Purchasely interceptAction:nativeAction
+                             handler:^(PLYInterceptorInfo * _Nonnull infos,
+                                       PLYPresentationActionParameters * _Nullable params,
+                                       void (^ _Nonnull completion)(PLYInterceptResult)) {
+            CDVPurchasely *strongSelf = weakSelf;
+            if (!strongSelf) {
+                completion(PLYInterceptResultNotHandled);
+                return;
+            }
+
+            NSString *callbackId = [[NSUUID UUID] UUIDString];
+            @synchronized (kPresentationStateLock) {
+                kInterceptorCallbacks[callbackId] = ^(NSString *result) {
+                    if ([result isEqualToString:@"success"]) {
+                        completion(PLYInterceptResultSuccess);
+                    } else if ([result isEqualToString:@"failed"]) {
+                        completion(PLYInterceptResultFailed);
+                    } else {
+                        completion(PLYInterceptResultNotHandled);
+                    }
+                };
+            }
+
+            // Build info dict.
+            NSMutableDictionary *info = [NSMutableDictionary new];
+            if (infos.contentId != nil) { info[@"contentId"] = infos.contentId; }
+            if (infos.presentation != nil) { info[@"presentation"] = presentationToMap(infos.presentation); }
+
+            // Build action-specific payload.
+            NSMutableDictionary *payloadOut = [NSMutableDictionary new];
+            if (params != nil) {
+                switch (nativeAction) {
+                    case PLYPresentationActionNavigate: {
+                        payloadOut[@"url"] = params.url.absoluteString ?: @"";
+                        if (params.title != nil) { payloadOut[@"title"] = params.title; }
+                        break;
+                    }
+                    case PLYPresentationActionPurchase: {
+                        if (params.plan != nil) { payloadOut[@"plan"] = [params.plan asDictionary]; }
+                        if (params.promoOffer != nil) {
+                            NSMutableDictionary *offer = [NSMutableDictionary new];
+                            if (params.promoOffer.vendorId != nil)    { offer[@"vendorId"]    = params.promoOffer.vendorId; }
+                            if (params.promoOffer.storeOfferId != nil) { offer[@"storeOfferId"] = params.promoOffer.storeOfferId; }
+                            payloadOut[@"offer"] = offer;
+                        }
+                        break;
+                    }
+                    case PLYPresentationActionClose:
+                    case PLYPresentationActionCloseAll: {
+                        payloadOut[@"closeReason"] = @"button";
+                        break;
+                    }
+                    case PLYPresentationActionOpenPresentation: {
+                        if (params.presentation != nil) { payloadOut[@"presentationId"] = params.presentation; }
+                        break;
+                    }
+                    case PLYPresentationActionOpenPlacement: {
+                        if (params.placement != nil) { payloadOut[@"placementId"] = params.placement; }
+                        break;
+                    }
+                    case PLYPresentationActionWebCheckout: {
+                        payloadOut[@"url"] = params.url.absoluteString ?: @"";
+                        if (params.clientReferenceId != nil)  { payloadOut[@"clientReferenceId"]  = params.clientReferenceId; }
+                        if (params.queryParameterKey != nil)  { payloadOut[@"queryParameterKey"]  = params.queryParameterKey; }
+                        payloadOut[@"webCheckoutProvider"] = stringFromWebCheckoutProvider(params.webCheckoutProvider);
+                        break;
+                    }
+                    default:
+                        break;
+                }
+            }
+
+            NSMutableDictionary *event = [NSMutableDictionary new];
+            event[@"callbackId"] = callbackId;
+            event[@"kind"]       = kind;
+            event[@"info"]       = info;
+            event[@"payload"]    = payloadOut;
+            [strongSelf emitOn:interceptCallbackId dict:event];
+        }];
+    });
+}
+
+- (void)unregisterActionInterceptor:(CDVInvokedUrlCommand*)command {
+    ensurePresentationState();
+    NSString *kind = [command argumentAtIndex:0];
+
+    PLYPresentationAction nativeAction;
+    if (!presentationActionFromString(kind, &nativeAction)) {
+        NSLog(@"[Purchasely] unknown interceptor kind: %@", kind);
+        return;
+    }
+
+    @synchronized (kPresentationStateLock) {
+        [kInterceptorKinds removeObject:kind];
+    }
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [Purchasely removeActionInterceptor:nativeAction];
+    });
+}
+
+- (void)completeActionInterceptor:(CDVInvokedUrlCommand*)command {
+    ensurePresentationState();
+    NSString *callbackId = [command argumentAtIndex:0];
+    NSString *result     = [command argumentAtIndex:1];
+
+    void (^cb)(NSString *) = nil;
+    @synchronized (kPresentationStateLock) {
+        cb = kInterceptorCallbacks[callbackId];
+        if (cb != nil) {
+            [kInterceptorCallbacks removeObjectForKey:callbackId];
+        }
+    }
+    // Invoke outside the lock — the callback re-enters the SDK's action handler.
+    if (cb != nil) {
+        cb(result);
+    }
+}
+
+#pragma mark - other methods
 
 - (void)setLogLevel:(CDVInvokedUrlCommand*)command {
     NSInteger logLevel = [[command argumentAtIndex:0] intValue];
@@ -67,7 +709,6 @@
 
 - (void)setThemeMode:(CDVInvokedUrlCommand *)command {
     NSInteger mode = [[command argumentAtIndex:0] intValue];
-
     [Purchasely setThemeMode:(enum PLYThemeMode) mode];
 }
 
@@ -75,84 +716,36 @@
     NSNumber *attributeNumber = [command argumentAtIndex:0];
     NSString *value = [command argumentAtIndex:1];
 
-    if (attributeNumber == nil || value == nil) {
-        return;
-    }
+    if (attributeNumber == nil || value == nil) { return; }
 
     NSInteger rawAttribute = [attributeNumber integerValue];
     PLYAttribute *attribute = nil;
 
     switch (rawAttribute) {
-        case CordovaPLYAttributeFirebaseAppInstanceId:
-            attribute = PLYAttributeFirebaseAppInstanceId;
-            break;
-        case CordovaPLYAttributeAirshipChannelId:
-            attribute = PLYAttributeAirshipChannelId;
-            break;
-        case CordovaPLYAttributeAirshipUserId:
-            attribute = PLYAttributeAirshipUserId;
-            break;
-        case CordovaPLYAttributeBatchInstallationId:
-            attribute = PLYAttributeBatchInstallationId;
-            break;
-        case CordovaPLYAttributeAdjustId:
-            attribute = PLYAttributeAdjustId;
-            break;
-        case CordovaPLYAttributeAppsflyerId:
-            attribute = PLYAttributeAppsflyerId;
-            break;
-        case CordovaPLYAttributeMixpanelDistinctId:
-            attribute = PLYAttributeMixpanelDistinctId;
-            break;
-        case CordovaPLYAttributeCleverTapId:
-            attribute = PLYAttributeClevertapId;
-            break;
-        case CordovaPLYAttributeSendinblueUserEmail:
-            attribute = PLYAttributeSendinblueUserEmail;
-            break;
-        case CordovaPLYAttributeIterableUserEmail:
-            attribute = PLYAttributeIterableUserEmail;
-            break;
-        case CordovaPLYAttributeIterableUserId:
-            attribute = PLYAttributeIterableUserId;
-            break;
-        case CordovaPLYAttributeAtInternetIdClient:
-            attribute = PLYAttributeAtInternetIdClient;
-            break;
-        case CordovaPLYAttributeMParticleUserId:
-            attribute = PLYAttributeMParticleUserId;
-            break;
-        case CordovaPLYAttributeCustomerioUserId:
-            attribute = PLYAttributeCustomerioUserId;
-            break;
-        case CordovaPLYAttributeCustomerioUserEmail:
-            attribute = PLYAttributeCustomerioUserEmail;
-            break;
-        case CordovaPLYAttributeBranchUserDeveloperIdentity:
-            attribute = PLYAttributeBranchUserDeveloperIdentity;
-            break;
-        case CordovaPLYAttributeAmplitudeUserId:
-            attribute = PLYAttributeAmplitudeUserId;
-            break;
-        case CordovaPLYAttributeAmplitudeDeviceId:
-            attribute = PLYAttributeAmplitudeDeviceId;
-            break;
-        case CordovaPLYAttributeMoengageUniqueId:
-            attribute = PLYAttributeMoengageUniqueId;
-            break;
-        case CordovaPLYAttributeOneSignalExternalId:
-            attribute = PLYAttributeOneSignalExternalId;
-            break;
-        case CordovaPLYAttributeBatchCustomUserId:
-            attribute = PLYAttributeBatchCustomUserId;
-            break;
+        case CordovaPLYAttributeFirebaseAppInstanceId:    attribute = PLYAttributeFirebaseAppInstanceId;    break;
+        case CordovaPLYAttributeAirshipChannelId:         attribute = PLYAttributeAirshipChannelId;         break;
+        case CordovaPLYAttributeAirshipUserId:            attribute = PLYAttributeAirshipUserId;            break;
+        case CordovaPLYAttributeBatchInstallationId:      attribute = PLYAttributeBatchInstallationId;      break;
+        case CordovaPLYAttributeAdjustId:                 attribute = PLYAttributeAdjustId;                 break;
+        case CordovaPLYAttributeAppsflyerId:              attribute = PLYAttributeAppsflyerId;              break;
+        case CordovaPLYAttributeMixpanelDistinctId:       attribute = PLYAttributeMixpanelDistinctId;       break;
+        case CordovaPLYAttributeCleverTapId:              attribute = PLYAttributeClevertapId;              break;
+        case CordovaPLYAttributeSendinblueUserEmail:      attribute = PLYAttributeSendinblueUserEmail;      break;
+        case CordovaPLYAttributeIterableUserEmail:        attribute = PLYAttributeIterableUserEmail;        break;
+        case CordovaPLYAttributeIterableUserId:           attribute = PLYAttributeIterableUserId;           break;
+        case CordovaPLYAttributeAtInternetIdClient:       attribute = PLYAttributeAtInternetIdClient;       break;
+        case CordovaPLYAttributeMParticleUserId:          attribute = PLYAttributeMParticleUserId;          break;
+        case CordovaPLYAttributeCustomerioUserId:         attribute = PLYAttributeCustomerioUserId;         break;
+        case CordovaPLYAttributeCustomerioUserEmail:      attribute = PLYAttributeCustomerioUserEmail;      break;
+        case CordovaPLYAttributeBranchUserDeveloperIdentity: attribute = PLYAttributeBranchUserDeveloperIdentity; break;
+        case CordovaPLYAttributeAmplitudeUserId:          attribute = PLYAttributeAmplitudeUserId;          break;
+        case CordovaPLYAttributeAmplitudeDeviceId:        attribute = PLYAttributeAmplitudeDeviceId;        break;
+        case CordovaPLYAttributeMoengageUniqueId:         attribute = PLYAttributeMoengageUniqueId;         break;
+        case CordovaPLYAttributeOneSignalExternalId:      attribute = PLYAttributeOneSignalExternalId;      break;
+        case CordovaPLYAttributeBatchCustomUserId:        attribute = PLYAttributeBatchCustomUserId;        break;
     }
 
-
-    if (attribute == nil) {
-        return;
-    }
-
+    if (attribute == nil) { return; }
     [Purchasely setAttribute:attribute value:value];
 }
 
@@ -164,103 +757,6 @@
 - (void)allowDeeplink:(CDVInvokedUrlCommand*)command {
     BOOL allow = [[command argumentAtIndex:0] boolValue];
     [Purchasely allowDeeplink: allow];
-}
-
-// v6: renamed from setDefaultPresentationResultHandler (breaking change). The
-// native handler now delivers a single PLYPresentationOutcome (purchaseResult +
-// closeReason + plan + the presentation that produced it) instead of the legacy
-// (result, plan) pair — aligned on the PLYPresentationBuilder onDismissed callback.
-- (void)setDefaultPresentationDismissHandler:(CDVInvokedUrlCommand*)command {
-    [Purchasely setDefaultPresentationDismissHandler:^(PLYPresentationOutcome * _Nonnull outcome) {
-        NSDictionary *resultDict = [self resultDictionaryForOutcome:outcome];
-
-        CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:resultDict];
-        [pluginResult setKeepCallbackAsBool:YES];
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-    }];
-}
-
-// SDK v6: the controller-returning APIs (presentationControllerWith:/For:,
-// productControllerFor:, planControllerFor:) were removed. Presentations are now
-// built with PLYPresentationBuilder, then displayed. The dismissal result is a
-// PLYPresentationOutcome delivered via the builder's onDismissed handler.
-- (void)displayBuilder:(PLYPresentationBuilder *)builder
-             contentId:(NSString * _Nullable)contentId
-          isFullscreen:(BOOL)isFullscreen
-               command:(CDVInvokedUrlCommand *)command {
-    if (contentId != nil) {
-        [builder contentId:contentId];
-    }
-    [builder onDismissed:^(PLYPresentationOutcome * _Nonnull outcome) {
-        [self successFor:command resultDict:[self resultDictionaryForOutcome:outcome]];
-    }];
-    id<PLYPresentationRequest> request = [builder build];
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (isFullscreen) {
-            [request displayWithTransition:[PLYDisplayMode fullScreen] completion:^(id<PLYPresentation> _Nullable presentation, NSError * _Nullable error) {
-                if (presentation != nil) { self.displayedPresentation = presentation; }
-                if (error != nil) { [self failureFor:command resultString:error.localizedDescription]; }
-            }];
-        } else {
-            [request displayWithCompletion:^(id<PLYPresentation> _Nullable presentation, NSError * _Nullable error) {
-                if (error != nil) { [self failureFor:command resultString:error.localizedDescription]; }
-            }];
-        }
-    });
-}
-
-- (void)presentPresentationWithIdentifier:(CDVInvokedUrlCommand*)command {
-    NSString *screenId = [command argumentAtIndex:0];
-    NSString *contentId = [command argumentAtIndex:1];
-    BOOL isFullscreen = [[command argumentAtIndex:2] boolValue];
-
-    [self displayBuilder:[PLYPresentationBuilder forScreenId:screenId]
-               contentId:contentId
-            isFullscreen:isFullscreen
-                 command:command];
-}
-
-- (void)presentPresentationForPlacement:(CDVInvokedUrlCommand*)command {
-    NSString *placementVendorId = [command argumentAtIndex:0];
-    NSString *contentId = [command argumentAtIndex:1];
-    BOOL isFullscreen = [[command argumentAtIndex:2] boolValue];
-
-    [self displayBuilder:[PLYPresentationBuilder forPlacementId:placementVendorId]
-               contentId:contentId
-            isFullscreen:isFullscreen
-                 command:command];
-}
-
-- (void)presentPlanWithIdentifier:(CDVInvokedUrlCommand*)command {
-    // v6: plan-specific presentation was removed. A presentation is identified by a
-    // placementId or screenId; here we display the screen.
-    NSString *screenId = [command argumentAtIndex:1];
-    NSString *contentId = [command argumentAtIndex:2];
-    BOOL isFullscreen = [[command argumentAtIndex:3] boolValue];
-
-    [self displayBuilder:[PLYPresentationBuilder forScreenId:screenId]
-               contentId:contentId
-            isFullscreen:isFullscreen
-                 command:command];
-}
-
-- (void)presentProductWithIdentifier:(CDVInvokedUrlCommand*)command {
-    // v6: product-specific presentation was removed. A presentation is identified by a
-    // placementId or screenId; here we display the screen.
-    NSString *screenId = [command argumentAtIndex:1];
-    NSString *contentId = [command argumentAtIndex:2];
-    BOOL isFullscreen = [[command argumentAtIndex:3] boolValue];
-
-    [self displayBuilder:[PLYPresentationBuilder forScreenId:screenId]
-               contentId:contentId
-            isFullscreen:isFullscreen
-                 command:command];
-}
-
-- (void)presentSubscriptions:(CDVInvokedUrlCommand*)command {
-    // v6: the native subscriptions list UI (subscriptionsController) was removed.
-    // Build your own UI from userSubscriptions / userSubscriptionsHistory.
-    NSLog(@"[Purchasely] presentSubscriptions is no longer available in SDK v6 (native subscriptions UI removed).");
 }
 
 - (void)purchaseWithPlanVendorId:(CDVInvokedUrlCommand*)command {
@@ -330,8 +826,6 @@
 }
 
 - (void)synchronize:(CDVInvokedUrlCommand*)command {
-    // SDK v6 exposes success/failure callbacks on synchronize — wire them back
-    // to the JS success/error callbacks (was previously fire-and-forget).
     [Purchasely synchronizeWithSuccess:^{
         [self successFor:command];
     } failure:^(NSError * _Nonnull error) {
@@ -350,13 +844,11 @@
 - (void)allProducts:(CDVInvokedUrlCommand*)command {
     [Purchasely allProductsWithSuccess:^(NSArray<PLYProduct *> * _Nonnull products) {
         NSMutableArray *productsArray = [NSMutableArray array];
-
         for (PLYProduct *product in products) {
             if (product != nil) {
                 [productsArray addObject: product.asDictionary];
             }
         }
-
         [self successFor:command resultArray:productsArray];
     } failure:^(NSError * _Nullable error) {
         [self failureFor:command resultString:error.localizedDescription];
@@ -365,7 +857,6 @@
 
 - (void)productWithIdentifier:(CDVInvokedUrlCommand*)command {
     NSString *productVendorId = [command argumentAtIndex:0];
-
     [Purchasely productWith:productVendorId
                     success:^(PLYProduct * _Nonnull product) {
         [self successFor:command resultDict:product.asDictionary];
@@ -377,7 +868,6 @@
 
 - (void)planWithIdentifier:(CDVInvokedUrlCommand*)command {
     NSString *planVendorId = [command argumentAtIndex:0];
-
     [Purchasely planWith:planVendorId
                  success:^(PLYPlan * _Nonnull plan) {
         [self successFor:command resultDict:plan.asDictionary];
@@ -438,7 +928,6 @@
 - (void)handleDeeplink:(CDVInvokedUrlCommand*)command {
     NSString *deeplinkString = [command argumentAtIndex:0];
     NSURL *deeplink = [NSURL URLWithString:deeplinkString];
-
     if (deeplink != nil) {
         BOOL result = [Purchasely handleDeeplink:deeplink];
         [self successFor:command resultBool:result];
@@ -455,25 +944,24 @@
 
 - (void)signPromotionalOffer:(CDVInvokedUrlCommand*)command {
     NSString *storeProductId = [command argumentAtIndex:0];
-    NSString *storeOfferId = [command argumentAtIndex:1];
+    NSString *storeOfferId   = [command argumentAtIndex:1];
 
     dispatch_async(dispatch_get_main_queue(), ^{
         if (@available(iOS 12.2, *)) {
             [Purchasely signPromotionalOfferWithStoreProductId:storeProductId storeOfferId:storeOfferId success:^(PLYOfferSignature * _Nonnull signature) {
                 NSDictionary* result = [self resultSignatureForSignPromoOffer:signature];
-                [self successFor:command resultBool:result];
+                [self successFor:command resultDict:result];
             } failure:^(NSError * _Nullable error) {
                 [self failureFor:command resultString:error.localizedDescription];
             }];
         } else {
-            [self failureFor:command resultString:@"This fonctionality is unavailable before ios 12.2"];
+            [self failureFor:command resultString:@"This functionality is unavailable before iOS 12.2"];
         }
     });
 }
 
 - (void)isEligibleForIntroOffer:(CDVInvokedUrlCommand*)command {
     NSString *planVendorId = [command argumentAtIndex:0];
-
     [Purchasely planWith:planVendorId
                  success:^(PLYPlan * _Nonnull plan) {
         [plan isUserEligibleForIntroductoryOfferWithCompletion:^(BOOL isEligible) {
@@ -484,377 +972,91 @@
     }];
 }
 
-// Helpers
-
-// v6: dismissal now delivers a PLYPresentationOutcome whose PLYPurchaseResult enum
-// is ordered (cancelled=0, purchased=1, restored=2, none=3) — different from the JS
-// PurchaseResult enum (PURCHASED=0, CANCELLED=1, RESTORED=2). Map explicitly so the
-// JS contract is preserved.
-- (NSDictionary<NSString *, NSObject *> *) resultDictionaryForOutcome:(PLYPresentationOutcome * _Nonnull)outcome {
-    NSMutableDictionary<NSString *, NSObject *> *result = [NSMutableDictionary new];
-    int code;
-    NSString *purchaseResultString = nil;
-    switch (outcome.purchaseResult) {
-        case PLYPurchaseResultPurchased: code = 0; purchaseResultString = @"purchased"; break; // JS PURCHASED
-        case PLYPurchaseResultCancelled: code = 1; purchaseResultString = @"cancelled"; break; // JS CANCELLED
-        case PLYPurchaseResultRestored:  code = 2; purchaseResultString = @"restored";  break; // JS RESTORED
-        case PLYPurchaseResultNone:      code = 1; purchaseResultString = nil;          break; // dismissed without a purchase
-        default:                         code = 1; purchaseResultString = nil;          break;
-    }
-    // Legacy fields, kept for source compatibility with existing integrations.
-    [result setObject:[NSNumber numberWithInt:code] forKey:@"result"];
-    if (outcome.plan != nil) {
-        [result setObject:[outcome.plan asDictionary] forKey:@"plan"];
-    }
-    // v6 rich outcome (parity with Flutter / React Native): string purchaseResult,
-    // closeReason, and the presentation that produced the outcome — always populated
-    // for the default dismiss handler so the app can identify the campaign/deeplink.
-    if (purchaseResultString != nil) {
-        [result setObject:purchaseResultString forKey:@"purchaseResult"];
-    }
-    NSString *closeReasonString = nil;
-    switch (outcome.closeReason) {
-        case PLYCloseReasonButton:             closeReasonString = @"button"; break;
-        case PLYCloseReasonInteractiveDismiss: closeReasonString = @"interactiveDismiss"; break; // distinguishable on iOS (parity with Flutter)
-        case PLYCloseReasonProgrammatic:       closeReasonString = @"programmatic"; break;
-        case PLYCloseReasonNone:               closeReasonString = nil; break; // no close (e.g. a purchase/restore)
-        default:                               closeReasonString = nil; break;
-    }
-    if (closeReasonString != nil) {
-        [result setObject:closeReasonString forKey:@"closeReason"];
-    }
-    if (outcome.presentation != nil) {
-        [result setObject:[self resultDictionaryForFetchPresentation:outcome.presentation] forKey:@"presentation"];
-    }
-    return result;
-}
-
-- (NSDictionary<NSString *, NSObject *> *) resultDictionaryForActionInterceptor:(PLYPresentationAction) action
-                                                                     parameters: (PLYPresentationActionParameters * _Nullable) params
-                                                               interceptorInfo: (PLYInterceptorInfo * _Nullable) infos {
-    NSMutableDictionary<NSString *, NSObject *> *actionInterceptorResult = [NSMutableDictionary new];
-
-    NSString* actionString;
-
-    switch (action) {
-        case PLYPresentationActionLogin:
-            actionString = @"login";
-            break;
-        case PLYPresentationActionPurchase:
-            actionString = @"purchase";
-            break;
-        case PLYPresentationActionClose:
-            actionString = @"close";
-            break;
-        case PLYPresentationActionCloseAll:
-            actionString = @"close_all";
-            break;
-        case PLYPresentationActionRestore:
-            actionString = @"restore";
-            break;
-        case PLYPresentationActionNavigate:
-            actionString = @"navigate";
-            break;
-        case PLYPresentationActionPromoCode:
-            actionString = @"promo_code";
-            break;
-        case PLYPresentationActionOpenPresentation:
-            actionString = @"open_presentation";
-            break;
-        case PLYPresentationActionOpenPlacement:
-            actionString = @"open_placement";
-            break;
-        case PLYPresentationActionWebCheckout:
-            actionString = @"web_checkout";
-            break;
-    }
-
-    [actionInterceptorResult setObject:actionString forKey:@"action"];
-
-    if (infos != nil) {
-        // v6: PLYPresentationInfo → PLYInterceptorInfo. The flat id fields were
-        // moved onto the embedded presentation (info.presentation).
-        NSMutableDictionary<NSString *, NSObject *> *infosResult = [NSMutableDictionary new];
-        if (infos.contentId != nil) {
-            [infosResult setObject:infos.contentId forKey:@"contentId"];
-        }
-        id<PLYPresentation> presentation = infos.presentation;
-        if (presentation != nil) {
-            if (presentation.id != nil) {
-                [infosResult setObject:presentation.id forKey:@"presentationId"];
-            }
-            if (presentation.placementId != nil) {
-                [infosResult setObject:presentation.placementId forKey:@"placementId"];
-            }
-            if (presentation.abTestId != nil) {
-                [infosResult setObject:presentation.abTestId forKey:@"abTestId"];
-            }
-            if (presentation.abTestVariantId != nil) {
-                [infosResult setObject:presentation.abTestVariantId forKey:@"abTestVariantId"];
-            }
-        }
-
-        [actionInterceptorResult setObject:infosResult forKey:@"info"];
-    }
-    if (params != nil) {
-        NSMutableDictionary<NSString *, NSObject *> *paramsResult = [NSMutableDictionary new];
-        if (params.url != nil) {
-            [paramsResult setObject:params.url.absoluteString forKey:@"url"];
-        }
-        if (params.plan != nil) {
-            [paramsResult setObject:[params.plan asDictionary] forKey:@"plan"];
-        }
-        if (params.title != nil) {
-            [paramsResult setObject:params.title forKey:@"title"];
-        }
-        if (params.presentation != nil) {
-            [paramsResult setObject:params.presentation forKey:@"presentation"];
-        }
-        if (params.promoOffer != nil) {
-            NSMutableDictionary<NSString *, NSObject *> *promoOffer = [NSMutableDictionary new];
-            [promoOffer setObject:params.promoOffer.vendorId forKey:@"vendorId"];
-            [promoOffer setObject:params.promoOffer.storeOfferId forKey:@"storeOfferId"];
-            [paramsResult setObject:promoOffer forKey:@"offer"];
-        }
-        NSString *webCheckoutProviderString = PLYWebCheckoutProviderToString(params.webCheckoutProvider);
-        [paramsResult setObject:webCheckoutProviderString forKey:@"webCheckoutProvider"];
-        if (params.queryParameterKey != nil) {
-            [paramsResult setObject:params.queryParameterKey forKey:@"queryParameterKey"];
-        }
-        if (params.clientReferenceId != nil) {
-            [paramsResult setObject:params.clientReferenceId forKey:@"clientReferenceId"];
-        }
-        [actionInterceptorResult setObject:paramsResult forKey:@"parameters"];
-    }
-
-    return actionInterceptorResult;
-}
-
-static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider) {
-    switch (provider) {
-        case PLYWebCheckoutProviderStripe:
-            return @"stripe";
-        case PLYWebCheckoutProviderOther:
-            return @"other";
-        default:
-            return @"unknown";
-    }
-}
-
-- (void)setPaywallActionInterceptor:(CDVInvokedUrlCommand*)command {
-    self.paywallActionInterceptorCommand = command;
-
-    // SDK v6: the single global setPaywallActionsInterceptor was removed in favor
-    // of per-action interceptors. We register one for every action and bridge them
-    // all back to the single JS callback, keeping the v5 Cordova contract
-    // (setPaywallActionInterceptor + onProcessAction).
-    enum PLYPresentationAction actions[] = {
-        PLYPresentationActionLogin, PLYPresentationActionPurchase, PLYPresentationActionClose,
-        PLYPresentationActionCloseAll, PLYPresentationActionRestore, PLYPresentationActionNavigate,
-        PLYPresentationActionPromoCode, PLYPresentationActionOpenPresentation,
-        PLYPresentationActionOpenPlacement, PLYPresentationActionWebCheckout
-    };
-    NSUInteger count = sizeof(actions) / sizeof(actions[0]);
-    for (NSUInteger i = 0; i < count; i++) {
-        enum PLYPresentationAction action = actions[i];
-        [Purchasely interceptAction:action handler:^(PLYInterceptorInfo * _Nonnull info, PLYPresentationActionParameters * _Nullable parameters, void (^ _Nonnull completion)(enum PLYInterceptResult)) {
-            // Store the completion so onProcessAction can resolve it later.
-            self.interceptCompletion = completion;
-            NSDictionary *resultDict = [self resultDictionaryForActionInterceptor:action parameters:parameters interceptorInfo:info];
-
-            CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:resultDict];
-            [pluginResult setKeepCallbackAsBool:YES];
-            [self.commandDelegate sendPluginResult:pluginResult callbackId:self.paywallActionInterceptorCommand.callbackId];
-        }];
-    }
-}
-
-- (void)onProcessAction:(CDVInvokedUrlCommand*)command {
-    BOOL processAction = [[command argumentAtIndex:0] boolValue];
-    if (self.interceptCompletion != nil) {
-        // v5 mapping: onProcessAction(true) = let Purchasely proceed = .notHandled,
-        // onProcessAction(false) = app handled the action = .success.
-        self.interceptCompletion(processAction ? PLYInterceptResultNotHandled : PLYInterceptResultSuccess);
-        self.interceptCompletion = nil;
-    }
-}
-
-- (void)closePresentation:(CDVInvokedUrlCommand*)command {
-    // v6: closeDisplayedPresentation was removed; closeAllScreens tears down every
-    // displayed screen (and correctly handles multi-step Flows).
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [Purchasely closeAllScreens];
-    });
-}
-
-- (void)hidePresentation:(CDVInvokedUrlCommand*)command {
-    // v6 has no hide/reopen for a single presentation instance; closeAllScreens is
-    // the closest behavior. Re-fetch + present to display it again.
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [Purchasely closeAllScreens];
-    });
-}
-
-- (void)showPresentation:(CDVInvokedUrlCommand*)command {
-    // v6 has no native hide/show: we re-display the last presentation we displayed
-    // (retained from present*/presentPresentation). hidePresentation closes it; this
-    // brings it back. If nothing was displayed yet, this is a no-op.
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (self.displayedPresentation != nil) {
-            [self.displayedPresentation displayFrom:nil];
-        }
-    });
-}
-
 - (void)userDidConsumeSubscriptionContent:(CDVInvokedUrlCommand*)command {
     [Purchasely userDidConsumeSubscriptionContent];
 }
 
+#pragma mark - user attributes
+
+- (PLYDataProcessingLegalBasis)legalBasisFromArg:(NSString *)arg {
+    if ([arg isEqualToString:@"ESSENTIAL"]) { return PLYDataProcessingLegalBasisEssential; }
+    return PLYDataProcessingLegalBasisOptional;
+}
+
 - (void)setUserAttributeWithStringArray:(CDVInvokedUrlCommand*)command {
-    NSString *key = [command argumentAtIndex:0];
+    NSString *key   = [command argumentAtIndex:0];
     NSArray<NSString *> *array = [command argumentAtIndex:1];
-    NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
-
-    NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
-
-    if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
-        processingLegalBasis = PLYDataProcessingLegalBasisEssential;
-    }
-
-    [Purchasely setUserAttributeWithStringArray:array forKey:key processingLegalBasis:processingLegalBasis];
+    PLYDataProcessingLegalBasis lb = [self legalBasisFromArg:[command argumentAtIndex:2]];
+    [Purchasely setUserAttributeWithStringArray:array forKey:key processingLegalBasis:lb];
 }
 
 - (void)setUserAttributeWithBooleanArray:(CDVInvokedUrlCommand*)command {
-    NSString *key = [command argumentAtIndex:0];
+    NSString *key   = [command argumentAtIndex:0];
     NSArray *values = [command argumentAtIndex:1];
-    NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
-
+    PLYDataProcessingLegalBasis lb = [self legalBasisFromArg:[command argumentAtIndex:2]];
     NSMutableArray<NSNumber *> *boolArray = [NSMutableArray array];
-    for (id value in values) {
-        [boolArray addObject:@([value boolValue])];
-    }
-
-    NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
-
-    if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
-        processingLegalBasis = PLYDataProcessingLegalBasisEssential;
-    }
-
-    [Purchasely setUserAttributeWithBoolArray:boolArray forKey:key processingLegalBasis:processingLegalBasis];
+    for (id value in values) { [boolArray addObject:@([value boolValue])]; }
+    [Purchasely setUserAttributeWithBoolArray:boolArray forKey:key processingLegalBasis:lb];
 }
 
 - (void)setUserAttributeWithIntArray:(CDVInvokedUrlCommand*)command {
-    NSString *key = [command argumentAtIndex:0];
+    NSString *key   = [command argumentAtIndex:0];
     NSArray *values = [command argumentAtIndex:1];
-    NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
-
+    PLYDataProcessingLegalBasis lb = [self legalBasisFromArg:[command argumentAtIndex:2]];
     NSMutableArray<NSNumber *> *intArray = [NSMutableArray array];
-    for (id val in values) {
-        [intArray addObject:@([val intValue])];
-    }
-
-    NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
-
-    if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
-        processingLegalBasis = PLYDataProcessingLegalBasisEssential;
-    }
-
-    [Purchasely setUserAttributeWithIntArray:intArray forKey:key processingLegalBasis:processingLegalBasis];
+    for (id val in values) { [intArray addObject:@([val intValue])]; }
+    [Purchasely setUserAttributeWithIntArray:intArray forKey:key processingLegalBasis:lb];
 }
 
 - (void)setUserAttributeWithDoubleArray:(CDVInvokedUrlCommand*)command {
-    NSString *key = [command argumentAtIndex:0];
+    NSString *key   = [command argumentAtIndex:0];
     NSArray *values = [command argumentAtIndex:1];
-    NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
-
+    PLYDataProcessingLegalBasis lb = [self legalBasisFromArg:[command argumentAtIndex:2]];
     NSMutableArray<NSNumber *> *doubleArray = [NSMutableArray array];
-    for (id val in values) {
-        [doubleArray addObject:@([val doubleValue])];
-    }
-
-    NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
-
-    if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
-        processingLegalBasis = PLYDataProcessingLegalBasisEssential;
-    }
-
-    [Purchasely setUserAttributeWithDoubleArray:doubleArray forKey:key processingLegalBasis:processingLegalBasis];
+    for (id val in values) { [doubleArray addObject:@([val doubleValue])]; }
+    [Purchasely setUserAttributeWithDoubleArray:doubleArray forKey:key processingLegalBasis:lb];
 }
 
 - (void)setUserAttributeWithString:(CDVInvokedUrlCommand*)command {
-    NSString *key = [command argumentAtIndex:0];
+    NSString *key   = [command argumentAtIndex:0];
     NSString *value = [command argumentAtIndex:1];
-    NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
-
-    NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
-
-    if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
-        processingLegalBasis = PLYDataProcessingLegalBasisEssential;
-    }
-
-    [Purchasely setUserAttributeWithStringValue:value forKey:key processingLegalBasis:processingLegalBasis];
+    PLYDataProcessingLegalBasis lb = [self legalBasisFromArg:[command argumentAtIndex:2]];
+    [Purchasely setUserAttributeWithStringValue:value forKey:key processingLegalBasis:lb];
 }
 
 - (void)setUserAttributeWithBoolean:(CDVInvokedUrlCommand*)command {
     NSString *key = [command argumentAtIndex:0];
-    BOOL value = [[command argumentAtIndex:1] boolValue];
-    NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
-
-    NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
-
-    if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
-        processingLegalBasis = PLYDataProcessingLegalBasisEssential;
-    }
-
-    [Purchasely setUserAttributeWithBoolValue:value forKey:key processingLegalBasis:processingLegalBasis];
+    BOOL value    = [[command argumentAtIndex:1] boolValue];
+    PLYDataProcessingLegalBasis lb = [self legalBasisFromArg:[command argumentAtIndex:2]];
+    [Purchasely setUserAttributeWithBoolValue:value forKey:key processingLegalBasis:lb];
 }
 
 - (void)setUserAttributeWithInt:(CDVInvokedUrlCommand*)command {
-    NSString *key = [command argumentAtIndex:0];
+    NSString *key   = [command argumentAtIndex:0];
     NSInteger value = [[command argumentAtIndex:1] intValue];
-    NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
-
-    NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
-
-    if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
-        processingLegalBasis = PLYDataProcessingLegalBasisEssential;
-    }
-
-    [Purchasely setUserAttributeWithIntValue:value forKey:key processingLegalBasis:processingLegalBasis];
+    PLYDataProcessingLegalBasis lb = [self legalBasisFromArg:[command argumentAtIndex:2]];
+    [Purchasely setUserAttributeWithIntValue:value forKey:key processingLegalBasis:lb];
 }
 
 - (void)setUserAttributeWithDouble:(CDVInvokedUrlCommand*)command {
     NSString *key = [command argumentAtIndex:0];
-    double value = [[command argumentAtIndex:1] doubleValue];
-    NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
-
-    NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
-
-    if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
-        processingLegalBasis = PLYDataProcessingLegalBasisEssential;
-    }
-
-    [Purchasely setUserAttributeWithDoubleValue:value forKey:key processingLegalBasis:processingLegalBasis];
+    double value  = [[command argumentAtIndex:1] doubleValue];
+    PLYDataProcessingLegalBasis lb = [self legalBasisFromArg:[command argumentAtIndex:2]];
+    [Purchasely setUserAttributeWithDoubleValue:value forKey:key processingLegalBasis:lb];
 }
 
 - (void)setUserAttributeWithDate:(CDVInvokedUrlCommand*)command {
-    NSString *key = [command argumentAtIndex:0];
+    NSString *key   = [command argumentAtIndex:0];
     NSString *value = [command argumentAtIndex:1];
-    NSString *processingLegalBasisBasisArg = [command argumentAtIndex:2];
+    PLYDataProcessingLegalBasis lb = [self legalBasisFromArg:[command argumentAtIndex:2]];
 
-    NSDateFormatter * dateFormatter = [NSDateFormatter new];
+    NSDateFormatter *dateFormatter = [NSDateFormatter new];
     dateFormatter.timeZone = [NSTimeZone timeZoneWithName:@"GMT"];
     [dateFormatter setDateFormat:@"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"];
     NSDate *date = [dateFormatter dateFromString:value];
 
-    NSInteger processingLegalBasis = PLYDataProcessingLegalBasisOptional;
-
-    if ([processingLegalBasisBasisArg isEqualToString:@"ESSENTIAL"]) {
-        processingLegalBasis = PLYDataProcessingLegalBasisEssential;
-    }
-
     if (date != nil) {
-        [Purchasely setUserAttributeWithDateValue:date forKey:key processingLegalBasis:processingLegalBasis];
+        [Purchasely setUserAttributeWithDateValue:date forKey:key processingLegalBasis:lb];
     } else {
         NSLog(@"[Purchasely] Cannot save date attribute %@", key);
     }
@@ -862,7 +1064,6 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
 
 - (void)userAttribute:(CDVInvokedUrlCommand*)command {
     NSString *key = [command argumentAtIndex:0];
-
     id _Nullable result = [self getUserAttributeValueForCordova:[Purchasely getUserAttributeFor:key]];
     if (result != nil) {
         [self successFor:command resultDict:result];
@@ -873,13 +1074,11 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
 
 - (id _Nullable) getUserAttributeValueForCordova:(id _Nullable) value {
     if ([value isKindOfClass:[NSDate class]]) {
-        NSDateFormatter * dateFormatter = [NSDateFormatter new];
+        NSDateFormatter *dateFormatter = [NSDateFormatter new];
         dateFormatter.timeZone = [NSTimeZone timeZoneWithName:@"GMT"];
         [dateFormatter setDateFormat:@"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"];
-        NSString *dateStr = [dateFormatter stringFromDate:value];
-        return dateStr;
+        return [dateFormatter stringFromDate:value];
     }
-
     return value;
 }
 
@@ -894,82 +1093,6 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
 
 - (void)clearBuiltInAttributes:(CDVInvokedUrlCommand*)command {
     [Purchasely clearBuiltInAttributes];
-}
-
-- (void)fetchPresentation:(CDVInvokedUrlCommand*)command {
-    NSString *placementId = [command argumentAtIndex:0];
-    NSString *screenId = [command argumentAtIndex:1];
-    NSString *contentId = [command argumentAtIndex:2];
-
-    dispatch_async(dispatch_get_main_queue(), ^{
-        // v6: fetchPresentationFor:/fetchPresentationWith: removed. Build a request
-        // with PLYPresentationBuilder (by placementId or screenId) and preload it;
-        // keep the loaded presentation so presentPresentation: can display it later.
-        // The dismissal result is delivered through the presentation's onDismissed handler.
-        PLYPresentationBuilder *builder = (placementId != nil)
-            ? [PLYPresentationBuilder forPlacementId:placementId]
-            : [PLYPresentationBuilder forScreenId:screenId];
-        if (contentId != nil) {
-            [builder contentId:contentId];
-        }
-        id<PLYPresentationRequest> request = [builder build];
-        [request preloadWithCompletion:^(id<PLYPresentation> _Nullable presentation, NSError * _Nullable error) {
-            if (error != nil) {
-                [self failureFor:command resultString: error.localizedDescription];
-            } else if (presentation != nil) {
-                presentation.onDismissed = ^(PLYPresentationOutcome * _Nonnull outcome) {
-                    if (self.purchaseResolve != nil) {
-                        [self successFor:self.purchaseResolve resultDict:[self resultDictionaryForOutcome:outcome]];
-                        self.purchaseResolve = nil;
-                    }
-                };
-                [self.presentationsLoaded addObject:presentation];
-                [self successFor:command resultDict:[self resultDictionaryForFetchPresentation:presentation]];
-            }
-        }];
-    });
-}
-
-- (void)presentPresentation:(CDVInvokedUrlCommand *)command {
-    NSDictionary<NSString *, id> *presentationDictionary = [command argumentAtIndex:0];
-    BOOL isFullscreen = [[command argumentAtIndex:1] boolValue];
-    // arg 2 (loadingBackgroundColor) is no longer applicable in v6: the
-    // presentation is already rendered by the time it is displayed.
-
-    if (presentationDictionary == nil) {
-        [self failureFor:command resultString: @"Presentation cannot be null"];
-        return;
-    }
-
-    self.purchaseResolve = command;
-
-    dispatch_async(dispatch_get_main_queue(), ^{
-        id<PLYPresentation> presentationLoaded = [self findPresentationLoadedFor:(NSString *)[presentationDictionary objectForKey:@"id"]];
-
-        if (presentationLoaded == nil) {
-            [self failureFor:command resultString: @"Presentation not loaded"];
-            return;
-        }
-
-        NSInteger index = [self findIndexPresentationLoadedFor:(NSString *)[presentationDictionary objectForKey:@"id"]];
-        if (index >= 0) {
-            [self.presentationsLoaded removeObjectAtIndex:index];
-        }
-
-        // Retain the presentation so showPresentation can re-display it after hide.
-        self.displayedPresentation = presentationLoaded;
-
-        // v6: display the preloaded presentation. Flows are handled transparently
-        // by displayFrom:. closeAllScreens first dismisses any displayed screen.
-        [Purchasely closeAllScreens];
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-            if (isFullscreen) {
-                [presentationLoaded displayFrom:nil transitionType:[PLYDisplayMode fullScreen]];
-            } else {
-                [presentationLoaded displayFrom:nil];
-            }
-        });
-    });
 }
 
 - (void) revokeDataProcessingConsent:(CDVInvokedUrlCommand *)command {
@@ -1001,142 +1124,19 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
     [Purchasely setDebugModeWithEnabled: enabled];
 }
 
-- (id<PLYPresentation>) findPresentationLoadedFor:(NSString * _Nullable) presentationId {
-    for (id<PLYPresentation> presentationLoaded in self.presentationsLoaded) {
-        if ([presentationLoaded.id isEqualToString: presentationId]) {
-            return presentationLoaded;
-        }
-    }
-    return nil;
-}
-
-- (NSInteger) findIndexPresentationLoadedFor:(NSString * _Nullable) presentationId {
-    NSInteger index = 0;
-    for (id<PLYPresentation> presentationLoaded in self.presentationsLoaded) {
-        if ([presentationLoaded.id isEqualToString: presentationId]) {
-            return index;
-        }
-        index++;
-    }
-    return -1;
-}
+#pragma mark - helpers
 
 - (NSDictionary *)resultSignatureForSignPromoOffer:(PLYOfferSignature * _Nullable) signature  {
     NSMutableDictionary<NSString *, NSObject *> *dict = [NSMutableDictionary new];
-
     [dict setObject:signature.planVendorId forKey:@"planVendorId"];
     [dict setObject:signature.identifier forKey:@"identifier"];
     [dict setObject:signature.signature forKey:@"signature"];
     [dict setObject:signature.keyIdentifier forKey:@"keyIdentifier"];
-
     NSString *nonceString = [signature.nonce UUIDString];
-    NSObject *nonce = (NSObject *)nonceString;
-    if (nonce != nil) {
-        [dict setObject:nonce forKey:@"nonce"];
-    }
-
+    if (nonceString != nil) { [dict setObject:nonceString forKey:@"nonce"]; }
     NSNumber *timestamp = [NSNumber numberWithDouble:signature.timestamp];
-    if (timestamp != nil) {
-        [dict setObject:timestamp forKey:@"timestamp"];
-    }
-
+    if (timestamp != nil) { [dict setObject:timestamp forKey:@"timestamp"]; }
     return dict;
-}
-
-- (NSDictionary<NSString *, NSObject *> *) resultDictionaryForFetchPresentation:(id<PLYPresentation> _Nullable) presentation {
-    NSMutableDictionary<NSString *, NSObject *> *presentationResult = [NSMutableDictionary new];
-
-    // TODO: fill all parameters.
-    if (presentation != nil) {
-
-        if (presentation.id != nil) {
-            [presentationResult setObject:presentation.id forKey:@"id"];
-        }
-
-        if (presentation.placementId != nil) {
-            [presentationResult setObject:presentation.placementId forKey:@"placementId"];
-        }
-
-        if (presentation.audienceId != nil) {
-            [presentationResult setObject:presentation.audienceId forKey:@"audienceId"];
-        }
-
-        if (presentation.abTestId != nil) {
-            [presentationResult setObject:presentation.abTestId forKey:@"abTestId"];
-        }
-
-        if (presentation.abTestVariantId != nil) {
-            [presentationResult setObject:presentation.abTestVariantId forKey:@"abTestVariantId"];
-        }
-
-        if (presentation.language != nil) {
-            [presentationResult setObject:presentation.language forKey:@"language"];
-        }
-
-        if (presentation.plans != nil) {
-            NSMutableArray *plans = [NSMutableArray new];
-
-            for (PLYPresentationPlan *plan in presentation.plans) {
-                [plans addObject:plan.asDictionary];
-            }
-            [presentationResult setObject:plans forKey:@"plans"];
-        }
-
-        /*if (presentation.metadata != nil) {
-
-            NSDictionary<NSString *,id> *rawMetadata = [presentation.metadata getRawMetadata];
-            NSMutableDictionary<NSString *,id> *resultDict = [NSMutableDictionary dictionary];
-
-            dispatch_group_t group = dispatch_group_create();
-            dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
-            dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
-
-            for (NSString *key in rawMetadata)  {
-                id value = rawMetadata[key];
-
-                if ([value isKindOfClass: [NSString class]]) {
-                    dispatch_group_enter(group); // Enter the dispatch group before making the async call
-                    [presentation.metadata getStringWith:key completion:^(NSString * _Nullable result) {
-                        [resultDict setObject:result forKey:key];
-                        dispatch_group_leave(group); // Leave the dispatch group after the async call is completed
-                    }];
-                } else {
-                    [resultDict setObject:value forKey:key];
-                }
-            }
-
-            dispatch_group_notify(group, queue, ^{
-                // Code to execute after all async calls are completed
-                [presentationResult setObject:resultDict forKey:@"metadata"];
-                dispatch_semaphore_signal(semaphore);
-            });
-
-            // Wait until all async calls are completed
-            dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
-        }*/
-
-        int resultString;
-
-        switch (presentation.type) {
-            case PLYPresentationTypeNormal:
-                resultString = PLYPresentationTypeNormal;
-                break;
-            case PLYPresentationTypeClient:
-                resultString = PLYPresentationTypeClient;
-                break;
-            case PLYPresentationTypeFallback:
-                resultString = PLYPresentationTypeFallback;
-                break;
-            case PLYPresentationTypeDeactivated:
-                resultString = PLYPresentationTypeDeactivated;
-                break;
-        }
-
-        [presentationResult setObject:[NSNumber numberWithInt:resultString] forKey:@"type"];
-
-    }
-
-    return presentationResult;
 }
 
 - (void)successFor:(CDVInvokedUrlCommand *)command {
@@ -1178,7 +1178,6 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
     CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsDictionary:resultDict];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
-
 
 // WARNING: This enum must be strictly identical to the one in the JS side (Purchasely.js).
 typedef NS_ENUM(NSInteger, CordovaPLYAttribute) {
