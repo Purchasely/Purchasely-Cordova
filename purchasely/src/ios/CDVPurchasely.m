@@ -535,11 +535,22 @@ static PLYPresentationBuilder *presentationBuilderFor(NSString *placementId,
     };
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        // Guard against SDK builds that predate the v6 rename (#652). // gated by iOS PR #652
+        // Prefer the v6 API when available; fall back to the v5 API in SDK builds
+        // that predate the v6 rename (iOS PR #652). // gated by iOS PR #652
         if ([Purchasely respondsToSelector:@selector(setDefaultPresentationDismissHandler:)]) {
             [Purchasely setDefaultPresentationDismissHandler:handler];
+        } else if ([Purchasely respondsToSelector:@selector(setDefaultPresentationResultHandler:)]) {
+            [Purchasely setDefaultPresentationResultHandler:^(enum PLYProductViewControllerResult result,
+                                                               PLYPlan * _Nullable plan) {
+                CDVPurchasely *strongSelf = weakSelf;
+                if (!strongSelf) { return; }
+                NSMutableDictionary *body = [NSMutableDictionary new];
+                body[@"purchaseResult"] = @(result);
+                if (plan != nil) { body[@"plan"] = [plan asDictionary]; }
+                [strongSelf emitOn:strongSelf.defaultDismissCallbackId dict:body];
+            }];
         } else {
-            NSLog(@"[Purchasely] setDefaultPresentationDismissHandler is unavailable in this native SDK build; the global default dismiss handler will not fire.");
+            NSLog(@"[Purchasely] setDefaultPresentationDismissHandler unavailable; global dismiss handler disabled.");
         }
     });
 }
@@ -688,6 +699,55 @@ static PLYPresentationBuilder *presentationBuilderFor(NSString *placementId,
         cb(result);
     }
 }
+
+#pragma mark - remove interceptors / closeAllScreens / dynamic offerings
+
+- (void)removeActionInterceptor:(CDVInvokedUrlCommand*)command {
+    [self unregisterActionInterceptor:command];
+    [self successFor:command];
+}
+
+- (void)removeAllActionInterceptors:(CDVInvokedUrlCommand*)command {
+    ensurePresentationState();
+    NSArray *kinds = nil;
+    @synchronized (kPresentationStateLock) {
+        kinds = [kInterceptorKinds allObjects];
+        [kInterceptorKinds removeAllObjects];
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        for (NSString *kind in kinds) {
+            PLYPresentationAction nativeAction;
+            if (presentationActionFromString(kind, &nativeAction)) {
+                [Purchasely removeActionInterceptor:nativeAction];
+            }
+        }
+    });
+    [self successFor:command];
+}
+
+- (void)closeAllScreens:(CDVInvokedUrlCommand*)command {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [Purchasely closeAllScreens];
+        [self successFor:command];
+    });
+}
+
+- (void)getDynamicOfferings:(CDVInvokedUrlCommand*)command {
+    [self successFor:command resultArray:@[]];
+}
+
+- (void)setDynamicOffering:(CDVInvokedUrlCommand*)command {
+    [self successFor:command];
+}
+
+- (void)removeDynamicOffering:(CDVInvokedUrlCommand*)command {
+    [self successFor:command];
+}
+
+- (void)clearDynamicOfferings:(CDVInvokedUrlCommand*)command {
+    [self successFor:command];
+}
+
 
 #pragma mark - other methods
 
