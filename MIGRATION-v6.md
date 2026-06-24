@@ -271,15 +271,15 @@ Purchasely.interceptAction('navigate', async (info, payload) => {
 
 | Kind | Description |
 |---|---|
-| `'close'` / `'close_all'` | User tapped the close button |
+| `'close'` / `'closeAll'` | User tapped the close button |
 | `'login'` | User tapped the login button |
 | `'navigate'` | User wants to open an external URL |
 | `'purchase'` | User tapped a purchase button |
 | `'restore'` | User tapped the restore button |
-| `'open_presentation'` | User wants to open another presentation |
-| `'open_placement'` | User wants to open another placement |
-| `'promo_code'` | User wants to enter a promo code |
-| `'web_checkout'` | User wants to start a web checkout |
+| `'openPresentation'` | User wants to open another presentation |
+| `'openPlacement'` | User wants to open another placement |
+| `'promoCode'` | User wants to enter a promo code |
+| `'webCheckout'` | User wants to start a web checkout |
 
 ### Managing interceptors
 

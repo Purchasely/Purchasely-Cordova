@@ -311,15 +311,15 @@ Purchasely.interceptAction('navigate', async (info, payload) => {
 | Kind | Enum value | Description |
 |---|---|---|
 | `'close'` | `Purchasely.PresentationAction.close` | User tapped the close button |
-| `'close_all'` | `Purchasely.PresentationAction.close_all` | Close all paywall screens |
+| `'closeAll'` | `Purchasely.PresentationAction.closeAll` | Close all paywall screens |
 | `'login'` | `Purchasely.PresentationAction.login` | User tapped the login button |
 | `'navigate'` | `Purchasely.PresentationAction.navigate` | Open an external URL |
 | `'purchase'` | `Purchasely.PresentationAction.purchase` | User tapped a purchase button |
 | `'restore'` | `Purchasely.PresentationAction.restore` | User tapped the restore button |
-| `'open_presentation'` | `Purchasely.PresentationAction.open_presentation` | Open another presentation |
-| `'open_placement'` | `Purchasely.PresentationAction.open_placement` | Open another placement |
-| `'promo_code'` | `Purchasely.PresentationAction.promo_code` | Enter a promo code |
-| `'web_checkout'` | `Purchasely.PresentationAction.web_checkout` | Start a web checkout |
+| `'openPresentation'` | `Purchasely.PresentationAction.openPresentation` | Open another presentation |
+| `'openPlacement'` | `Purchasely.PresentationAction.openPlacement` | Open another placement |
+| `'promoCode'` | `Purchasely.PresentationAction.promoCode` | Enter a promo code |
+| `'webCheckout'` | `Purchasely.PresentationAction.webCheckout` | Start a web checkout |
 
 ### Managing interceptors
 

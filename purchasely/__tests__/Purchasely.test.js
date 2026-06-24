@@ -106,15 +106,15 @@ describe('Purchasely', () => {
     describe('PresentationAction', () => {
       it('should have correct presentation action values', () => {
         expect(Purchasely.PresentationAction.close).toBe('close');
-        expect(Purchasely.PresentationAction.close_all).toBe('close_all');
+        expect(Purchasely.PresentationAction.closeAll).toBe('closeAll');
         expect(Purchasely.PresentationAction.login).toBe('login');
         expect(Purchasely.PresentationAction.navigate).toBe('navigate');
         expect(Purchasely.PresentationAction.purchase).toBe('purchase');
         expect(Purchasely.PresentationAction.restore).toBe('restore');
-        expect(Purchasely.PresentationAction.open_presentation).toBe('open_presentation');
-        expect(Purchasely.PresentationAction.open_placement).toBe('open_placement');
-        expect(Purchasely.PresentationAction.promo_code).toBe('promo_code');
-        expect(Purchasely.PresentationAction.web_checkout).toBe('web_checkout');
+        expect(Purchasely.PresentationAction.openPresentation).toBe('openPresentation');
+        expect(Purchasely.PresentationAction.openPlacement).toBe('openPlacement');
+        expect(Purchasely.PresentationAction.promoCode).toBe('promoCode');
+        expect(Purchasely.PresentationAction.webCheckout).toBe('webCheckout');
       });
     });
 
@@ -885,7 +885,7 @@ describe('Purchasely', () => {
        'fetchPresentationForPlacement', 'presentPresentation', 'showPresentation', 'hidePresentation']
         .forEach((m) => expect(Purchasely[m]).toBeUndefined());
       expect(Purchasely.PaywallAction).toBeUndefined();
-      expect(Purchasely.PresentationAction.web_checkout).toBe('web_checkout');
+      expect(Purchasely.PresentationAction.webCheckout).toBe('webCheckout');
     });
   });
 

@@ -515,15 +515,15 @@ exports.RunningMode = {
 
 exports.PresentationAction = {
     close: 'close',
-    close_all: 'close_all',
+    closeAll: 'closeAll',
     login: 'login',
     navigate: 'navigate',
     purchase: 'purchase',
     restore: 'restore',
-    open_presentation: 'open_presentation',
-    open_placement: 'open_placement',
-    promo_code: 'promo_code',
-    web_checkout: 'web_checkout',
+    openPresentation: 'openPresentation',
+    openPlacement: 'openPlacement',
+    promoCode: 'promoCode',
+    webCheckout: 'webCheckout',
 };
 exports.CloseReason = { button: 'button', backSystem: 'backSystem', programmatic: 'programmatic' };
 exports.InterceptResult = { success: 'success', failed: 'failed', notHandled: 'notHandled' };
