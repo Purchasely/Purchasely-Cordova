@@ -973,6 +973,62 @@ describe('Purchasely', () => {
     });
   });
 
+  describe('PresentationBuilder / PresentationRequest', () => {
+    it('display() resolves at dismissed with a 5-field outcome and no legacy result', async () => {
+      let eventCb;
+      mockExec.mockImplementation((success, error, service, action) => {
+        if (action === 'displayPresentation') eventCb = success;
+      });
+      const onPresented = jest.fn();
+      const req = Purchasely.PresentationBuilder.placement('ONBOARDING')
+        .contentId('c1')
+        .onPresented(onPresented)
+        .build();
+      const promise = req.display({ type: 'fullScreen' });
+
+      const displayCall = mockExec.mock.calls.find((c) => c[3] === 'displayPresentation');
+      expect(displayCall[4][1]).toMatchObject({ placementId: 'ONBOARDING', contentId: 'c1', presentationId: null });
+      expect(displayCall[4][2]).toEqual({ type: 'fullScreen' });
+
+      eventCb({ type: 'presented', requestId: displayCall[4][0], presentation: { id: 'S9' } });
+      eventCb({ type: 'dismissed', requestId: displayCall[4][0], presentation: { id: 'S9' }, purchaseResult: 0, plan: { vendorId: 'p' } });
+
+      const outcome = await promise;
+      expect(onPresented).toHaveBeenCalled();
+      expect(outcome).toEqual({
+        presentation: expect.objectContaining({ screenId: 'S9' }),
+        purchaseResult: 'purchased',
+        plan: { vendorId: 'p' },
+        closeReason: null,
+        error: null,
+      });
+      expect(outcome).not.toHaveProperty('result');
+    });
+
+    it('preload() resolves with the loaded presentation', async () => {
+      let eventCb;
+      mockExec.mockImplementation((success, error, service, action) => {
+        if (action === 'preloadPresentation') eventCb = success;
+      });
+      const req = Purchasely.PresentationBuilder.screen('SCREEN_1').build();
+      const p = req.preload();
+      const call = mockExec.mock.calls.find((c) => c[3] === 'preloadPresentation');
+      expect(call[4][1]).toMatchObject({ presentationId: 'SCREEN_1', placementId: null });
+      eventCb({ type: 'loaded', requestId: call[4][0], presentation: { id: 'SCREEN_1' } });
+      await expect(p).resolves.toMatchObject({ screenId: 'SCREEN_1' });
+    });
+
+    it('close() targets the request id', () => {
+      mockExec.mockImplementation(() => {});
+      const req = Purchasely.PresentationBuilder.placement('P').build();
+      req.display();
+      const reqId = mockExec.mock.calls.find((c) => c[3] === 'displayPresentation')[4][0];
+      req.close();
+      const closeCall = mockExec.mock.calls.find((c) => c[3] === 'closePresentation');
+      expect(closeCall[4]).toEqual([reqId]);
+    });
+  });
+
   describe('outcome normalizers', () => {
     it('maps purchaseResult ordinals to strings', () => {
       expect(Purchasely.__test.purchaseResultFromOrdinal(0)).toBe('purchased');

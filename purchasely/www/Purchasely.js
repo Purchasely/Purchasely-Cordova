@@ -104,6 +104,105 @@ function eventToOutcome(event, presentation) {
 exports.__test = { normalizePresentation, normalizeError, purchaseResultFromOrdinal, eventToOutcome };
 
 // ---------------------------------------------------------------------------
+// PresentationBuilder / PresentationRequest (v6 builder API)
+// ---------------------------------------------------------------------------
+
+var _reqCounter = 0;
+function generateRequestId() {
+  _reqCounter += 1;
+  return 'ply_req_' + Date.now() + '_' + _reqCounter;
+}
+
+class PresentationBuilder {
+  constructor(config) { this._config = config; }
+  static placement(id) { return new PresentationBuilder({ placementId: id, callbacks: {} }); }
+  static screen(id) { return new PresentationBuilder({ screenId: id, callbacks: {} }); }
+  static default() { return new PresentationBuilder({ isDefault: true, callbacks: {} }); }
+  contentId(id) { this._config.contentId = id; return this; }
+  backgroundColor(hex) { this._config.backgroundColor = hex; return this; }
+  progressColor(hex) { this._config.progressColor = hex; return this; }
+  displayCloseButton(b) { this._config.displayCloseButton = b; return this; }
+  displayBackButton(b) { this._config.displayBackButton = b; return this; }
+  onLoaded(fn) { this._config.callbacks.onLoaded = fn; return this; }
+  onPresented(fn) { this._config.callbacks.onPresented = fn; return this; }
+  onCloseRequested(fn) { this._config.callbacks.onCloseRequested = fn; return this; }
+  onDismissed(fn) { this._config.callbacks.onDismissed = fn; return this; }
+  build() { return new PresentationRequest(this._config); }
+}
+
+class PresentationRequest {
+  constructor(config) { this._config = config; this._requestId = null; this._live = null; }
+  _ensureId() { if (!this._requestId) this._requestId = generateRequestId(); return this._requestId; }
+  _payload() {
+    var c = this._config;
+    return {
+      placementId: c.placementId != null ? c.placementId : null,
+      presentationId: c.screenId != null ? c.screenId : null,
+      isDefault: c.isDefault === true,
+      contentId: c.contentId != null ? c.contentId : null,
+      backgroundColor: c.backgroundColor != null ? c.backgroundColor : null,
+      progressColor: c.progressColor != null ? c.progressColor : null,
+      displayCloseButton: c.displayCloseButton != null ? c.displayCloseButton : null,
+      displayBackButton: c.displayBackButton != null ? c.displayBackButton : null,
+    };
+  }
+  preload() {
+    var self = this, id = this._ensureId(), cb = this._config.callbacks;
+    return new Promise(function (resolve, reject) {
+      exec(function (event) {
+        if (event.requestId !== id || event.type !== 'loaded') return;
+        var presentation = normalizePresentation(event.presentation);
+        var error = normalizeError(event.error);
+        if (cb.onLoaded && presentation) cb.onLoaded(presentation, error);
+        if (error || !presentation) { reject(error || { message: 'Preload failed' }); return; }
+        self._live = presentation;
+        resolve(presentation);
+      }, function (e) { reject(normalizeError(e)); },
+        'Purchasely', 'preloadPresentation', [id, self._payload()]);
+    });
+  }
+  display(transition) {
+    var self = this, id = this._ensureId(), cb = this._config.callbacks;
+    return new Promise(function (resolve) {
+      exec(function (event) {
+        if (event.requestId !== id) return;
+        if (event.type === 'presented') {
+          var p = normalizePresentation(event.presentation) || self._live;
+          if (p) self._live = p;
+          if (cb.onPresented) cb.onPresented(p, normalizeError(event.error));
+        } else if (event.type === 'closeRequested') {
+          if (cb.onCloseRequested) cb.onCloseRequested();
+        } else if (event.type === 'dismissed') {
+          var pres = normalizePresentation(event.presentation) || self._live;
+          var outcome = eventToOutcome(event, pres);
+          if (cb.onDismissed) cb.onDismissed(outcome);
+          resolve(outcome);
+        }
+      }, function (e) {
+        var outcome = { presentation: self._live || null, purchaseResult: null,
+          plan: null, closeReason: null, error: normalizeError(e) || { message: 'Display failed' } };
+        if (cb.onDismissed) cb.onDismissed(outcome);
+        resolve(outcome);
+      }, 'Purchasely', 'displayPresentation', [id, self._payload(), transition || null]);
+    });
+  }
+  onDismissed(fn) { this._config.callbacks.onDismissed = fn; return this; }
+  onPresented(fn) { this._config.callbacks.onPresented = fn; return this; }
+  onCloseRequested(fn) { this._config.callbacks.onCloseRequested = fn; return this; }
+  close() {
+    var id = this._requestId;
+    if (id) exec(function () {}, function () {}, 'Purchasely', 'closePresentation', [id]);
+  }
+  back() {
+    var id = this._requestId;
+    if (id) exec(function () {}, function () {}, 'Purchasely', 'goBackToPreviousScreen', [id]);
+  }
+}
+
+exports.PresentationBuilder = PresentationBuilder;
+exports.PresentationRequest = PresentationRequest;
+
+// ---------------------------------------------------------------------------
 
 exports.addEventsListener = function (success, error) {
     exec(success, error, 'Purchasely', 'addEventsListener', []);
