@@ -333,3 +333,102 @@ utilisateur : « fais le code comme Android, on vérifiera et ajustera plus tard
 | Tests JS unitaires | `./node_modules/.bin/jest` (dans `purchasely/`) | ✅ **68/68** (dont `setDefaultPresentationDismissHandler`) |
 | Build Android | `tools/gradlew :app:assembleDebug` (résolu `jetified-core-6.0.0-beta.12` depuis **mavenLocal**) | ✅ **BUILD SUCCESSFUL** (14 s), `app-debug.apk` produit ; `:app:compileDebugKotlin` compile le `.kt` renommé + `sendPurchaseResult` enrichi (0 erreur, warnings pré‑existants seulement) → confirme la présence de `setDefaultPresentationDismissHandler`, `closeReason`, `presentation.{screenId,…}` en beta.12 |
 | Build iOS | — | ⏳ **non exécuté** (cf. §11.4 — rename non disponible dans le pod) |
+
+---
+
+## 12. Pivot vers l'API builder breaking (parité React Native)
+
+### 12.1 Décision et périmètre
+
+La session précédente (§1-11) avait conservé une couche JS quasi inchangée
+(méthodes plates `fetchPresentation`, `presentPresentationForPlacement`,
+`setPaywallActionInterceptor`+`onProcessAction`) et réécrit uniquement les bridges
+natifs. La présente session (Tasks 2-9 puis Task 10) opère un **pivot complet** :
+la couche JavaScript est réécrite pour exposer la même API builder que les SDK
+React Native et Flutter v6. Il n'y a **aucune couche de compatibilité v5** : les
+méthodes supprimées n'existent plus à l'exécution.
+
+**Ce qui a été supprimé :**
+- `Purchasely.start(apiKey, stores, storeKit1, userId, logLevel, runningMode, success, error)` (fonction plate)
+- `fetchPresentation` / `fetchPresentationForPlacement` / `presentPresentation` / `presentPresentationForPlacement`
+- `showPresentation` / `hidePresentation` / `closePresentation` (méthodes plates globales)
+- `setPaywallActionInterceptor(cb)` + `onProcessAction(bool)` (intercepteur global v5)
+- `presentSubscriptions()` (UI native supprimée, aucun remplacement)
+- `setDefaultPresentationResultHandler` (renommé `setDefaultPresentationDismissHandler`, sans alias)
+- `readyToOpenDeeplink` → `allowDeeplink` ; `isDeeplinkHandled` → `handleDeeplink`
+- `RunningMode.paywallObserver` → `RunningMode.observer`
+
+### 12.2 Nouvelle surface JS (builder API)
+
+**Démarrage :**
+`Purchasely.builder(apiKey)` retourne un `PurchaselyBuilder`. Méthodes de
+configuration : `.appUserId(id)`, `.runningMode('observer'|'full')`,
+`.logLevel('debug'|'info'|'warn'|'error')`, `.allowDeeplink(bool)`,
+`.allowCampaigns(bool)`, `.stores(['google'|'huawei'|'amazon'])`,
+`.storekitVersion('storeKit2'|'storeKit1')`. `.start()` retourne une
+`Promise<boolean>`.
+
+**Affichage de paywalls :**
+`Purchasely.PresentationBuilder.placement(id)` / `.screen(id)` / `.default()`
+retournent un `PresentationBuilder`. Options : `.contentId(id)`,
+`.onLoaded(fn)`, `.onPresented(fn)`, `.onCloseRequested(fn)`, `.onDismissed(fn)`.
+`.build()` retourne un `PresentationRequest`.
+
+**Cycle de vie de `PresentationRequest` :**
+- `.preload()` → `Promise<presentation>` (fetch réseau)
+- `.display(transition?)` → `Promise<outcome>` (résout à la fermeture)
+- `.close()` — ferme la présentation
+- `.back()` — revient à l'écran précédent
+
+**Outcome à 5 champs :**
+`{ presentation, purchaseResult, plan, closeReason, error }`
+- `purchaseResult` : `'purchased' | 'restored' | 'cancelled' | null`
+- `closeReason` : `'button' | 'backSystem' | 'programmatic' | null`
+  (`backSystem` = retour système Android + `interactiveDismiss` iOS)
+- `error` : exclusif avec `closeReason`
+
+**Intercepteur par action :**
+`Purchasely.interceptAction(kind, handler)` — le handler reçoit `(info, payload)`
+et retourne `'success' | 'failed' | 'notHandled'`. Pas de `onProcessAction`.
+`removeActionInterceptor(kind)` / `removeAllActionInterceptors()`.
+
+**Handler global :**
+`Purchasely.setDefaultPresentationDismissHandler(outcome => …)` /
+`removeDefaultPresentationDismissHandler()`.
+
+### 12.3 Adaptation du transport d'événements (Cordova vs RN)
+
+React Native utilise un `NativeEventEmitter` pour que le natif envoie des
+événements multicast vers le JS. Cordova n'a pas cet équivalent : le transport
+repose sur les **callbacks `cordova.exec` maintenus vivants** (kept-alive).
+
+Chaque action `exec` (ex. `displayPresentation`, `registerActionInterceptor`,
+`setDefaultPresentationDismissHandler`) conserve son `CallbackContext` côté natif
+et appelle `sendPluginResult(keepCallback:true)` pour chaque événement suivant.
+Le JS filtre par `requestId` (pour les présentations) ou par `kind` (pour les
+intercepteurs). Les **formes de payload sont identiques** entre le JS Cordova et
+le JS React Native :
+
+| Payload | Cordova | RN |
+|---|---|---|
+| Événement de cycle paywall | `{ requestId, type: 'loaded'|'presented'|'closeRequested'|'dismissed', presentation, purchaseResult, plan, closeReason, error }` | idem |
+| Événement intercepteur | `{ kind, callbackId, info: { contentId, presentation }, payload: { … } }` | idem |
+| Outcome final | `{ presentation, purchaseResult, plan, closeReason, error }` | idem (5 champs) |
+
+### 12.4 Preuves de vérification
+
+| Vérification | Résultat |
+|---|---|
+| Tests JS (jest) | ✅ **67/67** passent (suite complète après le pivot builder) |
+| Build Android (`tools/gradlew :app:assembleDebug`) | ✅ **BUILD SUCCESSFUL** vs `io.purchasely:core:6.0.0-beta.12` (mavenLocal) |
+| Build iOS | ⏳ **non compilé** — le code iOS reflète l'implémentation Android mais `[Purchasely setDefaultPresentationDismissHandler:]` n'est pas disponible dans le pod publié `6.0.0-rc.1` ; gated par iOS PR #652. Tous les autres appels iOS v6 compilent. |
+
+### 12.5 Fichiers touchés par le pivot builder (Tasks 2-9)
+
+| Fichier | Nature du changement |
+|---|---|
+| `purchasely/www/Purchasely.js` | Réécriture complète : `PurchaselyBuilder`, normalizers, `PresentationBuilder`/`PresentationRequest`, `interceptAction`, `setDefaultPresentationDismissHandler` |
+| `purchasely/src/android/PurchaselyPlugin.kt` | Handlers `preloadPresentation`, `displayPresentation`, `registerActionInterceptor`, `completeActionInterceptor`, `unregisterActionInterceptor` (parité builder) |
+| `purchasely/src/ios/CDVPurchasely.m` (+ `.h`) | Idem côté iOS (code miroir Android, gated par PR #652 pour le rename) |
+| `purchasely/__tests__/Purchasely.test.js` | Mise à jour : 67 tests couvrant le builder API, les normalizers, le cycle de vie des présentations et les intercepteurs |
+| `purchasely/example/www/js/index.js` | Mise à jour vers le builder API (Task 9) |
