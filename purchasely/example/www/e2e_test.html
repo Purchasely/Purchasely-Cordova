@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://ssl.gstatic.com 'unsafe-eval'; style-src 'self' 'unsafe-inline'; media-src *; img-src 'self' data: content:;">
+  <meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover">
+  <title>Purchasely E2E Tests</title>
+  <style>
+    body  { font-family: monospace; padding: 10px; background: #111; color: #ccc; font-size: 13px; }
+    #status { font-size: 16px; font-weight: bold; margin-bottom: 8px; padding: 6px; background: #222; }
+    #log  { white-space: pre-wrap; word-break: break-all; }
+    .pass { color: #4f4; }
+    .fail { color: #f44; }
+    .skip { color: #fa0; }
+    .info { color: #8af; }
+  </style>
+</head>
+<body>
+  <div id="status">Waiting for device ready…</div>
+  <pre id="log"></pre>
+  <script src="cordova.js"></script>
+  <script src="js/e2e_test.js"></script>
+</body>
+</html>
