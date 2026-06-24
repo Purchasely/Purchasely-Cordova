@@ -1,6 +1,5 @@
 package cordova.plugin.purchasely
 
-import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -27,13 +26,20 @@ import io.purchasely.ext.State
 import io.purchasely.ext.StoreType
 import io.purchasely.ext.SubscriptionsListener
 import io.purchasely.ext.UserAttributeListener
+import io.purchasely.ext.presentation.PLYCloseReason
 import io.purchasely.ext.presentation.PLYPresentation
 import io.purchasely.ext.presentation.PLYPresentationAction
+import io.purchasely.ext.presentation.PLYPresentationBase
+import io.purchasely.ext.presentation.PLYPresentationMetadata
 import io.purchasely.ext.presentation.PLYPresentationOutcome
-import io.purchasely.ext.presentation.PLYPresentationType
 import io.purchasely.ext.presentation.PLYPurchaseResult
 import io.purchasely.ext.presentation.display
 import io.purchasely.ext.presentation.preload
+import io.purchasely.views.presentation.models.PLYDimensionType
+import io.purchasely.views.presentation.models.PLYTransition
+import io.purchasely.views.presentation.models.PLYTransitionDimension
+import io.purchasely.views.presentation.models.PLYTransitionType
+import io.purchasely.storage.userData.PLYDynamicOffering
 import io.purchasely.storage.userData.PLYUserAttributeSource
 import io.purchasely.storage.userData.PLYUserAttributeType
 import io.purchasely.models.PLYError
@@ -49,21 +55,30 @@ import org.apache.cordova.PluginResult
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
-import java.lang.ref.WeakReference
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * This class echoes a string called from JavaScript.
  */
 class PurchaselyPlugin : CordovaPlugin() {
-    // v6: the global interceptor was replaced by per-action interceptors that
-    // resolve a PLYInterceptResult. We keep the latest resolver so onProcessAction
-    // can complete it, preserving the v5 Cordova contract.
-    private var interceptCompletion: ((PLYInterceptResult) -> Unit)? = null
+
+    // v6 presentation lifecycle state, keyed by the JS-supplied requestId.
+    private val activePresentations = ConcurrentHashMap<String, PLYPresentation>()
+    // Pending interceptor resolvers, completed when JS calls completeActionInterceptor.
+    private val pendingInterceptors = ConcurrentHashMap<String, CompletableDeferred<PLYInterceptResult>>()
+    // Kept-alive interceptor event callbacks, keyed by action kind.
+    private val interceptorCallbacks = ConcurrentHashMap<String, CallbackContext>()
 
     override fun execute(
         action: String,
@@ -101,49 +116,38 @@ class PurchaselyPlugin : CordovaPlugin() {
 
                 "purchasedSubscription" -> purchasedSubscription(callbackContext)
                 "allowDeeplink" -> allowDeeplink(args.getBoolean(0))
+                "applyStartOptions" -> applyStartOptions(args.optJSONObject(0))
                 "synchronize" -> synchronize(callbackContext)
-                "presentPresentationWithIdentifier" -> presentPresentationWithIdentifier(
-                    getStringFromJson(args.getString(0)),
-                    getStringFromJson(args.getString(1)),
-                    args.getBoolean(2),
+                "preloadPresentation" -> preloadPresentation(
+                    getStringFromJson(args.getString(0)) ?: "",
+                    args.optJSONObject(1),
                     callbackContext
                 )
-
-                "presentPresentationForPlacement" -> presentPresentationForPlacement(
-                    getStringFromJson(args.getString(0)),
-                    getStringFromJson(args.getString(1)),
-                    args.getBoolean(2),
+                "displayPresentation" -> displayPresentation(
+                    getStringFromJson(args.getString(0)) ?: "",
+                    args.optJSONObject(1),
+                    args.optJSONObject(2),
                     callbackContext
                 )
-
-                "presentProductWithIdentifier" -> presentProductWithIdentifier(
-                    getStringFromJson(args.getString(0)),
-                    getStringFromJson(args.getString(1)),
-                    getStringFromJson(args.getString(2)),
-                    args.getBoolean(3),
+                "closePresentation" -> closePresentation(
+                    getStringFromJson(args.getString(0)) ?: "",
                     callbackContext
                 )
-
-                "presentPlanWithIdentifier" -> presentPlanWithIdentifier(
-                    getStringFromJson(args.getString(0)),
-                    getStringFromJson(args.getString(1)),
-                    getStringFromJson(args.getString(2)),
-                    args.getBoolean(3),
+                "goBackToPreviousScreen" -> goBackToPreviousScreen(
+                    getStringFromJson(args.getString(0)) ?: ""
+                )
+                "registerActionInterceptor" -> registerActionInterceptor(
+                    getStringFromJson(args.getString(0)) ?: "",
                     callbackContext
                 )
-                "fetchPresentation" -> fetchPresentation(
-                    getStringFromJson(args.getString(0)),
-                    getStringFromJson(args.getString(1)),
-                    getStringFromJson(args.getString(2)),
-                    callbackContext
+                "unregisterActionInterceptor" -> unregisterActionInterceptor(
+                    getStringFromJson(args.getString(0)) ?: ""
                 )
-                "presentPresentation" -> presentPresentation(
-                    args.getJSONObject(0),
-                    args.getBoolean(1),
-                    getStringFromJson(args.getString(2)),
-                    callbackContext
+                "completeActionInterceptor" -> completeActionInterceptor(
+                    getStringFromJson(args.getString(0)) ?: "",
+                    getStringFromJson(args.getString(1)) ?: "notHandled"
                 )
-                "presentSubscriptions" -> presentSubscriptions()
+                "removeDefaultPresentationDismissHandler" -> removeDefaultPresentationDismissHandler()
                 "restoreAllProducts" -> restoreAllProducts(callbackContext)
                 "silentRestoreAllProducts" -> restoreAllProducts(callbackContext)
                 "userSubscriptions" -> userSubscriptions(callbackContext)
@@ -170,11 +174,6 @@ class PurchaselyPlugin : CordovaPlugin() {
                     getStringFromJson(args.getString(2)),
                     callbackContext
                 )
-                "setPaywallActionInterceptor" -> setPaywallActionInterceptor(callbackContext)
-                "onProcessAction" -> onProcessAction(args.getBoolean(0))
-                "closePresentation" -> closePresentation(callbackContext)
-                "hidePresentation" -> hidePresentation()
-                "showPresentation" -> showPresentation()
                 "userDidConsumeSubscriptionContent" -> userDidConsumeSubscriptionContent()
                 "setUserAttributeWithString" -> setUserAttributeWithString(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), getStringFromJson(args.optString(2)))
                 "setUserAttributeWithBoolean" -> setUserAttributeWithBoolean(getStringFromJson(args.getString(0)), args.getBoolean(1), getStringFromJson(args.optString(2)))
@@ -193,6 +192,20 @@ class PurchaselyPlugin : CordovaPlugin() {
                 "signPromotionalOffer" -> signPromotionalOffer(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), callbackContext)
                 "revokeDataProcessingConsent" -> revokeDataProcessingConsent(args.getJSONArray(0))
                 "setDebugMode" -> setDebugMode(args.getBoolean(0))
+                "setDynamicOffering" -> setDynamicOffering(
+                    getStringFromJson(args.getString(0)),
+                    getStringFromJson(args.getString(1)),
+                    getStringFromJson(args.optString(2)),
+                    callbackContext
+                )
+                "getDynamicOfferings" -> getDynamicOfferings(callbackContext)
+                "removeDynamicOffering" -> removeDynamicOffering(getStringFromJson(args.getString(0)))
+                "clearDynamicOfferings" -> clearDynamicOfferings()
+                "removeActionInterceptor" -> removeActionInterceptor(
+                    getStringFromJson(args.getString(0)),
+                    callbackContext
+                )
+                "removeAllActionInterceptors" -> removeAllActionInterceptors(callbackContext)
                 else -> return false
             }
         } catch (e: JSONException) {
@@ -284,9 +297,9 @@ class PurchaselyPlugin : CordovaPlugin() {
 
     private fun close() {
         defaultCallback = null
-        purchaseCallback = null
-        interceptCompletion = null
-        displayedPresentation = null
+        activePresentations.clear()
+        pendingInterceptors.clear()
+        interceptorCallbacks.clear()
         Purchasely.close()
     }
 
@@ -425,10 +438,16 @@ class PurchaselyPlugin : CordovaPlugin() {
         // v6: renamed from setDefaultPresentationResultHandler. The handler now
         // receives a single PLYPresentationOutcome (purchaseResult + closeReason +
         // plan + the presentation that produced it — populated for campaign/deeplink
-        // presentations the app did not open itself).
+        // presentations the app did not open itself). It is forwarded to JS through
+        // the kept-alive default-dismiss callback with the same fields as a
+        // `dismissed` event, but without a requestId.
         Purchasely.setDefaultPresentationDismissHandler { outcome: PLYPresentationOutcome ->
-            sendPurchaseResult(outcome)
+            emitDefaultPresentationDismissed(outcome)
         }
+    }
+
+    private fun removeDefaultPresentationDismissHandler() {
+        defaultCallback = null
     }
 
     private fun purchasedSubscription(callbackContext: CallbackContext) {
@@ -457,154 +476,388 @@ class PurchaselyPlugin : CordovaPlugin() {
         Purchasely.userDidConsumeSubscriptionContent()
     }
 
-    // v6: the dedicated PLYProductActivity host is gone. The native SDK's
-    // PLYPresentation { ... }.display(activity) builds, preloads and displays the
-    // presentation (handling full-screen and multi-step Flows automatically).
-    // isFullScreen is now controlled by the Console transition and is ignored here.
-    private fun presentPresentationWithIdentifier(
-        screenId: String?,
-        contentId: String?,
-        isFullScreen: Boolean,
-        callbackContext: CallbackContext
-    ) {
-        purchaseCallback = callbackContext
-        val activity = cordova.activity ?: return
-        PLYPresentation {
-            if (screenId != null) screenId(screenId)
-            contentId(contentId)
-            onPresented { loaded, _ -> displayedPresentation = loaded }
-        }.display(activity) { outcome -> sendPurchaseResult(outcome) }
-    }
+    // -----------------------------------------------------------------------
+    // v6 presentation lifecycle (builder API)
+    //
+    // The JS PresentationBuilder/PresentationRequest layer drives the native
+    // presentation through requestId-scoped actions. Each builds a
+    // PLYPresentation { ... } (alias for PLYPresentationBase.Prepared), wires the
+    // lifecycle callbacks, and emits `{type, requestId, ...}` JSONObjects on the
+    // kept-alive callbackContext that issued the action.
+    // -----------------------------------------------------------------------
 
-    private fun presentPresentationForPlacement(
-        placementVendorId: String?,
-        contentId: String?,
-        isFullScreen: Boolean,
-        callbackContext: CallbackContext
-    ) {
-        purchaseCallback = callbackContext
-        val activity = cordova.activity ?: return
-        PLYPresentation {
-            if (placementVendorId != null) placementId(placementVendorId)
-            contentId(contentId)
-            onPresented { loaded, _ -> displayedPresentation = loaded }
-        }.display(activity) { outcome -> sendPurchaseResult(outcome) }
-    }
-
-    private fun presentProductWithIdentifier(
-        productVendorId: String?,
-        screenId: String?,
-        contentId: String?,
-        isFullScreen: Boolean,
-        callbackContext: CallbackContext
-    ) {
-        // v6: product-specific presentation was removed. A presentation is identified by
-        // a placementId or screenId; here we display the screen.
-        purchaseCallback = callbackContext
-        val activity = cordova.activity ?: return
-        PLYPresentation {
-            if (screenId != null) screenId(screenId)
-            contentId(contentId)
-            onPresented { loaded, _ -> displayedPresentation = loaded }
-        }.display(activity) { outcome -> sendPurchaseResult(outcome) }
-    }
-
-    private fun presentPlanWithIdentifier(
-        planVendorId: String?,
-        screenId: String?,
-        contentId: String?,
-        isFullScreen: Boolean,
-        callbackContext: CallbackContext
-    ) {
-        // v6: plan-specific presentation was removed. A presentation is identified by
-        // a placementId or screenId; here we display the screen.
-        purchaseCallback = callbackContext
-        val activity = cordova.activity ?: return
-        PLYPresentation {
-            if (screenId != null) screenId(screenId)
-            contentId(contentId)
-            onPresented { loaded, _ -> displayedPresentation = loaded }
-        }.display(activity) { outcome -> sendPurchaseResult(outcome) }
-    }
-
-    private fun fetchPresentation(
-        placementId: String?,
-        screenId: String?,
-        contentId: String?,
-        callbackContext: CallbackContext) {
-        // v6: Purchasely.fetchPresentation(properties) / PLYPresentationProperties were
-        // removed. Build a request with the PLYPresentation { } DSL (by placementId or
-        // screenId) and preload it; keep the loaded presentation so presentPresentation
-        // can display it later.
-        PLYPresentation {
-            if (placementId != null) placementId(placementId)
-            if (screenId != null) screenId(screenId)
-            contentId(contentId)
-        }.preload { presentation: PLYPresentation?, error: PLYError? ->
-            if (presentation != null) {
-                presentationsLoaded.removeAll { it.screenId == presentation.screenId && it.placementId == presentation.placementId }
-                presentationsLoaded.add(presentation)
-                val map = hashMapOf<String, Any?>(
-                    "id" to presentation.screenId,
-                    "placementId" to presentation.placementId,
-                    "audienceId" to presentation.audienceId,
-                    "abTestId" to presentation.abTestId,
-                    "abTestVariantId" to presentation.abTestVariantId,
-                    "language" to presentation.language,
-                    "type" to presentation.type.ordinal,
-                    "plans" to presentation.plans.map { it.toMap() }
-                )
-                callbackContext.success(JSONObject(map))
-            }
-            if (error != null) callbackContext.error(error.message ?: "Unable to fetch presentation")
+    private fun applyStartOptions(options: JSONObject?) {
+        options ?: return
+        if (options.has("allowDeeplink") && !options.isNull("allowDeeplink")) {
+            Purchasely.allowDeeplink = options.optBoolean("allowDeeplink")
+        }
+        if (options.has("allowCampaigns") && !options.isNull("allowCampaigns")) {
+            Purchasely.allowCampaigns = options.optBoolean("allowCampaigns")
         }
     }
 
-    // Delete when available in Android SDK
-    fun PLYPresentationPlan.toMap() : Map<String, String?> {
-        return mapOf(
-            Pair("planVendorId", planVendorId),
-            Pair("storeProductId", storeProductId),
-            Pair("basePlanId", basePlanId),
-            //Pair("offerId", offerId)
+    private fun buildPreparedPresentation(payload: JSONObject?): PLYPresentationBase.Prepared {
+        return PLYPresentation {
+            payload?.let { p ->
+                p.optStringOrNull("placementId")?.let { placementId(it) }
+                // The JS `screenId` is forwarded as the legacy native key `presentationId`.
+                p.optStringOrNull("presentationId")?.let { screenId(it) }
+                p.optStringOrNull("contentId")?.let { contentId(it) }
+                if (p.has("displayCloseButton") && !p.isNull("displayCloseButton")) {
+                    displayCloseButton(p.optBoolean("displayCloseButton"))
+                }
+                if (p.has("displayBackButton") && !p.isNull("displayBackButton")) {
+                    displayBackButton(p.optBoolean("displayBackButton"))
+                }
+                p.optStringOrNull("backgroundColor")?.let { hex ->
+                    try {
+                        backgroundColor(android.graphics.Color.parseColor(hex))
+                    } catch (e: Exception) {
+                        Log.w("Purchasely", "Invalid backgroundColor: $hex")
+                    }
+                }
+                p.optStringOrNull("progressColor")?.let { hex ->
+                    try {
+                        progressColor(android.graphics.Color.parseColor(hex))
+                    } catch (e: Exception) {
+                        Log.w("Purchasely", "Invalid progressColor: $hex")
+                    }
+                }
+            }
+        }
+    }
+
+    private fun preloadPresentation(
+        requestId: String,
+        payload: JSONObject?,
+        callbackContext: CallbackContext
+    ) {
+        val prepared = buildPreparedPresentation(payload)
+        prepared.preload { loaded: PLYPresentation?, error: PLYError? ->
+            val map = HashMap<String, Any?>()
+            map["type"] = "loaded"
+            map["requestId"] = requestId
+            loaded?.let {
+                activePresentations[requestId] = it
+                map["presentation"] = it.toPresentationMap()
+            }
+            error?.let { map["error"] = it.toErrorMap() }
+            emitOn(callbackContext, map)
+        }
+    }
+
+    private fun displayPresentation(
+        requestId: String,
+        payload: JSONObject?,
+        transition: JSONObject?,
+        callbackContext: CallbackContext
+    ) {
+        val activity = cordova.activity
+        if (activity == null) {
+            emitOn(
+                callbackContext,
+                mapOf(
+                    "type" to "dismissed",
+                    "requestId" to requestId,
+                    "error" to mapOf("message" to "No current activity to host the presentation")
+                )
+            )
+            return
+        }
+
+        val prepared = buildPreparedPresentation(payload)
+        prepared.onCloseRequested = {
+            emitOn(callbackContext, mapOf("type" to "closeRequested", "requestId" to requestId))
+        }
+
+        prepared.display(
+            context = activity,
+            transition = mapTransition(transition),
+            presentation = { loaded: PLYPresentation ->
+                activePresentations[requestId] = loaded
+                emitOn(
+                    callbackContext,
+                    mapOf(
+                        "type" to "presented",
+                        "requestId" to requestId,
+                        "presentation" to loaded.toPresentationMap()
+                    )
+                )
+            },
+            callback = { outcome: PLYPresentationOutcome ->
+                emitOn(callbackContext, dismissedMap(requestId, outcome))
+                activePresentations.remove(requestId)
+            }
         )
     }
 
-    private fun presentPresentation(presentationMap: JSONObject?,
-                            isFullScreen: Boolean,
-                            loadingBackgroundColor: String?,
-                            callbackContext: CallbackContext) {
-        if (presentationMap == null) {
-            callbackContext.error("presentation cannot be null")
+    private fun closePresentation(requestId: String, callbackContext: CallbackContext) {
+        emitOn(callbackContext, mapOf("type" to "closeRequested", "requestId" to requestId))
+        activePresentations.remove(requestId)
+        // The native SDK does not expose a per-request close, so this dismisses
+        // *every* displayed presentation, not just `requestId` (RN parity).
+        if (activePresentations.isNotEmpty()) {
+            Log.w(
+                "Purchasely",
+                "closePresentation($requestId) dismisses ALL displayed presentations " +
+                    "(per-request close is not supported by the native SDK); " +
+                    "${activePresentations.size} other active request(s) will also be closed."
+            )
+        }
+        Purchasely.closeAllScreens()
+    }
+
+    private fun goBackToPreviousScreen(requestId: String) {
+        val loaded = activePresentations[requestId]
+        if (loaded == null) {
+            Log.w("Purchasely", "goBackToPreviousScreen($requestId) ignored: presentation is not loaded")
             return
         }
+        loaded.back()
+    }
 
-        val id = if (presentationMap.has("id") && !presentationMap.isNull("id")) presentationMap.getString("id") else null
-        val placement = if (presentationMap.has("placementId") && !presentationMap.isNull("placementId")) presentationMap.getString("placementId") else null
-
-        val presentation = presentationsLoaded.lastOrNull {
-            it.screenId == id && it.placementId == placement
+    private fun mapTransition(transition: JSONObject?): PLYTransition? {
+        transition ?: return null
+        val typeString = transition.optStringOrNull("type") ?: return null
+        val type = when (typeString) {
+            "fullScreen" -> PLYTransitionType.FULLSCREEN
+            "push" -> PLYTransitionType.PUSH
+            "modal" -> PLYTransitionType.MODAL
+            "drawer" -> PLYTransitionType.DRAWER
+            "popin" -> PLYTransitionType.POPIN
+            else -> PLYTransitionType.FULLSCREEN
         }
-        if (presentation == null) {
-            callbackContext.error("presentation cannot be found")
+
+        fun readDimension(key: String): PLYTransitionDimension? {
+            if (!transition.has(key) || transition.isNull(key)) return null
+            val dim = transition.optJSONObject(key) ?: return null
+            val dimType = when (dim.optStringOrNull("type")) {
+                "pixel" -> PLYDimensionType.PIXEL
+                else -> PLYDimensionType.PERCENTAGE
+            }
+            val value = if (dim.has("value") && !dim.isNull("value")) {
+                dim.optDouble("value", 0.0).toFloat()
+            } else {
+                0f
+            }
+            return PLYTransitionDimension(type = dimType, value = value)
+        }
+
+        val dismissible = if (transition.has("dismissible") && !transition.isNull("dismissible")) {
+            transition.optBoolean("dismissible")
+        } else {
+            true
+        }
+
+        return PLYTransition(
+            type = type,
+            width = readDimension("width"),
+            height = readDimension("height"),
+            dismissible = dismissible
+        )
+    }
+
+    // -----------------------------------------------------------------------
+    // v6 per-action interceptor (builder API)
+    // -----------------------------------------------------------------------
+
+    private fun registerActionInterceptor(kind: String, callbackContext: CallbackContext) {
+        val actionType = kindToActionClass(kind)
+        if (actionType == null) {
+            Log.w("Purchasely", "Unknown interceptor kind: $kind")
             return
         }
+        interceptorCallbacks[kind] = callbackContext
+        Purchasely.interceptAction(actionType, PLYActionInterceptorCallback { info, action, complete ->
+            val callbackId = UUID.randomUUID().toString()
+            val deferred = CompletableDeferred<PLYInterceptResult>()
+            pendingInterceptors[callbackId] = deferred
 
-        purchaseCallback = callbackContext
-        // Retain so showPresentation can re-display it after hide.
-        displayedPresentation = presentation
+            val map = HashMap<String, Any?>()
+            map["callbackId"] = callbackId
+            map["kind"] = kind
+            map["info"] = buildInterceptorInfo(info)
+            map["payload"] = buildInterceptorPayload(action)
+            emitOn(interceptorCallbacks[kind], map)
 
-        // v6: display() handles Flows and standard presentations transparently and
-        // delivers a single PLYPresentationOutcome on dismissal.
-        cordova.activity?.let { activity ->
-            presentation.display(activity) { outcome -> sendPurchaseResult(outcome) }
+            CoroutineScope(Dispatchers.Main).launch {
+                // Bound the suspension: withTimeoutOrNull returns null if JS never
+                // resolves within INTERCEPTOR_TIMEOUT_MS; in every case we default to
+                // NOT_HANDLED and drop the pending entry so the SDK action is never
+                // blocked indefinitely.
+                val result = runCatching {
+                    withTimeoutOrNull(INTERCEPTOR_TIMEOUT_MS) { deferred.await() }
+                }.getOrNull() ?: PLYInterceptResult.NOT_HANDLED
+                pendingInterceptors.remove(callbackId)
+                complete(result)
+            }
+        })
+    }
+
+    private fun unregisterActionInterceptor(kind: String) {
+        val actionType = kindToActionClass(kind)
+        if (actionType == null) {
+            Log.w("Purchasely", "Unknown interceptor kind: $kind")
+            return
+        }
+        interceptorCallbacks.remove(kind)
+        runCatching { Purchasely.removeActionInterceptor(actionType) }.onFailure {
+            Log.w("Purchasely", "removeActionInterceptor($kind) failed: ${it.message}")
         }
     }
 
-    private fun presentSubscriptions() {
-        // v6: the native subscriptions list UI (subscriptionsFragment) was removed.
-        // Build your own UI from userSubscriptions / userSubscriptionsHistory.
-        Log.w("Purchasely", "presentSubscriptions is no longer available in SDK v6 (native subscriptions UI removed).")
+    private fun completeActionInterceptor(callbackId: String, result: String) {
+        val deferred = pendingInterceptors.remove(callbackId) ?: return
+        deferred.complete(
+            when (result) {
+                "success" -> PLYInterceptResult.SUCCESS
+                "failed" -> PLYInterceptResult.FAILED
+                else -> PLYInterceptResult.NOT_HANDLED
+            }
+        )
+    }
+
+    // Accepts both the v6 builder camelCase kinds (registerActionInterceptor /
+    // unregisterActionInterceptor) and the legacy PaywallAction snake_case kinds
+    // (removeActionInterceptor) so both JS surfaces resolve to the same classes.
+    private fun kindToActionClass(kind: String): Class<out PLYPresentationAction>? = when (kind) {
+        "close" -> PLYPresentationAction.Close::class.java
+        "closeAll", "close_all" -> PLYPresentationAction.CloseAll::class.java
+        "login" -> PLYPresentationAction.Login::class.java
+        "navigate" -> PLYPresentationAction.Navigate::class.java
+        "purchase" -> PLYPresentationAction.Purchase::class.java
+        "restore" -> PLYPresentationAction.Restore::class.java
+        "openPresentation", "open_presentation" -> PLYPresentationAction.OpenPresentation::class.java
+        "openPlacement", "open_placement" -> PLYPresentationAction.OpenPlacement::class.java
+        "promoCode", "promo_code" -> PLYPresentationAction.PromoCode::class.java
+        "webCheckout", "web_checkout" -> PLYPresentationAction.WebCheckout::class.java
+        else -> null
+    }
+
+    private fun buildInterceptorInfo(info: PLYInterceptorInfo): Map<String, Any?> {
+        val map = HashMap<String, Any?>()
+        map["contentId"] = info.contentId
+        info.presentation?.let { map["presentation"] = it.toPresentationMap() }
+        return map
+    }
+
+    private fun buildInterceptorPayload(action: PLYPresentationAction): Map<String, Any?> {
+        val payload = HashMap<String, Any?>()
+        when (action) {
+            is PLYPresentationAction.Navigate -> {
+                payload["url"] = action.url.toString()
+                action.title?.let { payload["title"] = it }
+            }
+            is PLYPresentationAction.Purchase -> {
+                payload["plan"] = transformPlanToMap(action.plan)
+                action.offer?.let {
+                    payload["offer"] = mapOf(
+                        "vendorId" to it.vendorId,
+                        "storeOfferId" to it.storeOfferId
+                    )
+                }
+                action.subscriptionOffer?.let { so ->
+                    payload["subscriptionOffer"] = mapOf(
+                        "subscriptionId" to so.subscriptionId,
+                        "basePlanId" to so.basePlanId,
+                        "offerToken" to so.offerToken,
+                        "offerId" to so.offerId
+                    )
+                }
+            }
+            is PLYPresentationAction.Close -> payload["closeReason"] = action.closeReason.toCordovaString()
+            is PLYPresentationAction.CloseAll -> payload["closeReason"] = action.closeReason.toCordovaString()
+            is PLYPresentationAction.OpenPresentation -> payload["presentationId"] = action.presentationId
+            is PLYPresentationAction.OpenPlacement -> payload["placementId"] = action.placementId
+            is PLYPresentationAction.WebCheckout -> {
+                payload["url"] = action.url.toString()
+                payload["clientReferenceId"] = action.clientReferenceId
+                payload["queryParameterKey"] = action.queryParameterKey
+                payload["webCheckoutProvider"] = action.webCheckoutProvider.name.lowercase()
+            }
+            else -> {
+                // login, restore, promoCode → no extra payload.
+            }
+        }
+        return payload
+    }
+
+    // -----------------------------------------------------------------------
+    // v6 presentation event payload builders
+    // -----------------------------------------------------------------------
+
+    private fun dismissedMap(requestId: String, outcome: PLYPresentationOutcome): Map<String, Any?> {
+        val map = HashMap<String, Any?>()
+        map["type"] = "dismissed"
+        map["requestId"] = requestId
+        outcome.presentation?.let { map["presentation"] = it.toPresentationMap() }
+        outcome.purchaseResult?.let { map["purchaseResult"] = it.toOrdinal() }
+        outcome.plan?.let { map["plan"] = transformPlanToMap(it) }
+        val outcomeError1 = outcome.error
+        if (outcomeError1 == null) {
+            outcome.closeReason?.let { map["closeReason"] = it.toCordovaString() }
+        } else {
+            map["error"] = outcomeError1.toErrorMap()
+        }
+        return map
+    }
+
+    private fun emitDefaultPresentationDismissed(outcome: PLYPresentationOutcome) {
+        val map = HashMap<String, Any?>()
+        outcome.presentation?.let { map["presentation"] = it.toPresentationMap() }
+        outcome.purchaseResult?.let { map["purchaseResult"] = it.toOrdinal() }
+        outcome.plan?.let { map["plan"] = transformPlanToMap(it) }
+        val outcomeError2 = outcome.error
+        if (outcomeError2 == null) {
+            outcome.closeReason?.let { map["closeReason"] = it.toCordovaString() }
+        } else {
+            map["error"] = outcomeError2.toErrorMap()
+        }
+        emitOn(defaultCallback, map)
+    }
+
+    private fun PLYPresentation.toPresentationMap(): Map<String, Any?> {
+        val map = HashMap<String, Any?>()
+        map["screenId"] = screenId
+        map["id"] = screenId
+        map["placementId"] = placementId
+        map["contentId"] = contentId
+        map["audienceId"] = audienceId
+        map["abTestId"] = abTestId
+        map["abTestVariantId"] = abTestVariantId
+        map["language"] = language
+        map["type"] = type.ordinal
+        map["height"] = height
+        if (plans.isNotEmpty()) {
+            map["plans"] = plans.map { it.toMap() }
+        }
+        metadata?.let { map["metadata"] = it.toMetadataMap() }
+        return map
+    }
+
+    private fun PLYPresentationMetadata.toMetadataMap(): Map<String, Any?> {
+        val result = HashMap<String, Any?>()
+        keys().forEach { key -> result[key] = get(key) }
+        return result
+    }
+
+    private fun PLYError.toErrorMap(): Map<String, Any?> {
+        return mapOf("message" to (message ?: "Unknown error"))
+    }
+
+    // Delete when available in Android SDK
+    private fun PLYPresentationPlan.toMap(): Map<String, String?> {
+        return mapOf(
+            "planVendorId" to planVendorId,
+            "storeProductId" to storeProductId,
+            "basePlanId" to basePlanId
+        )
+    }
+
+    private fun JSONObject.optStringOrNull(key: String): String? {
+        if (!has(key) || isNull(key)) return null
+        val value = optString(key, "")
+        return if (value.isEmpty() || value == "null") null else value
     }
 
     private fun restoreAllProducts(callbackContext: CallbackContext) {
@@ -782,114 +1035,56 @@ class PurchaselyPlugin : CordovaPlugin() {
         })
     }
 
-    private fun setPaywallActionInterceptor(callbackContext: CallbackContext) {
-        // v6: the global setPaywallActionsInterceptor was removed. Register a typed
-        // interceptor per action and bridge them all to the single JS callback,
-        // keeping the v5 Cordova contract (setPaywallActionInterceptor + onProcessAction).
-        val actionClasses = listOf(
-            PLYPresentationAction.Login::class.java,
-            PLYPresentationAction.Purchase::class.java,
-            PLYPresentationAction.Close::class.java,
-            PLYPresentationAction.CloseAll::class.java,
-            PLYPresentationAction.Restore::class.java,
-            PLYPresentationAction.Navigate::class.java,
-            PLYPresentationAction.PromoCode::class.java,
-            PLYPresentationAction.OpenPresentation::class.java,
-            PLYPresentationAction.OpenPlacement::class.java,
-            PLYPresentationAction.WebCheckout::class.java
-        )
-        for (actionClass in actionClasses) {
-            Purchasely.interceptAction(actionClass, PLYActionInterceptorCallback { info, action, result ->
-                // Store the resolver so onProcessAction can complete it later.
-                interceptCompletion = result
-                interceptorActivity = WeakReference(info.activity)
-
-                val pluginResult = PluginResult(
-                    PluginResult.Status.OK,
-                    JSONObject(
-                        hashMapOf<String, Any?>(
-                            "info" to buildInterceptorInfo(info),
-                            "action" to action.value,
-                            "parameters" to buildInterceptorParameters(action).filterNot { it.value == null }
-                        )
-                    )
-                )
-                pluginResult.keepCallback = true
-                callbackContext.sendPluginResult(pluginResult)
-            })
+    private fun setDynamicOffering(
+        reference: String?,
+        planVendorId: String?,
+        offerVendorId: String?,
+        callbackContext: CallbackContext
+    ) {
+        if (reference == null || planVendorId == null) {
+            callbackContext.error("reference and planVendorId are required")
+            return
+        }
+        Purchasely.setDynamicOffering(reference, planVendorId, offerVendorId) { result: Boolean ->
+            if (result) callbackContext.success() else callbackContext.error("setDynamicOffering failed")
         }
     }
 
-    private fun buildInterceptorInfo(info: PLYInterceptorInfo): Map<String, Any?> {
-        val presentation = info.presentation
-        return mapOf(
-            "contentId" to info.contentId,
-            "presentationId" to presentation?.screenId,
-            "placementId" to presentation?.placementId,
-            "abTestId" to presentation?.abTestId,
-            "abTestVariantId" to presentation?.abTestVariantId
-        )
-    }
-
-    private fun buildInterceptorParameters(action: PLYPresentationAction): HashMap<String, Any?> {
-        // v6: parameters now live on the typed action subclass (PLYPresentationActionParameters
-        // was removed). Map them back to the flat dictionary the JS layer expects.
-        val params = hashMapOf<String, Any?>()
-        when (action) {
-            is PLYPresentationAction.Navigate -> {
-                params["url"] = action.url.toString()
-                params["title"] = action.title
+    private fun getDynamicOfferings(callbackContext: CallbackContext) {
+        Purchasely.getDynamicOfferings { offerings: List<PLYDynamicOffering> ->
+            val array = org.json.JSONArray()
+            for (o in offerings) {
+                array.put(JSONObject().apply {
+                    put("offerId", o.offerId)
+                    put("planId", o.planId)
+                    put("reference", o.reference)
+                })
             }
-            is PLYPresentationAction.Purchase -> {
-                params["plan"] = transformPlanToMap(action.plan)
-                params["subscriptionOffer"] = action.subscriptionOffer?.toMap()
-                params["offer"] = mapOf(
-                    "vendorId" to action.offer?.vendorId,
-                    "storeOfferId" to action.offer?.storeOfferId
-                )
-            }
-            is PLYPresentationAction.Close -> params["closeReason"] = action.closeReason.name
-            is PLYPresentationAction.CloseAll -> params["closeReason"] = action.closeReason.name
-            is PLYPresentationAction.OpenPresentation -> params["presentation"] = action.presentationId
-            is PLYPresentationAction.OpenPlacement -> params["placement"] = action.placementId
-            is PLYPresentationAction.WebCheckout -> {
-                params["url"] = action.url.toString()
-                params["clientReferenceId"] = action.clientReferenceId
-                params["queryParameterKey"] = action.queryParameterKey
-                params["webCheckoutProvider"] = action.webCheckoutProvider.name
-            }
-            else -> {}
-        }
-        return params
-    }
-
-    private fun closePresentation(callbackContext: CallbackContext) {
-        // v6: closeAllScreens dismisses every displayed screen (handles Flows too).
-        Purchasely.closeAllScreens()
-    }
-
-    private fun onProcessAction(processAction: Boolean) {
-        val activityHandler = interceptorActivity?.get() ?: cordova.activity
-        activityHandler?.runOnUiThread {
-            // v5 mapping: onProcessAction(true) = let Purchasely proceed = NOT_HANDLED;
-            // onProcessAction(false) = app handled the action = SUCCESS.
-            interceptCompletion?.invoke(if (processAction) PLYInterceptResult.NOT_HANDLED else PLYInterceptResult.SUCCESS)
-            interceptCompletion = null
-            interceptorActivity?.clear()
-            interceptorActivity = null
+            callbackContext.success(array)
         }
     }
 
-    private fun showPresentation() {
-        // v6 has no native hide/show: re-display the last presentation we displayed
-        // (retained from present*/presentPresentation). hidePresentation closes it.
-        val activity = cordova.activity ?: return
-        displayedPresentation?.display(activity) { outcome -> sendPurchaseResult(outcome) }
+    private fun removeDynamicOffering(reference: String?) {
+        if (reference != null) Purchasely.removeDynamicOffering(reference)
     }
 
-    private fun hidePresentation() {
-        // v6 has no hide/reopen for a single presentation; closeAllScreens is the closest behavior.
-        Purchasely.closeAllScreens()
+    private fun clearDynamicOfferings() {
+        Purchasely.clearDynamicOfferings()
+    }
+
+    private fun removeActionInterceptor(kind: String?, callbackContext: CallbackContext) {
+        val actionClass = kindToActionClass(kind ?: "")
+        if (actionClass == null) {
+            callbackContext.error("Unknown action kind: $kind")
+            return
+        }
+        Purchasely.removeActionInterceptor(actionClass)
+        callbackContext.success()
+    }
+
+    private fun removeAllActionInterceptors(callbackContext: CallbackContext) {
+        Purchasely.removeAllActionInterceptors()
+        callbackContext.success()
     }
 
     fun setUserAttributeWithStringArray(key: String?, value: JSONArray?, legalBasisString: String?) {
@@ -1117,64 +1312,46 @@ class PurchaselyPlugin : CordovaPlugin() {
         Purchasely.debugMode = enabled
     }
 
+    // -----------------------------------------------------------------------
+    // v6 kept-alive emit helper + outcome mappers (copied from RN bridge)
+    // -----------------------------------------------------------------------
+
+    /** Emit a JSONObject on a kept-alive callback (keepCallback = true). */
+    private fun emitOn(cb: CallbackContext?, map: Map<String, Any?>) {
+        cb ?: return
+        val result = PluginResult(PluginResult.Status.OK, JSONObject(map))
+        result.keepCallback = true
+        cb.sendPluginResult(result)
+    }
+
+    private fun PLYCloseReason.toCordovaString(): String = when (this) {
+        PLYCloseReason.BUTTON -> "button"
+        PLYCloseReason.BACK_SYSTEM -> "backSystem"
+        PLYCloseReason.PROGRAMMATIC -> "programmatic"
+    }
+
+    private fun PLYPurchaseResult.toOrdinal(): Int = when (this) {
+        PLYPurchaseResult.PURCHASED -> 0
+        PLYPurchaseResult.CANCELLED -> 1
+        PLYPurchaseResult.RESTORED -> 2
+    }
+
     companion object {
         var defaultCallback: CallbackContext? = null
-        var purchaseCallback: CallbackContext? = null
         var eventsCallback: CallbackContext? = null
         var attributesCallback: CallbackContext? = null
-
-        var interceptorActivity: WeakReference<Activity>? = null
-
-        val presentationsLoaded = mutableListOf<PLYPresentation>()
-        // Last presentation displayed — retained so showPresentation can re-display it.
-        var displayedPresentation: PLYPresentation? = null
 
         private const val runningModeObserver = 2
         private const val runningModeFull = 3
 
-        // v6: dismissal delivers a single PLYPresentationOutcome. PLYPurchaseResult
-        // ordinals (PURCHASED=0, CANCELLED=1, RESTORED=2) match the JS PurchaseResult
-        // enum, but we map explicitly to stay robust and handle the null (no-purchase) case.
-        fun sendPurchaseResult(outcome: PLYPresentationOutcome) {
-            val map = HashMap<String?, Any?>()
-            // Legacy fields, kept for source compatibility with existing integrations.
-            map["result"] = when (outcome.purchaseResult) {
-                PLYPurchaseResult.PURCHASED -> 0
-                PLYPurchaseResult.CANCELLED -> 1
-                PLYPurchaseResult.RESTORED -> 2
-                else -> 1 // none / null → dismissed without a purchase
-            }
-            map["plan"] = transformPlanToMap(outcome.plan)
-            // v6 rich outcome (parity with Flutter / React Native): a string
-            // purchaseResult, the closeReason, and the presentation that produced
-            // the outcome — always populated for the default dismiss handler so the
-            // app can identify which campaign/deeplink presentation closed.
-            map["purchaseResult"] = outcome.purchaseResult?.name?.lowercase()
-            map["closeReason"] = outcome.closeReason?.value
-            map["presentation"] = outcome.presentation?.let { p ->
-                HashMap<String?, Any?>().apply {
-                    put("screenId", p.screenId)
-                    put("placementId", p.placementId)
-                    put("contentId", p.contentId)
-                    put("audienceId", p.audienceId)
-                    put("abTestId", p.abTestId)
-                    put("abTestVariantId", p.abTestVariantId)
-                    put("campaignId", p.campaignId)
-                    put("flowId", p.flowId)
-                    put("language", p.language)
-                }
-            }
-            if (purchaseCallback != null) {
-                purchaseCallback?.success(JSONObject(map))
-                purchaseCallback = null
-            } else if (defaultCallback != null) {
-                val pluginResult = PluginResult(PluginResult.Status.OK, JSONObject(map))
-                pluginResult.keepCallback = true
-                defaultCallback?.sendPluginResult(pluginResult)
-            }
-        }
+        /**
+         * Upper bound on how long the bridge waits for JS to resolve an intercepted
+         * action via completeActionInterceptor. If JS never calls back we default to
+         * NOT_HANDLED so the SDK action is never blocked indefinitely.
+         */
+        private const val INTERCEPTOR_TIMEOUT_MS = 30_000L
 
-        private fun transformPlanToMap(plan: PLYPlan?): Map<String?, Any?> {
+        fun transformPlanToMap(plan: PLYPlan?): Map<String?, Any?> {
             if (plan == null) return HashMap()
             val map = HashMap(plan.toMap())
             if (plan.type == DistributionType.CONSUMABLE) {
