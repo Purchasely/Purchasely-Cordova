@@ -134,20 +134,34 @@ describe('Purchasely', () => {
     });
   });
 
-  describe('start', () => {
-    it('should call exec with correct parameters', () => {
-      const success = jest.fn();
-      const error = jest.fn();
+  describe('PurchaselyBuilder', () => {
+    it('builds and starts the SDK with mapped args + applyStartOptions', async () => {
+      mockExec.mockImplementation((success) => success(true));
+      const ok = await Purchasely.builder('API_KEY')
+        .appUserId('user_1')
+        .runningMode('full')
+        .logLevel('debug')
+        .allowDeeplink(true)
+        .allowCampaigns(false)
+        .stores(['google', 'huawei'])
+        .storekitVersion('storeKit1')
+        .start();
+      expect(ok).toBe(true);
+      const startCall = mockExec.mock.calls.find((c) => c[3] === 'start');
+      expect(startCall[4]).toEqual([
+        'API_KEY', ['Google', 'Huawei'], true, 'user_1', 0, 3, expect.any(String),
+      ]);
+      const optsCall = mockExec.mock.calls.find((c) => c[3] === 'applyStartOptions');
+      expect(optsCall[4]).toEqual([{ allowDeeplink: true, allowCampaigns: false }]);
+    });
 
-      Purchasely.start('API_KEY', ['GOOGLE'], false, 'user123', 1, 3, success, error);
-
-      expect(mockExec).toHaveBeenCalledWith(
-        success,
-        error,
-        'Purchasely',
-        'start',
-        ['API_KEY', ['GOOGLE'], false, 'user123', 1, 3, '5.6.2']
-      );
+    it('uses observer + error + storeKit2 defaults', async () => {
+      mockExec.mockImplementation((success) => success(true));
+      await Purchasely.builder('K').start();
+      const startCall = mockExec.mock.calls.find((c) => c[3] === 'start');
+      expect(startCall[4][1]).toEqual(['Google']);   // stores
+      expect(startCall[4][2]).toBe(false);            // storekit1 (storeKit2 default)
+      expect(startCall[4][5]).toBe(2);                // runningMode observer
     });
   });
 

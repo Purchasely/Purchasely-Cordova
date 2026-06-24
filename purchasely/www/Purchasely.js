@@ -2,13 +2,50 @@ var exec = require('cordova/exec');
 
 var defaultError = (e) => { console.log(e); }
 
-exports.start = function (apiKey, stores, storekit1, userId, logLevel, runningMode, success, error) {
-    var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
-    if(!cordovaSdkVersion) {
-        cordovaSdkVersion = "6.0.0-rc.1";
+var LOG_LEVEL_MAP = { debug: 0, info: 1, warn: 2, error: 3 };
+var RUNNING_MODE_MAP = { observer: 2, full: 3 };
+
+function resolveSdkVersion() {
+    var v = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely'];
+    return v || '6.0.0-rc.1';
+}
+
+class PurchaselyBuilder {
+    constructor(state) { this._state = state; }
+    static apiKey(key) {
+        return new PurchaselyBuilder({
+            apiKey: key, appUserId: null, runningMode: 'observer', logLevel: 'error',
+            allowDeeplink: false, allowCampaigns: true, androidStores: ['google'],
+            storekitVersion: 'storeKit2',
+        });
     }
-    exec(success, error, 'Purchasely', 'start', [apiKey, stores, storekit1, userId, logLevel, runningMode, cordovaSdkVersion]);
-};
+    appUserId(id) { this._state.appUserId = id; return this; }
+    runningMode(m) { this._state.runningMode = m; return this; }
+    logLevel(l) { this._state.logLevel = l; return this; }
+    allowDeeplink(a) { this._state.allowDeeplink = a; return this; }
+    allowCampaigns(a) { this._state.allowCampaigns = a; return this; }
+    stores(s) { this._state.androidStores = s; return this; }
+    storekitVersion(v) { this._state.storekitVersion = v; return this; }
+    start() {
+        var s = this._state;
+        var storeNames = s.androidStores.map(function (x) {
+            return x.charAt(0).toUpperCase() + x.slice(1);
+        });
+        return new Promise(function (resolve, reject) {
+            exec(function (configured) {
+                exec(function () {}, function () {}, 'Purchasely', 'applyStartOptions',
+                    [{ allowDeeplink: s.allowDeeplink, allowCampaigns: s.allowCampaigns }]);
+                resolve(configured);
+            }, reject, 'Purchasely', 'start', [
+                s.apiKey, storeNames, s.storekitVersion === 'storeKit1', s.appUserId,
+                LOG_LEVEL_MAP[s.logLevel], RUNNING_MODE_MAP[s.runningMode], resolveSdkVersion(),
+            ]);
+        });
+    }
+}
+
+exports.PurchaselyBuilder = PurchaselyBuilder;
+exports.builder = function (apiKey) { return PurchaselyBuilder.apiKey(apiKey); };
 
 exports.addEventsListener = function (success, error) {
     exec(success, error, 'Purchasely', 'addEventsListener', []);
