@@ -40,17 +40,16 @@ function onDeviceReady() {
 	console.log('Running cordova-' + cordova.platformId + '@' + cordova.version);
 	document.getElementById('deviceready').classList.add('ready');
 
-	Purchasely.start(
-		'fcb39be4-2ba4-4db7-bde3-2a5a1e20745d',
-		['Google'],
-		false,
-		null,
-		Purchasely.LogLevel.DEBUG,
-		Purchasely.RunningMode.full,
-		(isConfigured) => {
-			if(isConfigured) onPurchaselySdkReady();
-		},
-		(error) => {
+	Purchasely.builder('fcb39be4-2ba4-4db7-bde3-2a5a1e20745d')
+		.appUserId(null)
+		.runningMode('full')
+		.logLevel('error')
+		.allowDeeplink(true)
+		.start()
+		.then(configured => {
+			if (configured) onPurchaselySdkReady();
+		})
+		.catch(error => {
 			console.log(error);
 		});
 
@@ -60,7 +59,6 @@ function onDeviceReady() {
 
 	document.getElementById("openPresentation").addEventListener("click", openPresentation);
 	document.getElementById("fetchPresentation").addEventListener("click", fetchPresentation);
-	document.getElementById("presentSubscriptions").addEventListener("click", presentSubscriptions);
 	document.getElementById("showPresentation").addEventListener("click", showPresentation);
 	document.getElementById("hidePresentation").addEventListener("click", hidePresentation);
 	document.getElementById("closePresentation").addEventListener("click", closePresentation);
@@ -139,8 +137,6 @@ function onPurchaselySdkReady() {
 	Purchasely.setAttribute(Purchasely.Attribute.BATCH_CUSTOM_USER_ID, "batch_custom_user_id");
 	Purchasely.setAttribute(Purchasely.Attribute.BATCH_INSTALLATION_ID, "testBatch1");
 
-	Purchasely.allowDeeplink(true);
-
 	Purchasely.planWithIdentifier('PURCHASELY_PLUS_MONTHLY', (plan) => {
 		console.log(' ==> Plan');
 		console.log(plan.vendorId);
@@ -162,14 +158,11 @@ function onPurchaselySdkReady() {
 		// v6: rich outcome. `presentation` identifies which campaign/deeplink closed.
 		console.log("Dismissed presentation: " + (outcome.presentation && outcome.presentation.screenId));
 		console.log("Purchase result: " + outcome.purchaseResult + " / close reason: " + outcome.closeReason);
-		if(outcome.result == Purchasely.PurchaseResult.CANCELLED) {
+		if (outcome.purchaseResult === 'cancelled') {
 			console.log("User cancelled purchase");
 		} else {
 			console.log("User purchased " + (outcome.plan && outcome.plan.vendorId));
 		}
-	},
-		(error) => {
-		console.log("Error with purchase : " + error);
 	});
 
 	Purchasely.setUserAttributeWithString("key_string", "value_string", Purchasely.DataProcessingLegalBasis.essential);
@@ -241,103 +234,105 @@ function onPurchaselySdkReady() {
 
 	Purchasely.removeUserAttributeListener();
 
-	Purchasely.setPaywallActionInterceptor((result) => {
-		console.log(result);
-		console.log('Received action from paywall ' + result.info.presentationId);
+	// v6 interceptor: per-action handlers replacing setPaywallActionInterceptor + onProcessAction
+	Purchasely.interceptAction('navigate', (info, payload) => {
+		console.log('User wants to navigate to website ' + payload.title + ' ' + payload.url);
+		console.log('prevent Purchasely SDK to navigate to website');
+		return Purchasely.InterceptResult.notHandled;
+	});
 
-		if (result.action === Purchasely.PaywallAction.navigate) {
-			console.log(
-			'User wants to navigate to website ' +
-				result.parameters.title +
-				' ' +
-				result.parameters.url
-			);
-			console.log('prevent Purchasely SDK to navigate to website');
-			Purchasely.onProcessAction(true);
-		} else if (result.action === Purchasely.PaywallAction.close) {
-			console.log('User wants to close paywall - close reason ' + result.parameters.closeReason);
-			Purchasely.onProcessAction(true);
-		} else if (result.action === Purchasely.PaywallAction.close_all) {
-		    console.log('User wants to close all paywalls');
-            Purchasely.onProcessAction(true);
-		} else if (result.action === Purchasely.PaywallAction.login) {
-			console.log('User wants to login');
-			//Present your own screen for user to log in
-			Purchasely.closePresentation();
-			Purchasely.userLogin('MY_USER_ID');
-			//Call this method to update Purchasely Paywall
-			Purchasely.onProcessAction(true);
-		} else if (result.action === Purchasely.PaywallAction.open_presentation) {
-			console.log('User wants to open a new paywall');
-			Purchasely.onProcessAction(true);
-	    } else if (result.action === Purchasely.PaywallAction.open_placement) {
-            console.log('User wants to open a new placement');
-            Purchasely.onProcessAction(true);
-		} else if (result.action === Purchasely.PaywallAction.purchase) {
-			console.log('User wants to purchase');
-			//If you want to intercept it, close paywall and display your screen
-			Purchasely.hidePresentation();
-		} else if (result.action === Purchasely.PaywallAction.web_checkout) {
-			console.log('User wants to proceed to web checkout');
-			console.log('web checkout url: ' + result.parameters.url);
-			console.log('web checkout provider: ' + result.parameters.webCheckoutProvider);
-	        console.log('web checkout client reference id: ' + result.parameters.clientReferenceId);
-	        console.log('web checkout query parameter key: ' + result.parameters.queryParameterKey);
-			Purchasely.onProcessAction(true);
-		} else {
-			console.log('Action unknown ' + result.action);
-			Purchasely.onProcessAction(true);
-		}
+	Purchasely.interceptAction('close', (info, payload) => {
+		console.log('User wants to close paywall - close reason ' + payload.closeReason);
+		return Purchasely.InterceptResult.notHandled;
+	});
+
+	Purchasely.interceptAction('closeAll', (info, payload) => {
+		console.log('User wants to close all paywalls');
+		return Purchasely.InterceptResult.notHandled;
+	});
+
+	Purchasely.interceptAction('login', (info, payload) => {
+		console.log('User wants to login');
+		//Present your own screen for user to log in
+		Purchasely.userLogin('MY_USER_ID');
+		return Purchasely.InterceptResult.success;
+	});
+
+	Purchasely.interceptAction('openPresentation', (info, payload) => {
+		console.log('User wants to open a new paywall');
+		return Purchasely.InterceptResult.notHandled;
+	});
+
+	Purchasely.interceptAction('openPlacement', (info, payload) => {
+		console.log('User wants to open a new placement');
+		return Purchasely.InterceptResult.notHandled;
+	});
+
+	Purchasely.interceptAction('purchase', (info, payload) => {
+		console.log('User wants to purchase');
+		//If you want to intercept it, handle the purchase yourself
+		return Purchasely.InterceptResult.notHandled;
+	});
+
+	Purchasely.interceptAction('webCheckout', (info, payload) => {
+		console.log('User wants to proceed to web checkout');
+		console.log('web checkout url: ' + payload.url);
+		console.log('web checkout provider: ' + payload.webCheckoutProvider);
+		console.log('web checkout client reference id: ' + payload.clientReferenceId);
+		console.log('web checkout query parameter key: ' + payload.queryParameterKey);
+		return Purchasely.InterceptResult.notHandled;
 	});
 
 	Purchasely.clearBuiltInAttributes();
 }
 
+// Active presentation request for use with show/hide/close controls
+var _activePresentationRequest = null;
+
 function openPresentation() {
-	Purchasely.presentPresentationForPlacement(
-		'ONBOARDING', //placementId
-		null, //contentId
-		true, //fullscreen
-		(callback) => {
-			console.log(callback);
-			if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
+	Purchasely.PresentationBuilder
+		.placement('ONBOARDING')
+		.contentId(null)
+		.build()
+		.display({ type: 'fullScreen' })
+		.then(outcome => {
+			console.log(outcome);
+			if (outcome.purchaseResult === 'cancelled') {
 				console.log("User cancelled purchased");
 			} else {
-				console.log("User purchased " + callback.plan.name);
+				console.log("User purchased " + (outcome.plan && outcome.plan.name));
 			}
-		},
-		(error) => {
+		})
+		.catch(error => {
 			console.log("Error with purchase : " + error);
-		}
-	);
+		});
 }
 
 function fetchPresentation() {
-	Purchasely.fetchPresentationForPlacement(
-		'flow_demo', //placementId
-		null, //contentId
-		(presentation) => {
-			console.log(safeStringify(presentation));
-			Purchasely.presentPresentation(presentation, false, null,
-				(callback) => {
-					console.log(callback);
-					if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
-						console.log("User cancelled purchased");
-					} else {
-						console.log("User purchased " + callback.plan.name);
-					}
-				}, (error) => {
-					console.log("Error with present : " + error);
-				});
-		},
-		(error) => {
-			console.log("Error with purchase : " + error);
-		}
-	);
-}
+	var req = Purchasely.PresentationBuilder
+		.placement('flow_demo')
+		.contentId(null)
+		.build();
 
-function presentSubscriptions() {
-	Purchasely.presentSubscriptions();
+	req.preload()
+		.then(presentation => {
+			console.log(safeStringify(presentation));
+			_activePresentationRequest = req;
+			return req.display();
+		})
+		.then(outcome => {
+			console.log(outcome);
+			if (outcome.purchaseResult === 'cancelled') {
+				console.log("User cancelled purchased");
+			} else {
+				console.log("User purchased " + (outcome.plan && outcome.plan.name));
+			}
+			_activePresentationRequest = null;
+		})
+		.catch(error => {
+			console.log("Error with presentation : " + error);
+			_activePresentationRequest = null;
+		});
 }
 
 function purchaseWithPlanVendorId() {
@@ -345,26 +340,32 @@ function purchaseWithPlanVendorId() {
 }
 
 function processToPayment() {
-	// Call this method open paywall again
-	Purchasely.showPresentation();
-
-	// Call this method in paywallObserver mode to synchronize purchases with Purchasely
-	// Purchasely.synchronize();
-
-	// Call this method to process to payment or false if you handled it
-	Purchasely.onProcessAction(true);
+	// In v6, showing/hiding a presentation is managed via PresentationRequest.
+	// If you have an active request, call display() again to bring it back.
+	if (_activePresentationRequest) {
+		_activePresentationRequest.display();
+	}
 }
 
 function showPresentation() {
-	Purchasely.showPresentation();
+	if (_activePresentationRequest) {
+		_activePresentationRequest.display();
+	}
 }
 
 function hidePresentation() {
-	Purchasely.hidePresentation();
+	// In v6 there is no hide — close the active presentation instead.
+	if (_activePresentationRequest) {
+		_activePresentationRequest.close();
+		_activePresentationRequest = null;
+	}
 }
 
 function closePresentation() {
-	Purchasely.closePresentation();
+	if (_activePresentationRequest) {
+		_activePresentationRequest.close();
+		_activePresentationRequest = null;
+	}
 }
 
 function restore() {
