@@ -972,4 +972,28 @@ describe('Purchasely', () => {
       );
     });
   });
+
+  describe('outcome normalizers', () => {
+    it('maps purchaseResult ordinals to strings', () => {
+      expect(Purchasely.__test.purchaseResultFromOrdinal(0)).toBe('purchased');
+      expect(Purchasely.__test.purchaseResultFromOrdinal(1)).toBe('cancelled');
+      expect(Purchasely.__test.purchaseResultFromOrdinal(2)).toBe('restored');
+      expect(Purchasely.__test.purchaseResultFromOrdinal(null)).toBeNull();
+    });
+    it('nulls closeReason when an error is present', () => {
+      const o = Purchasely.__test.eventToOutcome(
+        { purchaseResult: 1, closeReason: 'button', error: 'boom' },
+        { screenId: 'S1' });
+      expect(o.error).toEqual({ message: 'boom' });
+      expect(o.closeReason).toBeNull();
+      expect(o.purchaseResult).toBe('cancelled');
+      expect(o.presentation.screenId).toBe('S1');
+    });
+    it('normalizes a presentation, mapping id → screenId', () => {
+      const p = Purchasely.__test.normalizePresentation({ id: 'X', placementId: 'P' });
+      expect(p.screenId).toBe('X');
+      expect(p.placementId).toBe('P');
+      expect(Purchasely.__test.normalizePresentation({})).toBeNull();
+    });
+  });
 });

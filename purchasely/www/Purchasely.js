@@ -47,6 +47,64 @@ class PurchaselyBuilder {
 exports.PurchaselyBuilder = PurchaselyBuilder;
 exports.builder = function (apiKey) { return PurchaselyBuilder.apiKey(apiKey); };
 
+// ---------------------------------------------------------------------------
+// Presentation outcome & error normalizers
+// Module-level function declarations (hoisted) — consumed by Tasks 4–6.
+// ---------------------------------------------------------------------------
+
+function normalizePresentation(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  var screenId = raw.screenId != null ? raw.screenId : raw.id;
+  if (!screenId) return null;
+  return {
+    screenId: screenId, id: screenId,
+    placementId: raw.placementId != null ? raw.placementId : null,
+    contentId: raw.contentId != null ? raw.contentId : null,
+    audienceId: raw.audienceId != null ? raw.audienceId : null,
+    abTestId: raw.abTestId != null ? raw.abTestId : null,
+    abTestVariantId: raw.abTestVariantId != null ? raw.abTestVariantId : null,
+    language: raw.language != null ? raw.language : null,
+    type: raw.type != null ? raw.type : null,
+    plans: raw.plans != null ? raw.plans : null,
+    metadata: raw.metadata != null ? raw.metadata : null,
+    height: raw.height != null ? raw.height : null,
+  };
+}
+
+function normalizeError(raw) {
+  if (!raw) return null;
+  if (typeof raw === 'string') return { message: raw };
+  return {
+    code: raw.code != null ? raw.code : null,
+    message: raw.message != null ? raw.message : 'Unknown error',
+    domain: raw.domain != null ? raw.domain : null,
+  };
+}
+
+function purchaseResultFromOrdinal(v) {
+  if (v === null || v === undefined) return null;
+  if (v === 0) return 'purchased';
+  if (v === 2) return 'restored';
+  if (v === 1) return 'cancelled';
+  return null;
+}
+
+function eventToOutcome(event, presentation) {
+  var error = normalizeError(event.error);
+  return {
+    presentation: presentation || null,
+    purchaseResult: purchaseResultFromOrdinal(event.purchaseResult),
+    plan: event.plan != null ? event.plan : null,
+    closeReason: error ? null : (event.closeReason != null ? event.closeReason : null),
+    error: error,
+  };
+}
+
+// Internal test-only surface — not part of the public API.
+exports.__test = { normalizePresentation, normalizeError, purchaseResultFromOrdinal, eventToOutcome };
+
+// ---------------------------------------------------------------------------
+
 exports.addEventsListener = function (success, error) {
     exec(success, error, 'Purchasely', 'addEventsListener', []);
 };
