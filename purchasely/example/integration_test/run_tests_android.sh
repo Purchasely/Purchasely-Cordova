@@ -87,6 +87,18 @@ if [ $SKIP_INSTALL -eq 0 ]; then
   echo "==> Installing APK on $DEVICE…"
   adb -s "$DEVICE" install -r "$APK"
   echo "==> Install done"
+
+  # adb install returns before the system finishes dexopt and dispatching
+  # ACTION_PACKAGE_ADDED.  Launching too soon produces result code=-92 (aborted)
+  # and the process is never forked.  Wait until pm confirms the package, then
+  # add a small buffer for dexopt to complete.
+  echo "==> Waiting for package to be launchable…"
+  for _wi in $(seq 1 30); do
+    adb -s "$DEVICE" shell pm list packages 2>/dev/null | grep -qF 'com.purchasely.demo' && break || true
+    sleep 1
+  done
+  sleep 2
+  echo "==> Package ready"
 fi
 
 # ── clear previous logcat ────────────────────────────────────────────────────
@@ -97,9 +109,22 @@ echo "==> Logcat cleared"
 PKG="com.purchasely.demo"
 MAIN_ACTIVITY="$PKG/org.apache.cordova.CordovaApp"
 echo "==> Launching $PKG…"
-adb -s "$DEVICE" shell am start -n "$MAIN_ACTIVITY" 2>/dev/null || \
-  adb -s "$DEVICE" shell am start -n "$PKG/.MainActivity" 2>/dev/null || \
-  adb -s "$DEVICE" shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
+
+LAUNCH_OUT=""
+for _li in 1 2 3; do
+  LAUNCH_OUT=$(adb -s "$DEVICE" shell am start -W -n "$MAIN_ACTIVITY" 2>&1) || true
+  echo "==> am start (attempt $_li): $LAUNCH_OUT"
+  echo "$LAUNCH_OUT" | grep -qE 'Status: ok|Complete' && break || true
+  if [ "$_li" -lt 3 ]; then
+    echo "==> Launch not confirmed, retrying in 3s…"
+    sleep 3
+  fi
+done
+
+if ! echo "$LAUNCH_OUT" | grep -qE 'Status: ok|Complete'; then
+  echo "ERROR: app failed to launch after 3 attempts — last output: $LAUNCH_OUT" >&2
+  exit 1
+fi
 echo "==> App launched"
 
 # ── T9 / T10 driver coordination ─────────────────────────────────────────────
@@ -145,7 +170,7 @@ adb -s "$DEVICE" logcat -G 16M 2>/dev/null || true
 # One reader avoids competing readers that overflow the logcat ring buffer.
 adb -s "$DEVICE" logcat -v time \
   | tee "$FULL_LOGFILE" \
-  | grep --line-buffered -E 'PLY_E2E|Purchasely|chromium|CordovaWebView|AndroidRuntime|System\.err' \
+  | grep --line-buffered -E 'PLY_E2E|Purchasely|CordovaLog|chromium|CordovaWebView|AndroidRuntime|System\.err' \
   | while IFS= read -r line; do
     echo "$line" | tee -a "$LOGFILE"
 
