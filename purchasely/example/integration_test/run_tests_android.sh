@@ -150,6 +150,7 @@ TAP_DONE=0
 BACK_DONE=0
 SUITE_RESULT=""
 
+LAST_HEARTBEAT_TS=$START_TS
 while true; do
   NOW=$(date +%s)
   ELAPSED=$((NOW - START_TS))
@@ -158,6 +159,12 @@ while true; do
     err "TIMEOUT: suite did not complete within ${TIMEOUT_SECS}s"
     SUITE_RESULT="FAIL"
     break
+  fi
+
+  # Heartbeat every 30 s so CI logs show the monitor is alive
+  if [ $((NOW - LAST_HEARTBEAT_TS)) -ge 30 ]; then
+    log "Monitoring… elapsed=${ELAPSED}s / ${TIMEOUT_SECS}s"
+    LAST_HEARTBEAT_TS=$NOW
   fi
 
   # T8 tap signal
@@ -187,7 +194,12 @@ while true; do
   sleep 0.5
 done
 
-# Wait for background drivers (best-effort)
+# Stop logcat capture before wait — adb logcat never exits on its own and would
+# block the bare `wait` below forever, preventing the script from terminating.
+[ -n "$LOGCAT_PID" ] && kill "$LOGCAT_PID" 2>/dev/null || true
+LOGCAT_PID=""
+
+# Wait for background UI drivers (tap / back) — they finish in seconds
 wait 2>/dev/null || true
 
 # -- Report --------------------------------------------------------------------
