@@ -108,6 +108,7 @@ echo "==> App launched"
 
 TAP_PID=""
 BACK_PID=""
+TIMER_PID=""
 
 launch_tap_driver() {
   echo "==> [host] starting tap_purchase driver for T9"
@@ -122,59 +123,54 @@ launch_back_driver() {
 }
 
 cleanup_drivers() {
-  [ -n "$TAP_PID"  ] && kill "$TAP_PID"  2>/dev/null || true
-  [ -n "$BACK_PID" ] && kill "$BACK_PID" 2>/dev/null || true
+  [ -n "$TAP_PID"   ] && kill "$TAP_PID"   2>/dev/null || true
+  [ -n "$BACK_PID"  ] && kill "$BACK_PID"  2>/dev/null || true
+  [ -n "$TIMER_PID" ] && kill "$TIMER_PID" 2>/dev/null || true
 }
 trap 'cleanup_drivers; restore_config' EXIT
 
 # ── tail logcat and react to signals ─────────────────────────────────────────
 LOGFILE="/tmp/cordova_e2e_logcat_$(date +%s).txt"
-echo "==> Logging to $LOGFILE"
-touch "$LOGFILE"  # ensure file exists even if no matching lines appear
+FULL_LOGFILE="/tmp/cordova_full_logcat_$(date +%s).txt"
+echo "==> Logging filtered to $LOGFILE, full to $FULL_LOGFILE"
+touch "$LOGFILE"
 
-DONE=0
-FINAL_LINE=""
 # Configurable via PLY_E2E_TIMEOUT env var (useful for slow CI emulators)
 TEST_TIMEOUT="${PLY_E2E_TIMEOUT:-300}"
 
-start_time=$(date +%s)
-
-adb -s "$DEVICE" logcat -v time | while IFS= read -r line; do
-  # Capture PLY_E2E markers, Purchasely SDK logs, and WebView console output
-  if echo "$line" | grep -qE 'PLY_E2E|Purchasely|chromium|CordovaWebView'; then
+# Single logcat pipeline: tee full output to disk, grep-filter to the while loop.
+# One reader avoids competing readers that overflow the logcat ring buffer.
+adb -s "$DEVICE" logcat -G 16M -v time \
+  | tee "$FULL_LOGFILE" \
+  | grep --line-buffered -E 'PLY_E2E|Purchasely|chromium|CordovaWebView|AndroidRuntime|System\.err' \
+  | while IFS= read -r line; do
     echo "$line" | tee -a "$LOGFILE"
-  fi
 
-  if echo "$line" | grep -q '\[PLY_E2E\] T9_PRESENTING'; then
-    launch_tap_driver
-  fi
+    if echo "$line" | grep -q '\[PLY_E2E\] T9_PRESENTING'; then
+      launch_tap_driver
+    fi
 
-  if echo "$line" | grep -q '\[PLY_E2E\] T10_PRESENTING'; then
-    launch_back_driver
-  fi
+    if echo "$line" | grep -q '\[PLY_E2E\] T10_PRESENTING'; then
+      launch_back_driver
+    fi
 
-  if echo "$line" | grep -q '\[PLY_E2E\] DONE:'; then
-    FINAL_LINE=$(echo "$line" | grep -o '\[PLY_E2E\] DONE:.*')
-    echo "==> $FINAL_LINE"
-    # Signal to the outer loop that we're done by writing a sentinel file
-    touch /tmp/cordova_e2e_done
-    break
-  fi
-
-  now=$(date +%s)
-  if [ $((now - start_time)) -gt $TEST_TIMEOUT ]; then
-    echo "ERROR: global test timeout (${TEST_TIMEOUT}s) exceeded" | tee -a "$LOGFILE"
-    touch /tmp/cordova_e2e_timeout
-    break
-  fi
-done &
+    if echo "$line" | grep -q '\[PLY_E2E\] DONE:'; then
+      FINAL_LINE=$(echo "$line" | grep -o '\[PLY_E2E\] DONE:.*')
+      echo "==> $FINAL_LINE"
+      touch /tmp/cordova_e2e_done
+      break
+    fi
+  done &
 LOGCAT_PID=$!
 
-# Wait for done/timeout sentinel
-# Outer loop runs for TEST_TIMEOUT + 60s so the inner subshell always has time
-# to write its sentinel file before being killed (avoids the race condition where
-# both timeouts fire at ~T+300 and the outer kill wins).
-OUTER_TIMEOUT=$((TEST_TIMEOUT + 60))
+# Independent background timer — fires regardless of logcat volume/EOF
+(sleep "$TEST_TIMEOUT" \
+  && echo "ERROR: global test timeout (${TEST_TIMEOUT}s) exceeded" | tee -a "$LOGFILE" \
+  && touch /tmp/cordova_e2e_timeout) &
+TIMER_PID=$!
+
+# Wait for done/timeout sentinel, or detect logcat pipeline death (EOF/crash)
+OUTER_TIMEOUT=$((TEST_TIMEOUT + 30))
 for i in $(seq 1 $OUTER_TIMEOUT); do
   if [ -f /tmp/cordova_e2e_done ]; then
     rm -f /tmp/cordova_e2e_done
@@ -184,6 +180,12 @@ for i in $(seq 1 $OUTER_TIMEOUT); do
     rm -f /tmp/cordova_e2e_timeout
     kill "$LOGCAT_PID" 2>/dev/null || true
     echo "ERROR: test suite timed out" >&2
+    exit 1
+  fi
+  # If the logcat pipeline exited early (emulator crash / buffer overflow), bail
+  if ! kill -0 "$LOGCAT_PID" 2>/dev/null; then
+    echo "ERROR: logcat pipeline exited unexpectedly (emulator crash or log buffer overflow)" \
+      | tee -a "$LOGFILE" >&2
     exit 1
   fi
   sleep 1
