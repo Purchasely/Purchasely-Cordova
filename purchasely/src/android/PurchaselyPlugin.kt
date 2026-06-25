@@ -624,7 +624,7 @@ class PurchaselyPlugin : CordovaPlugin() {
 
     private fun closePresentation(requestId: String, callbackContext: CallbackContext) {
         emitOn(callbackContext, mapOf("type" to "closeRequested", "requestId" to requestId))
-        activePresentations.remove(requestId)
+        val presentation = activePresentations.remove(requestId)
         // The native SDK does not expose a per-request close, so this dismisses
         // *every* displayed presentation, not just `requestId` (RN parity).
         if (activePresentations.isNotEmpty()) {
@@ -636,6 +636,21 @@ class PurchaselyPlugin : CordovaPlugin() {
             )
         }
         Purchasely.closeAllScreens()
+        // SDK rc.2 does not reliably emit PRESENTATION_CLOSED for programmatic closes
+        // via closeAllScreens(). Emit a synthetic event so addEventsListener callbacks
+        // (e.g. T11) receive it.
+        val cb = eventsCallback
+        if (cb != null) {
+            val props = HashMap<String?, Any?>()
+            props["placement_id"] = presentation?.placementId
+            props["displayed_presentation"] = presentation?.screenId
+            val eventMap = HashMap<String?, Any?>()
+            eventMap["name"] = "PRESENTATION_CLOSED"
+            eventMap["properties"] = props
+            val result = PluginResult(PluginResult.Status.OK, JSONObject(eventMap))
+            result.keepCallback = true
+            cb.sendPluginResult(result)
+        }
     }
 
     private fun goBackToPreviousScreen(requestId: String) {
@@ -1200,7 +1215,7 @@ class PurchaselyPlugin : CordovaPlugin() {
             is JSONArray -> callbackContext.success(result)
             is String -> callbackContext.success(result)
             is Int -> callbackContext.success(result)
-            is Boolean -> callbackContext.success(if (result) 1 else 0)
+            is Boolean -> callbackContext.sendPluginResult(PluginResult(PluginResult.Status.OK, result))
             else -> callbackContext.error("No user attribute found with $key")
         }
     }

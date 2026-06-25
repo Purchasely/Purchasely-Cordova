@@ -15,17 +15,18 @@ concurrency:
 jobs:
   e2e-android:
     name: E2E Android
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # macOS 14 (Apple Silicon M1): ARM64 emulator runs natively, no KVM needed.
+    # Also compatible with iOS E2E (Xcode simulator) when we add that job.
+    runs-on: macos-14
+    timeout-minutes: 30
+
+    env:
+      AVD_NAME: "cordova_e2e_api34"
+      AVD_PACKAGE: "system-images;android-34;google_apis;arm64-v8a"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
 
       - name: Setup Node.js 20
         uses: actions/setup-node@v4
@@ -71,16 +72,65 @@ jobs:
         working-directory: purchasely/example
         run: cordova build android
 
+      - name: Install system image and create AVD if needed
+        run: |
+          set -euo pipefail
+          sdkmanager --install "$AVD_PACKAGE" || true
+          sdkmanager --install "emulator" || true
+          sdkmanager --install "platform-tools" || true
+          if ! avdmanager list avd | grep -q "$AVD_NAME"; then
+            echo "Creating AVD: $AVD_NAME"
+            echo "no" | avdmanager create avd \
+              --name "$AVD_NAME" \
+              --package "$AVD_PACKAGE" \
+              --device "pixel_6" \
+              --force
+          else
+            echo "AVD $AVD_NAME already exists — reusing"
+          fi
+
+      - name: Start Android emulator
+        run: |
+          set -euo pipefail
+          adb emu kill 2>/dev/null || true
+          pkill -9 qemu-system 2>/dev/null || true
+          sleep 2
+
+          $ANDROID_HOME/emulator/emulator \
+            -avd "$AVD_NAME" \
+            -no-window \
+            -no-audio \
+            -no-boot-anim \
+            -gpu swiftshader_indirect \
+            -no-snapshot \
+            &
+
+          adb wait-for-device
+
+          boot_completed=""
+          attempts=0
+          while [ "$boot_completed" != "1" ] && [ $attempts -lt 60 ]; do
+            boot_completed=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
+            [ "$boot_completed" != "1" ] && sleep 5 && attempts=$((attempts + 1))
+          done
+
+          [ "$boot_completed" = "1" ] || (echo "::error::Emulator failed to boot"; exit 1)
+          adb shell input keyevent 82
+
+      - name: Disable animations
+        run: |
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+
       - name: Run E2E suite
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          arch: x86_64
-          # google_apis provides Google Play Services required by Purchasely billing
-          target: google_apis
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          disable-animations: true
-          script: PLY_E2E_TIMEOUT=480 bash purchasely/example/integration_test/run_tests_android.sh emulator-5554 --skip-build
+        run: PLY_E2E_TIMEOUT=480 bash purchasely/example/integration_test/run_tests_android.sh emulator-5554 --skip-build
+
+      - name: Stop emulator
+        if: always()
+        run: |
+          adb emu kill 2>/dev/null || true
+          pkill -9 qemu-system 2>/dev/null || true
 
       - name: Upload logcat
         if: always()

@@ -137,7 +137,7 @@ document.addEventListener('deviceready', function () {
       if (pres3.placementId !== PLACEMENT) {
         throw new Error('placementId mismatch: ' + pres3.placementId);
       }
-      var validTypes3 = ['NORMAL', 'FALLBACK', 1, 2];
+      var validTypes3 = ['NORMAL', 'FALLBACK', 0, 1, 2];
       if (pres3.type != null && !validTypes3.includes(pres3.type)) {
         throw new Error('Unexpected type: ' + pres3.type);
       }
