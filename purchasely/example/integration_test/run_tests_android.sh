@@ -130,16 +130,18 @@ trap 'cleanup_drivers; restore_config' EXIT
 # ── tail logcat and react to signals ─────────────────────────────────────────
 LOGFILE="/tmp/cordova_e2e_logcat_$(date +%s).txt"
 echo "==> Logging to $LOGFILE"
+touch "$LOGFILE"  # ensure file exists even if no matching lines appear
 
 DONE=0
 FINAL_LINE=""
-TEST_TIMEOUT=300  # 5 minutes max for the whole suite
+# Configurable via PLY_E2E_TIMEOUT env var (useful for slow CI emulators)
+TEST_TIMEOUT="${PLY_E2E_TIMEOUT:-300}"
 
 start_time=$(date +%s)
 
 adb -s "$DEVICE" logcat -v time | while IFS= read -r line; do
-  # Print only lines that contain PLY_E2E or Purchasely
-  if echo "$line" | grep -qE 'PLY_E2E|Purchasely|chromium'; then
+  # Capture PLY_E2E markers, Purchasely SDK logs, and WebView console output
+  if echo "$line" | grep -qE 'PLY_E2E|Purchasely|chromium|CordovaWebView'; then
     echo "$line" | tee -a "$LOGFILE"
   fi
 
@@ -169,7 +171,11 @@ done &
 LOGCAT_PID=$!
 
 # Wait for done/timeout sentinel
-for i in $(seq 1 $TEST_TIMEOUT); do
+# Outer loop runs for TEST_TIMEOUT + 60s so the inner subshell always has time
+# to write its sentinel file before being killed (avoids the race condition where
+# both timeouts fire at ~T+300 and the outer kill wins).
+OUTER_TIMEOUT=$((TEST_TIMEOUT + 60))
+for i in $(seq 1 $OUTER_TIMEOUT); do
   if [ -f /tmp/cordova_e2e_done ]; then
     rm -f /tmp/cordova_e2e_done
     break

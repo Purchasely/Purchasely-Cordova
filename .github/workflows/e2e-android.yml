@@ -76,13 +76,23 @@ jobs:
         with:
           api-level: 34
           arch: x86_64
+          # google_apis provides Google Play Services required by Purchasely billing
+          target: google_apis
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
-          script: bash purchasely/example/integration_test/run_tests_android.sh emulator-5554 --skip-build
+          script: |
+            adb -s emulator-5554 logcat -v time > /tmp/cordova_full_logcat.txt &
+            FULL_PID=$!
+            PLY_E2E_TIMEOUT=480 bash purchasely/example/integration_test/run_tests_android.sh emulator-5554 --skip-build
+            STATUS=$?
+            kill $FULL_PID 2>/dev/null || true
+            exit $STATUS
 
       - name: Upload logcat on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: cordova-e2e-logcat
-          path: /tmp/cordova_e2e_logcat_*.txt
+          path: |
+            /tmp/cordova_e2e_logcat_*.txt
+            /tmp/cordova_full_logcat.txt
