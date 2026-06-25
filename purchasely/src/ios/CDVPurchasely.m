@@ -307,12 +307,60 @@ static PLYPresentationBuilder *presentationBuilderFor(NSString *placementId,
     });
 }
 
+// ---------------------------------------------------------------------------
+// Transition parsing — converts a JS transition dict to PLYDisplayMode.
+//
+// The JS wire format mirrors the Android / Flutter bridges:
+//   { type: 'drawer', height: { type: 'percentage', value: 0.6 }, dismissible: true }
+//
+// PLYDimension is a Swift-only enum (not @objc), so we rely on the legacy
+// ObjC-accessible `heightPercentage:` factory methods on PLYDisplayMode.
+// ---------------------------------------------------------------------------
+
+static double parseHeightPct(id _Nullable heightObj) {
+    if ([heightObj isKindOfClass:[NSNumber class]]) {
+        return [(NSNumber *)heightObj doubleValue];
+    }
+    if ([heightObj isKindOfClass:[NSDictionary class]]) {
+        NSDictionary *dim = (NSDictionary *)heightObj;
+        double val = [dim[@"value"] doubleValue];
+        NSString *dimType = dim[@"type"];
+        if ([dimType isEqualToString:@"percentage"]) return val;
+        // pixel: not representable via the ObjC factory; treat as a large percentage fallback
+        return val > 1.0 ? 0.9 : val;
+    }
+    return 0.5;
+}
+
+static PLYDisplayMode * _Nullable parseDisplayMode(NSDictionary * _Nullable transition) {
+    if (![transition isKindOfClass:[NSDictionary class]]) return nil;
+    NSString *type = transition[@"type"];
+    if (![type isKindOfClass:[NSString class]]) return nil;
+    BOOL dismissible = YES;
+    id dVal = transition[@"dismissible"];
+    if ([dVal isKindOfClass:[NSNumber class]]) { dismissible = [(NSNumber *)dVal boolValue]; }
+
+    if ([type isEqualToString:@"fullScreen"])    return [PLYDisplayMode fullScreen];
+    if ([type isEqualToString:@"modal"])         return [PLYDisplayMode modalWithDismissible:dismissible];
+    if ([type isEqualToString:@"push"])          return [PLYDisplayMode push];
+    if ([type isEqualToString:@"inlinePaywall"]) return [PLYDisplayMode inlinePaywall];
+    if ([type isEqualToString:@"drawer"]) {
+        double h = parseHeightPct(transition[@"height"]);
+        return [PLYDisplayMode drawerWithHeightPercentage:h dismissible:dismissible];
+    }
+    if ([type isEqualToString:@"popin"]) {
+        double h = parseHeightPct(transition[@"height"]);
+        return [PLYDisplayMode popinWithHeightPercentage:h dismissible:dismissible];
+    }
+    return nil;
+}
+
 #pragma mark - displayPresentation
 
 - (void)displayPresentation:(CDVInvokedUrlCommand*)command {
     ensurePresentationState();
 
-    NSString *requestId   = [command argumentAtIndex:0];
+    NSString *requestId      = [command argumentAtIndex:0];
     NSDictionary *payload    = [command argumentAtIndex:1];
     NSDictionary *transition = [command argumentAtIndex:2];
 
@@ -324,7 +372,7 @@ static PLYPresentationBuilder *presentationBuilderFor(NSString *placementId,
                          toContentId:&contentId
                          toIsDefault:&isDefault];
 
-    // Store kept-alive callbackId for this request.
+    // Register the kept-alive callbackId for this request.
     @synchronized (kPresentationStateLock) {
         kCallbacksByRequest[requestId] = command.callbackId;
     }
@@ -366,7 +414,9 @@ static PLYPresentationBuilder *presentationBuilderFor(NSString *placementId,
         [strongSelf emitOn:cbId dict:body];
     };
 
-    void (^onFetchCompletion)(id<PLYPresentation> _Nullable, NSError * _Nullable) =
+    // Fires when the SDK has triggered display (presentation handed off to UIKit).
+    // Emits `presented`; does NOT resolve the display Promise — that happens at dismiss.
+    void (^onPresentedCompletion)(id<PLYPresentation> _Nullable, NSError * _Nullable) =
     ^(id<PLYPresentation> _Nullable presentation, NSError * _Nullable error) {
         CDVPurchasely *strongSelf = weakSelf;
         if (!strongSelf) { return; }
@@ -376,35 +426,16 @@ static PLYPresentationBuilder *presentationBuilderFor(NSString *placementId,
             cbId = kCallbacksByRequest[requestId];
         }
 
-        // Emit `loaded`.
-        NSMutableDictionary *loaded = [NSMutableDictionary new];
-        loaded[@"type"]      = @"loaded";
-        loaded[@"requestId"] = requestId;
-        if (presentation != nil) { loaded[@"presentation"] = presentationToMap(presentation); }
-        if (error != nil)        { loaded[@"error"]        = presentationErrorToMap(error); }
-        [strongSelf emitOn:cbId dict:loaded];
-
-        if (error != nil) {
-            // P0.4: synthesize an onPresented(null, error).
+        if (error != nil || presentation == nil) {
+            NSError *displayError = error ?: [NSError errorWithDomain:@"io.purchasely.presentation"
+                                                                  code:404
+                                                              userInfo:@{NSLocalizedDescriptionKey: @"Presentation not found"}];
             NSMutableDictionary *presented = [NSMutableDictionary new];
             presented[@"type"]      = @"presented";
             presented[@"requestId"] = requestId;
-            presented[@"error"]     = presentationErrorToMap(error);
+            presented[@"error"]     = presentationErrorToMap(displayError);
             [strongSelf emitOn:cbId dict:presented];
-            emitDismissed(error);
-            return;
-        }
-
-        if (presentation == nil) {
-            NSError *missing = [NSError errorWithDomain:@"io.purchasely.presentation"
-                                                   code:404
-                                               userInfo:@{NSLocalizedDescriptionKey: @"Presentation not found"}];
-            NSMutableDictionary *presented = [NSMutableDictionary new];
-            presented[@"type"]      = @"presented";
-            presented[@"requestId"] = requestId;
-            presented[@"error"]     = presentationErrorToMap(missing);
-            [strongSelf emitOn:cbId dict:presented];
-            emitDismissed(missing);
+            emitDismissed(displayError);
             return;
         }
 
@@ -413,35 +444,14 @@ static PLYPresentationBuilder *presentationBuilderFor(NSString *placementId,
             kPresentationsByRequest[requestId] = presentation;
         }
 
-        // Emit `presented`.
         NSMutableDictionary *presented = [NSMutableDictionary new];
         presented[@"type"]         = @"presented";
         presented[@"requestId"]    = requestId;
         presented[@"presentation"] = presentationToMap(presentation);
         [strongSelf emitOn:cbId dict:presented];
-
-        UIViewController *controller = presentation.controller;
-        if (controller == nil) {
-            NSError *err = [NSError errorWithDomain:@"io.purchasely.presentation"
-                                               code:500
-                                           userInfo:@{NSLocalizedDescriptionKey: @"Presentation has no controller"}];
-            emitDismissed(err);
-            return;
-        }
-
-        // Apply the transition `dismissible` flag if provided.
-        if ([transition isKindOfClass:[NSDictionary class]]) {
-            id dismissible = transition[@"dismissible"];
-            if ([dismissible isKindOfClass:[NSNumber class]]) {
-                controller.modalInPresentation = ![dismissible boolValue];
-            }
-        }
-
-        strongSelf.presentedPresentationViewController = controller;
-        [Purchasely showController:controller type:PLYUIControllerTypeProductPage from:nil];
     };
 
-    // v6: dismiss outcome is delivered through the builder's `onDismissed` handler.
+    // Fires when the presentation is dismissed — resolves the JS display() Promise.
     void (^onDismissed)(PLYPresentationOutcome *) = ^(PLYPresentationOutcome *outcome) {
         capturedResult      = outcome.purchaseResult;
         capturedPlan        = outcome.plan;
@@ -459,12 +469,16 @@ static PLYPresentationBuilder *presentationBuilderFor(NSString *placementId,
             NSError *error = [NSError errorWithDomain:@"io.purchasely.presentation"
                                                  code:400
                                              userInfo:@{NSLocalizedDescriptionKey: @"No placementId or screenId provided"}];
-            onFetchCompletion(nil, error);
+            onPresentedCompletion(nil, error);
             return;
         }
         [builder onDismissed:onDismissed];
         id<PLYPresentationRequest> request = [builder build];
-        [request preloadWithCompletion:onFetchCompletion];
+        // v6 path: displayWithTransition:completion: hands the presentation off to UIKit
+        // and wires onDismissed into the presentation lifecycle automatically.
+        // Replaces the v5 preloadWithCompletion: + showController: pattern.
+        PLYDisplayMode *displayMode = parseDisplayMode(transition);
+        [request displayWithTransition:displayMode completion:onPresentedCompletion];
     });
 }
 

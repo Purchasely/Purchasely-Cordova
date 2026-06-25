@@ -10,7 +10,6 @@
 //
 // Deviations from React Native (see E2E_TEST_INDEX.md):
 //   T2  — no isAnonymous(): not in Cordova JS API; tests login/logout cycle only
-//   T7  — no drawer height config: display() transition object is simpler in Cordova
 //   T10/T11 — no per-listener remove handle: use global removeEventsListener()
 
 var API_KEY   = '0ad0594b-3b3d-4fea-8ee1-4b5df91efe87';
@@ -185,14 +184,12 @@ document.addEventListener('deviceready', function () {
       pass('T6', 'register → removeActionInterceptor → removeAll ✓');
     } catch (e) { fail('T6', e); }
 
-    // ── T7 — display → close programmatique → outcome ─────────────────────────
-    // Note: Cordova display() does not support drawer-height config; using
-    // default fullscreen. Assertions are identical to RN (closeReason + props).
+    // ── T7 — display(drawer 60%) → close programmatique → outcome ────────────
     running('T7');
     try {
       var req7 = Purchasely.PresentationBuilder.placement(PLACEMENT).build();
       await req7.preload();
-      var displayP7 = req7.display();
+      var displayP7 = req7.display({ type: 'drawer', height: { type: 'percentage', value: 0.6 }, dismissible: true });
       await sleep(3000);
       req7.close();
       var outcome7 = await Promise.race([
