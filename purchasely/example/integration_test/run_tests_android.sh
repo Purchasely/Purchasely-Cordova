@@ -107,7 +107,7 @@ echo "==> Logcat cleared"
 
 # ── launch the app ───────────────────────────────────────────────────────────
 PKG="com.purchasely.demo"
-MAIN_ACTIVITY="$PKG/org.apache.cordova.CordovaApp"
+MAIN_ACTIVITY="$PKG/.MainActivity"
 echo "==> Launching $PKG…"
 
 LAUNCH_OUT=""
