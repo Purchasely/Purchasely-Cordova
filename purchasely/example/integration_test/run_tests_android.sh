@@ -138,9 +138,12 @@ touch "$LOGFILE"
 # Configurable via PLY_E2E_TIMEOUT env var (useful for slow CI emulators)
 TEST_TIMEOUT="${PLY_E2E_TIMEOUT:-300}"
 
+# Increase ring buffer size before streaming (separate command; -G exits after setting).
+adb -s "$DEVICE" logcat -G 16M 2>/dev/null || true
+
 # Single logcat pipeline: tee full output to disk, grep-filter to the while loop.
 # One reader avoids competing readers that overflow the logcat ring buffer.
-adb -s "$DEVICE" logcat -G 16M -v time \
+adb -s "$DEVICE" logcat -v time \
   | tee "$FULL_LOGFILE" \
   | grep --line-buffered -E 'PLY_E2E|Purchasely|chromium|CordovaWebView|AndroidRuntime|System\.err' \
   | while IFS= read -r line; do
