@@ -87,6 +87,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cordova-e2e-logcat
-          path: |
-            /tmp/cordova_e2e_logcat_*.txt
-            /tmp/cordova_full_logcat_*.txt
+          path: /tmp/e2e_cordova_logcat_*.log
