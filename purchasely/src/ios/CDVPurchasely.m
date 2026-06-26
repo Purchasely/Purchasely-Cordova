@@ -10,14 +10,6 @@
 #import "CDVPurchasely+Events.h"
 #import "UIColor+PLYHelper.h"
 
-// v6: `setDefaultPresentationDismissHandler:` (block: PLYPresentationOutcome) was
-// renamed from `setDefaultPresentationResultHandler:` in iOS PR #652. The pod we
-// build against (6.0.0-rc.1) may predate that rename, so forward-declare it here.
-// The call site is guarded with `respondsToSelector:`. // gated by iOS PR #652
-@interface Purchasely (PLYDefaultDismissHandler)
-+ (void)setDefaultPresentationDismissHandler:(void (^)(PLYPresentationOutcome *outcome))handler;
-@end
-
 #pragma mark - internal state (shared across presentation methods)
 
 /// requestId → captured PLYPresentation (so we can replay it in events).
@@ -549,23 +541,7 @@ static PLYDisplayMode * _Nullable parseDisplayMode(NSDictionary * _Nullable tran
     };
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        // Prefer the v6 API when available; fall back to the v5 API in SDK builds
-        // that predate the v6 rename (iOS PR #652). // gated by iOS PR #652
-        if ([Purchasely respondsToSelector:@selector(setDefaultPresentationDismissHandler:)]) {
-            [Purchasely setDefaultPresentationDismissHandler:handler];
-        } else if ([Purchasely respondsToSelector:@selector(setDefaultPresentationResultHandler:)]) {
-            [Purchasely setDefaultPresentationResultHandler:^(enum PLYProductViewControllerResult result,
-                                                               PLYPlan * _Nullable plan) {
-                CDVPurchasely *strongSelf = weakSelf;
-                if (!strongSelf) { return; }
-                NSMutableDictionary *body = [NSMutableDictionary new];
-                body[@"purchaseResult"] = @(result);
-                if (plan != nil) { body[@"plan"] = [plan asDictionary]; }
-                [strongSelf emitOn:strongSelf.defaultDismissCallbackId dict:body];
-            }];
-        } else {
-            NSLog(@"[Purchasely] setDefaultPresentationDismissHandler unavailable; global dismiss handler disabled.");
-        }
+        [Purchasely setDefaultPresentationDismissHandler:handler];
     });
 }
 
