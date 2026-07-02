@@ -83,4 +83,5 @@ Cordova SDK, iOS SDK, and Android SDK versions are usually close but **may diffe
 ## CI/CD
 
 - **`ci.yml`** — Runs on PRs: unit tests, iOS build, Android build, version consistency check
-- **`publish.yml`** — Runs on GitHub release: calls CI first, then publishes both npm packages via OIDC trusted publishing (no npm token stored)
+- **`publish.yml`** — Runs on GitHub release: calls CI first, then publishes both npm packages via OIDC trusted publishing (no npm token stored). Prerelease tags (`X.Y.Z-*`, e.g. `6.0.0-rc.1`) publish under the npm `next` dist-tag; stable tags under `latest`. Mark the GitHub release "pre-release" for RCs.
+- **`e2e-android.yml` / `e2e-ios.yml`** — Device E2E (Appium + WebdriverIO) against the real backend; run on `workflow_dispatch`, nightly, and scoped PRs (not part of `ci.yml`). See `purchasely/example/e2e/README.md`.
