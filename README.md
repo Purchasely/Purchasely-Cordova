@@ -15,16 +15,21 @@ cordova plugin add @purchasely/cordova-plugin-purchasely-google
 
 ## Usage
 
-More details in our [documentation](https://docs.purchasely.com/quick-start/sdk-implementation) 
+More details in our [documentation](https://docs.purchasely.com/quick-start/sdk-implementation).
+
+> **Upgrading from 5.x?** See [MIGRATION-v6.md](MIGRATION-v6.md) — `start()` now takes an
+> options object, `RunningMode` defaults to `observer`, and a few methods were renamed.
 
 ```js
 Purchasely.start(
-    'API_KEY',                     // set your own api key
-    ['Google'],                    // list of stores for Android, accepted values: Google, Huawei and Amazon
-    false,                         // set to false to use StoreKit2, true to use StoreKit1
-    null,                          // set your user id
-    Purchasely.LogLevel.DEBUG,     // log level, should be warning or error in production
-    Purchasely.RunningMode.full,   // running mode, can be paywallObserver or full
+    {
+        apiKey: 'API_KEY',                  // set your own api key
+        stores: [Purchasely.Store.google],  // Android stores: Store.google, Store.huawei, Store.amazon
+        storeKit1: false,                   // iOS: false to use StoreKit2, true for StoreKit1
+        appUserId: null,                    // set your user id
+        logLevel: Purchasely.LogLevel.DEBUG, // should be warning or error in production
+        runningMode: Purchasely.RunningMode.full // observer or full (defaults to observer)
+    },
     (isConfigured) => {
         if(isConfigured) {
             // Purchasely is ready, you can display paywalls, set user attributes, start a purchase flow etc.
@@ -39,7 +44,7 @@ Purchasely.start(
 Purchasely.presentPresentationForPlacement(
     'placementId',
     'my_content_id', // may be null
-    false, //display in fullscreen mode
+    Purchasely.TransitionType.fullScreen, // display mode
     (callback) => {
         console.log(callback);
         if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
