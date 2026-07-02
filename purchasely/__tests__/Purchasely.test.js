@@ -97,9 +97,13 @@ describe('Purchasely', () => {
     });
 
     describe('RunningMode', () => {
-      it('should have correct running mode values', () => {
-        expect(Purchasely.RunningMode.paywallObserver).toBe(2);
-        expect(Purchasely.RunningMode.full).toBe(3);
+      it('should expose the Purchasely 6.0 running modes by name', () => {
+        expect(Purchasely.RunningMode.observer).toBe('observer');
+        expect(Purchasely.RunningMode.full).toBe('full');
+      });
+
+      it('should keep paywallObserver as a deprecated alias of observer', () => {
+        expect(Purchasely.RunningMode.paywallObserver).toBe('observer');
       });
     });
 
@@ -115,6 +119,72 @@ describe('Purchasely', () => {
         expect(Purchasely.PaywallAction.open_placement).toBe('open_placement');
         expect(Purchasely.PaywallAction.promo_code).toBe('promo_code');
         expect(Purchasely.PaywallAction.web_checkout).toBe('web_checkout');
+      });
+    });
+
+    describe('PresentationAction', () => {
+      it('should mirror PaywallAction (renamed in 6.0, kept as alias)', () => {
+        expect(Purchasely.PresentationAction).toBe(Purchasely.PaywallAction);
+        expect(Purchasely.PresentationAction.purchase).toBe('purchase');
+      });
+    });
+
+    describe('InterceptResult', () => {
+      it('should have correct intercept result values', () => {
+        expect(Purchasely.InterceptResult.success).toBe('success');
+        expect(Purchasely.InterceptResult.failed).toBe('failed');
+        expect(Purchasely.InterceptResult.notHandled).toBe('notHandled');
+      });
+    });
+
+    describe('PresentationType', () => {
+      it('should have correct presentation type values', () => {
+        expect(Purchasely.PresentationType.normal).toBe(0);
+        expect(Purchasely.PresentationType.fallback).toBe(1);
+        expect(Purchasely.PresentationType.deactivated).toBe(2);
+        expect(Purchasely.PresentationType.client).toBe(3);
+      });
+    });
+
+    describe('CloseReason', () => {
+      it('should have correct close reason values', () => {
+        expect(Purchasely.CloseReason.none).toBe('none');
+        expect(Purchasely.CloseReason.button).toBe('button');
+        expect(Purchasely.CloseReason.interactiveDismiss).toBe('interactive_dismiss');
+        expect(Purchasely.CloseReason.programmatic).toBe('programmatic');
+      });
+    });
+
+    describe('TransitionType', () => {
+      it('should have correct transition type values', () => {
+        expect(Purchasely.TransitionType.fullScreen).toBe('fullScreen');
+        expect(Purchasely.TransitionType.modal).toBe('modal');
+        expect(Purchasely.TransitionType.drawer).toBe('drawer');
+        expect(Purchasely.TransitionType.popin).toBe('popin');
+        expect(Purchasely.TransitionType.push).toBe('push');
+        expect(Purchasely.TransitionType.inlinePaywall).toBe('inlinePaywall');
+      });
+    });
+
+    describe('DimensionType', () => {
+      it('should have correct dimension type values', () => {
+        expect(Purchasely.DimensionType.pixel).toBe('pixel');
+        expect(Purchasely.DimensionType.percentage).toBe('percentage');
+      });
+    });
+
+    describe('Store', () => {
+      it('should have correct store values', () => {
+        expect(Purchasely.Store.google).toBe('Google');
+        expect(Purchasely.Store.huawei).toBe('Huawei');
+        expect(Purchasely.Store.amazon).toBe('Amazon');
+      });
+    });
+
+    describe('StorekitVersion', () => {
+      it('should have correct storekit version values', () => {
+        expect(Purchasely.StorekitVersion.storeKit1).toBe('storeKit1');
+        expect(Purchasely.StorekitVersion.storeKit2).toBe('storeKit2');
       });
     });
 
@@ -135,18 +205,39 @@ describe('Purchasely', () => {
   });
 
   describe('start', () => {
-    it('should call exec with correct parameters', () => {
+    it('should call exec with a single options object (with sdkVersion appended)', () => {
       const success = jest.fn();
       const error = jest.fn();
 
-      Purchasely.start('API_KEY', ['GOOGLE'], false, 'user123', 1, 3, success, error);
+      Purchasely.start(
+        {
+          apiKey: 'API_KEY',
+          stores: [Purchasely.Store.google],
+          storeKit1: false,
+          appUserId: 'user123',
+          logLevel: Purchasely.LogLevel.INFO,
+          runningMode: Purchasely.RunningMode.full
+        },
+        success,
+        error
+      );
 
       expect(mockExec).toHaveBeenCalledWith(
         success,
         error,
         'Purchasely',
         'start',
-        ['API_KEY', ['GOOGLE'], false, 'user123', 1, 3, '5.6.2']
+        [
+          {
+            apiKey: 'API_KEY',
+            stores: ['Google'],
+            storeKit1: false,
+            appUserId: 'user123',
+            logLevel: 1,
+            runningMode: 'full',
+            sdkVersion: '5.6.2'
+          }
+        ]
       );
     });
   });
@@ -270,33 +361,81 @@ describe('Purchasely', () => {
     });
   });
 
-  describe('readyToOpenDeeplink', () => {
+  describe('allowDeeplink', () => {
     it('should call exec with correct parameters', () => {
+      Purchasely.allowDeeplink(true);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'allowDeeplink',
+        [true]
+      );
+    });
+  });
+
+  describe('allowCampaigns', () => {
+    it('should call exec with correct parameters', () => {
+      Purchasely.allowCampaigns(false);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'allowCampaigns',
+        [false]
+      );
+    });
+  });
+
+  describe('readyToOpenDeeplink (deprecated alias)', () => {
+    it('should delegate to allowDeeplink', () => {
       Purchasely.readyToOpenDeeplink(true);
 
       expect(mockExec).toHaveBeenCalledWith(
         expect.any(Function),
         expect.any(Function),
         'Purchasely',
-        'readyToOpenDeeplink',
+        'allowDeeplink',
         [true]
       );
     });
   });
 
-  describe('setDefaultPresentationResultHandler', () => {
+  describe('setDefaultPresentationDismissHandler', () => {
     it('should call exec with correct parameters', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.setDefaultPresentationDismissHandler(success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'setDefaultPresentationDismissHandler', []);
+    });
+  });
+
+  describe('setDefaultPresentationResultHandler (deprecated alias)', () => {
+    it('should delegate to setDefaultPresentationDismissHandler', () => {
       const success = jest.fn();
       const error = jest.fn();
 
       Purchasely.setDefaultPresentationResultHandler(success, error);
 
-      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'setDefaultPresentationResultHandler', []);
+      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'setDefaultPresentationDismissHandler', []);
     });
   });
 
   describe('synchronize', () => {
-    it('should call exec with correct parameters', () => {
+    it('should call exec with the provided callbacks', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.synchronize(success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'synchronize', []);
+    });
+
+    it('should default callbacks when none provided', () => {
       Purchasely.synchronize();
 
       expect(mockExec).toHaveBeenCalledWith(
@@ -310,7 +449,22 @@ describe('Purchasely', () => {
   });
 
   describe('presentPresentationWithIdentifier', () => {
-    it('should call exec with correct parameters', () => {
+    it('should pass a display mode string', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.presentPresentationWithIdentifier('presentation1', 'content1', Purchasely.TransitionType.drawer, success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        success,
+        error,
+        'Purchasely',
+        'presentPresentationWithIdentifier',
+        ['presentation1', 'content1', 'drawer']
+      );
+    });
+
+    it('should normalize a legacy isFullscreen=true to fullScreen', () => {
       const success = jest.fn();
       const error = jest.fn();
 
@@ -321,13 +475,13 @@ describe('Purchasely', () => {
         error,
         'Purchasely',
         'presentPresentationWithIdentifier',
-        ['presentation1', 'content1', true]
+        ['presentation1', 'content1', 'fullScreen']
       );
     });
   });
 
   describe('presentPresentationForPlacement', () => {
-    it('should call exec with correct parameters', () => {
+    it('should normalize a legacy isFullscreen=false to modal', () => {
       const success = jest.fn();
       const error = jest.fn();
 
@@ -338,41 +492,7 @@ describe('Purchasely', () => {
         error,
         'Purchasely',
         'presentPresentationForPlacement',
-        ['placement1', 'content1', false]
-      );
-    });
-  });
-
-  describe('presentProductWithIdentifier', () => {
-    it('should call exec with correct parameters', () => {
-      const success = jest.fn();
-      const error = jest.fn();
-
-      Purchasely.presentProductWithIdentifier('product1', 'presentation1', 'content1', true, success, error);
-
-      expect(mockExec).toHaveBeenCalledWith(
-        success,
-        error,
-        'Purchasely',
-        'presentProductWithIdentifier',
-        ['product1', 'presentation1', 'content1', true]
-      );
-    });
-  });
-
-  describe('presentPlanWithIdentifier', () => {
-    it('should call exec with correct parameters', () => {
-      const success = jest.fn();
-      const error = jest.fn();
-
-      Purchasely.presentPlanWithIdentifier('plan1', 'presentation1', 'content1', false, success, error);
-
-      expect(mockExec).toHaveBeenCalledWith(
-        success,
-        error,
-        'Purchasely',
-        'presentPlanWithIdentifier',
-        ['plan1', 'presentation1', 'content1', false]
+        ['placement1', 'content1', 'modal']
       );
     });
   });
@@ -412,33 +532,19 @@ describe('Purchasely', () => {
   });
 
   describe('presentPresentation', () => {
-    it('should call exec with correct parameters', () => {
+    it('should call exec with a display mode string', () => {
       const success = jest.fn();
       const error = jest.fn();
       const presentation = { id: 'test' };
 
-      Purchasely.presentPresentation(presentation, true, '#FFFFFF', success, error);
+      Purchasely.presentPresentation(presentation, Purchasely.TransitionType.fullScreen, '#FFFFFF', success, error);
 
       expect(mockExec).toHaveBeenCalledWith(
         success,
         error,
         'Purchasely',
         'presentPresentation',
-        [presentation, true, '#FFFFFF']
-      );
-    });
-  });
-
-  describe('presentSubscriptions', () => {
-    it('should call exec with correct parameters', () => {
-      Purchasely.presentSubscriptions();
-
-      expect(mockExec).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.any(Function),
-        'Purchasely',
-        'presentSubscriptions',
-        []
+        [presentation, 'fullScreen', '#FFFFFF']
       );
     });
   });
@@ -493,8 +599,25 @@ describe('Purchasely', () => {
     });
   });
 
-  describe('isDeeplinkHandled', () => {
+  describe('handleDeeplink', () => {
     it('should call exec with correct parameters', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.handleDeeplink('https://example.com/deeplink', success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        success,
+        error,
+        'Purchasely',
+        'handleDeeplink',
+        ['https://example.com/deeplink']
+      );
+    });
+  });
+
+  describe('isDeeplinkHandled (deprecated alias)', () => {
+    it('should delegate to handleDeeplink', () => {
       const success = jest.fn();
       const error = jest.fn();
 
@@ -504,7 +627,7 @@ describe('Purchasely', () => {
         success,
         error,
         'Purchasely',
-        'isDeeplinkHandled',
+        'handleDeeplink',
         ['https://example.com/deeplink']
       );
     });
@@ -576,7 +699,7 @@ describe('Purchasely', () => {
   });
 
   describe('onProcessAction', () => {
-    it('should call exec with correct parameters', () => {
+    it('should map a legacy true to notHandled', () => {
       Purchasely.onProcessAction(true);
 
       expect(mockExec).toHaveBeenCalledWith(
@@ -584,7 +707,31 @@ describe('Purchasely', () => {
         expect.any(Function),
         'Purchasely',
         'onProcessAction',
-        [true]
+        ['notHandled']
+      );
+    });
+
+    it('should map a legacy false to success', () => {
+      Purchasely.onProcessAction(false);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'onProcessAction',
+        ['success']
+      );
+    });
+
+    it('should pass an InterceptResult string through unchanged', () => {
+      Purchasely.onProcessAction(Purchasely.InterceptResult.failed);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'onProcessAction',
+        ['failed']
       );
     });
   });
@@ -651,34 +798,6 @@ describe('Purchasely', () => {
     });
   });
 
-  describe('showPresentation', () => {
-    it('should call exec with correct parameters', () => {
-      Purchasely.showPresentation();
-
-      expect(mockExec).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.any(Function),
-        'Purchasely',
-        'showPresentation',
-        []
-      );
-    });
-  });
-
-  describe('hidePresentation', () => {
-    it('should call exec with correct parameters', () => {
-      Purchasely.hidePresentation();
-
-      expect(mockExec).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.any(Function),
-        'Purchasely',
-        'hidePresentation',
-        []
-      );
-    });
-  });
-
   describe('closePresentation', () => {
     it('should call exec with correct parameters', () => {
       Purchasely.closePresentation();
@@ -688,6 +807,20 @@ describe('Purchasely', () => {
         expect.any(Function),
         'Purchasely',
         'closePresentation',
+        []
+      );
+    });
+  });
+
+  describe('backPresentation', () => {
+    it('should call exec with correct parameters', () => {
+      Purchasely.backPresentation();
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'backPresentation',
         []
       );
     });
