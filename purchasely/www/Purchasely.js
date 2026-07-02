@@ -2,12 +2,39 @@ var exec = require('cordova/exec');
 
 var defaultError = (e) => { console.log(e); }
 
-exports.start = function (apiKey, stores, storekit1, userId, logLevel, runningMode, success, error) {
+// Normalize a presentation display mode. Historically the presentation methods
+// took an `isFullscreen` boolean; Purchasely 6.0 replaced it with a display mode
+// (see Purchasely.TransitionType). Booleans are still accepted for source
+// compatibility: true -> fullScreen, false -> modal.
+function normalizeDisplayMode(mode) {
+    if (mode === true) return 'fullScreen';
+    if (mode === false) return 'modal';
+    return mode || 'fullScreen';
+}
+
+// Purchasely 6.0: `start` now takes a single options object instead of a
+// positional argument list. Existing positional calls are no longer supported
+// (see MIGRATION-v6.md).
+//
+// options:
+//   apiKey          (string, required)
+//   appUserId       (string, optional)
+//   logLevel        (int, optional — see Purchasely.LogLevel)
+//   runningMode     (string, optional — see Purchasely.RunningMode; defaults to observer)
+//   stores          (string[], optional — see Purchasely.Store)
+//   storeKit1       (bool, optional — iOS; true forces StoreKit 1)
+//   storekitVersion (string, optional — iOS; see Purchasely.StorekitVersion)
+//   allowDeeplink   (bool, optional)
+//   allowCampaigns  (bool, optional)
+//   deeplink        (string, optional — cold-start deeplink URL)
+exports.start = function (options, success, error) {
+    var opts = options || {};
     var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
     if(!cordovaSdkVersion) {
         cordovaSdkVersion = "6.0.0-rc.1";
     }
-    exec(success, error, 'Purchasely', 'start', [apiKey, stores, storekit1, userId, logLevel, runningMode, cordovaSdkVersion]);
+    opts.sdkVersion = cordovaSdkVersion;
+    exec(success, error, 'Purchasely', 'start', [opts]);
 };
 
 exports.addEventsListener = function (success, error) {
@@ -46,32 +73,42 @@ exports.setAttribute = function (attribute, value) {
     exec(() => {}, defaultError, 'Purchasely', 'setAttribute', [attribute, value]);
 };
 
+// Purchasely 6.0: allow (or defer) the SDK from opening deeplinks.
+exports.allowDeeplink = function (allow) {
+    exec(() => {}, defaultError, 'Purchasely', 'allowDeeplink', [allow]);
+};
+
+// Purchasely 6.0: allow (or defer) the SDK from displaying campaign deeplinks.
+exports.allowCampaigns = function (allow) {
+    exec(() => {}, defaultError, 'Purchasely', 'allowCampaigns', [allow]);
+};
+
+// @deprecated Purchasely 6.0 — renamed to allowDeeplink.
 exports.readyToOpenDeeplink = function (isReady) {
-    exec(() => {}, defaultError, 'Purchasely', 'readyToOpenDeeplink', [isReady]);
+    exports.allowDeeplink(isReady);
 };
 
+exports.setDefaultPresentationDismissHandler = function (success, error) {
+    exec(success, error, 'Purchasely', 'setDefaultPresentationDismissHandler', []);
+};
+
+// @deprecated Purchasely 6.0 — renamed to setDefaultPresentationDismissHandler.
 exports.setDefaultPresentationResultHandler = function (success, error) {
-    exec(success, error, 'Purchasely', 'setDefaultPresentationResultHandler', []);
+    exports.setDefaultPresentationDismissHandler(success, error);
 };
 
-exports.synchronize = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'synchronize', []);
+// Purchasely 6.0: synchronize now reports completion. success receives true on
+// success; error is invoked on failure (previously fire-and-forget).
+exports.synchronize = function (success, error) {
+    exec(success || (() => {}), error || defaultError, 'Purchasely', 'synchronize', []);
 };
 
-exports.presentPresentationWithIdentifier = function (presentationId, contentId, isFullscreen, success, error) {
-    exec(success, error, 'Purchasely', 'presentPresentationWithIdentifier', [presentationId, contentId, isFullscreen]);
+exports.presentPresentationWithIdentifier = function (presentationId, contentId, displayMode, success, error) {
+    exec(success, error, 'Purchasely', 'presentPresentationWithIdentifier', [presentationId, contentId, normalizeDisplayMode(displayMode)]);
 };
 
-exports.presentPresentationForPlacement = function (placementId, contentId, isFullscreen, success, error) {
-    exec(success, error, 'Purchasely', 'presentPresentationForPlacement', [placementId, contentId, isFullscreen]);
-};
-
-exports.presentProductWithIdentifier = function (productId, presentationId, contentId, isFullscreen, success, error) {
-    exec(success, error, 'Purchasely', 'presentProductWithIdentifier', [productId, presentationId, contentId, isFullscreen]);
-};
-
-exports.presentPlanWithIdentifier = function (planId, presentationId, contentId, isFullscreen, success, error) {
-    exec(success, error, 'Purchasely', 'presentPlanWithIdentifier', [planId, presentationId, contentId, isFullscreen]);
+exports.presentPresentationForPlacement = function (placementId, contentId, displayMode, success, error) {
+    exec(success, error, 'Purchasely', 'presentPresentationForPlacement', [placementId, contentId, normalizeDisplayMode(displayMode)]);
 };
 
 exports.fetchPresentation = function (presentationId, contentId, success, error) {
@@ -82,12 +119,8 @@ exports.fetchPresentationForPlacement = function (placementId, contentId, succes
     exec(success, error, 'Purchasely', 'fetchPresentation', [placementId, null, contentId]);
 };
 
-exports.presentPresentation = function (presentation, isFullscreen, backgroundColor,success, error) {
-    exec(success, error, 'Purchasely', 'presentPresentation', [presentation, isFullscreen, backgroundColor]);
-};
-
-exports.presentSubscriptions = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'presentSubscriptions', []);
+exports.presentPresentation = function (presentation, displayMode, backgroundColor, success, error) {
+    exec(success, error, 'Purchasely', 'presentPresentation', [presentation, normalizeDisplayMode(displayMode), backgroundColor]);
 };
 
 exports.purchaseWithPlanVendorId = function (planId, offerId, contentId, success, error) {
@@ -106,8 +139,14 @@ exports.purchasedSubscription = function (success, error) {
     exec(success, error, 'Purchasely', 'purchasedSubscription', []);
 };
 
+// Purchasely 6.0: returns whether the deeplink was handled by Purchasely.
+exports.handleDeeplink = function (deepLink, success, error) {
+    exec(success, error, 'Purchasely', 'handleDeeplink', [deepLink]);
+};
+
+// @deprecated Purchasely 6.0 — renamed to handleDeeplink.
 exports.isDeeplinkHandled = function (deepLink, success, error) {
-    exec(success, error, 'Purchasely', 'isDeeplinkHandled', [deepLink]);
+    exports.handleDeeplink(deepLink, success, error);
 };
 
 exports.allProducts = function (success, error) {
@@ -122,12 +161,22 @@ exports.productWithIdentifier = function (productId, success) {
     exec(success, defaultError, 'Purchasely', 'productWithIdentifier', [productId]);
 };
 
+// Purchasely 6.0: the paywall action interceptor. `success` is invoked for each
+// intercepted action with { action, info, parameters }. After handling, report
+// the outcome with onProcessAction(result) (see Purchasely.InterceptResult).
 exports.setPaywallActionInterceptor = function (success) {
     exec(success, defaultError, 'Purchasely', 'setPaywallActionInterceptor', []);
 };
 
-exports.onProcessAction = function (processAction) {
-    exec(() => {}, defaultError, 'Purchasely', 'onProcessAction', [processAction]);
+// Purchasely 6.0: report how the intercepted action was handled.
+// `result` is a Purchasely.InterceptResult value ('success' | 'failed' | 'notHandled').
+// Legacy booleans are still accepted: true -> notHandled (let the SDK proceed),
+// false -> success (the app handled it).
+exports.onProcessAction = function (result) {
+    var value = result;
+    if (result === true) value = 'notHandled';
+    else if (result === false) value = 'success';
+    exec(() => {}, defaultError, 'Purchasely', 'onProcessAction', [value]);
 };
 
 exports.userDidConsumeSubscriptionContent = function () {
@@ -146,16 +195,14 @@ exports.setLanguage = function (language) {
     exec(() => {}, defaultError, 'Purchasely', 'setLanguage', [language]);
 };
 
-exports.showPresentation = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'showPresentation', []);
-};
-
-exports.hidePresentation = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'hidePresentation', []);
-};
-
+// Purchasely 6.0: close the displayed presentation.
 exports.closePresentation = function () {
     exec(() => {}, defaultError, 'Purchasely', 'closePresentation', []);
+};
+
+// Purchasely 6.0: navigate back within the displayed presentation.
+exports.backPresentation = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'backPresentation', []);
 };
 
 exports.setUserAttributeWithString = function (key, value, processLegalBasis) {
@@ -297,9 +344,13 @@ exports.PlanType = {
     unknown: 4
 }
 
+// Purchasely 6.0: running mode is passed by name (the native iOS and Android
+// enums use different raw values). `paywallObserver` was merged into `observer`
+// and is kept here as a deprecated alias.
 exports.RunningMode = {
-    paywallObserver: 2,
-    full: 3
+    observer: 'observer',
+    full: 'full',
+    paywallObserver: 'observer'
 }
 
 exports.PaywallAction = {
@@ -313,6 +364,64 @@ exports.PaywallAction = {
     open_placement: 'open_placement',
     promo_code: 'promo_code',
     web_checkout: 'web_checkout'
+}
+
+// Purchasely 6.0: PaywallAction was renamed to PresentationAction (same values).
+// PaywallAction is kept above as a deprecated alias.
+exports.PresentationAction = exports.PaywallAction;
+
+// Purchasely 6.0: result reported to onProcessAction after handling an
+// intercepted paywall action.
+exports.InterceptResult = {
+    success: 'success',
+    failed: 'failed',
+    notHandled: 'notHandled'
+}
+
+// Purchasely 6.0: the type of a fetched presentation.
+exports.PresentationType = {
+    normal: 0,
+    fallback: 1,
+    deactivated: 2,
+    client: 3
+}
+
+// Purchasely 6.0: why a presentation closed (delivered in the dismiss outcome).
+exports.CloseReason = {
+    none: 'none',
+    button: 'button',
+    interactiveDismiss: 'interactive_dismiss',
+    programmatic: 'programmatic'
+}
+
+// Purchasely 6.0: presentation display mode, passed in place of the former
+// `isFullscreen` boolean to the present* methods.
+exports.TransitionType = {
+    fullScreen: 'fullScreen',
+    modal: 'modal',
+    drawer: 'drawer',
+    popin: 'popin',
+    push: 'push',
+    inlinePaywall: 'inlinePaywall'
+}
+
+// Purchasely 6.0: sizing unit for drawer/popin display modes.
+exports.DimensionType = {
+    pixel: 'pixel',
+    percentage: 'percentage'
+}
+
+// Purchasely 6.0: stores that can be enabled at start.
+exports.Store = {
+    google: 'Google',
+    huawei: 'Huawei',
+    amazon: 'Amazon'
+}
+
+// Purchasely 6.0: StoreKit version selection (iOS).
+exports.StorekitVersion = {
+    storeKit1: 'storeKit1',
+    storeKit2: 'storeKit2'
 }
 
 exports.ThemeMode = {
