@@ -41,12 +41,13 @@ function onDeviceReady() {
 	document.getElementById('deviceready').classList.add('ready');
 
 	Purchasely.start(
-		'fcb39be4-2ba4-4db7-bde3-2a5a1e20745d',
-		['Google'],
-		false,
-		null,
-		Purchasely.LogLevel.DEBUG,
-		Purchasely.RunningMode.full,
+		{
+			apiKey: 'fcb39be4-2ba4-4db7-bde3-2a5a1e20745d',
+			stores: [Purchasely.Store.google],
+			storeKit1: false,
+			logLevel: Purchasely.LogLevel.DEBUG,
+			runningMode: Purchasely.RunningMode.full
+		},
 		(isConfigured) => {
 			if(isConfigured) onPurchaselySdkReady();
 		},
@@ -60,14 +61,13 @@ function onDeviceReady() {
 
 	document.getElementById("openPresentation").addEventListener("click", openPresentation);
 	document.getElementById("fetchPresentation").addEventListener("click", fetchPresentation);
-	document.getElementById("presentSubscriptions").addEventListener("click", presentSubscriptions);
-	document.getElementById("showPresentation").addEventListener("click", showPresentation);
-	document.getElementById("hidePresentation").addEventListener("click", hidePresentation);
+	document.getElementById("backPresentation").addEventListener("click", backPresentation);
 	document.getElementById("closePresentation").addEventListener("click", closePresentation);
 	document.getElementById("purchaseWithPlanVendorId").addEventListener("click", purchaseWithPlanVendorId);
 	document.getElementById("restore").addEventListener("click", restore);
 	document.getElementById("silentRestore").addEventListener("click", silentRestore);
 	document.getElementById("processToPayment").addEventListener("click", processToPayment);
+	document.getElementById("openDeeplink").addEventListener("click", openDeeplink);
 
 }
 
@@ -139,7 +139,7 @@ function onPurchaselySdkReady() {
 	Purchasely.setAttribute(Purchasely.Attribute.BATCH_CUSTOM_USER_ID, "batch_custom_user_id");
 	Purchasely.setAttribute(Purchasely.Attribute.BATCH_INSTALLATION_ID, "testBatch1");
 
-	Purchasely.readyToOpenDeeplink(true);
+	Purchasely.allowDeeplink(true);
 
 	Purchasely.planWithIdentifier('PURCHASELY_PLUS_MONTHLY', (plan) => {
 		console.log(' ==> Plan');
@@ -157,11 +157,11 @@ function onPurchaselySdkReady() {
 		console.log(error);
 	});
 
-	Purchasely.setDefaultPresentationResultHandler(callback => {
+	Purchasely.setDefaultPresentationDismissHandler(callback => {
 		console.log(callback);
 		if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
-			console.log("User cancelled purchased");
-		} else {
+			console.log("User cancelled purchase - close reason " + callback.closeReason);
+		} else if (callback.plan) {
 			console.log("User purchased " + callback.plan.vendorId);
 		}
 	},
@@ -242,48 +242,48 @@ function onPurchaselySdkReady() {
 		console.log(result);
 		console.log('Received action from paywall ' + result.info.presentationId);
 
-		if (result.action === Purchasely.PaywallAction.navigate) {
+		if (result.action === Purchasely.PresentationAction.navigate) {
 			console.log(
 			'User wants to navigate to website ' +
 				result.parameters.title +
 				' ' +
 				result.parameters.url
 			);
-			console.log('prevent Purchasely SDK to navigate to website');
-			Purchasely.onProcessAction(true);
-		} else if (result.action === Purchasely.PaywallAction.close) {
+			console.log('let the Purchasely SDK navigate to website');
+			Purchasely.onProcessAction(Purchasely.InterceptResult.notHandled);
+		} else if (result.action === Purchasely.PresentationAction.close) {
 			console.log('User wants to close paywall - close reason ' + result.parameters.closeReason);
-			Purchasely.onProcessAction(true);
-		} else if (result.action === Purchasely.PaywallAction.close_all) {
-		    console.log('User wants to close all paywalls');
-            Purchasely.onProcessAction(true);
-		} else if (result.action === Purchasely.PaywallAction.login) {
+			Purchasely.onProcessAction(Purchasely.InterceptResult.notHandled);
+		} else if (result.action === Purchasely.PresentationAction.close_all) {
+			console.log('User wants to close all paywalls');
+			Purchasely.onProcessAction(Purchasely.InterceptResult.notHandled);
+		} else if (result.action === Purchasely.PresentationAction.login) {
 			console.log('User wants to login');
 			//Present your own screen for user to log in
-			Purchasely.closePaywall();
+			Purchasely.closePresentation();
 			Purchasely.userLogin('MY_USER_ID');
-			//Call this method to update Purchasely Paywall
-			Purchasely.onProcessAction(true);
-		} else if (result.action === Purchasely.PaywallAction.open_presentation) {
+			//Report success so the Purchasely paywall refreshes
+			Purchasely.onProcessAction(Purchasely.InterceptResult.success);
+		} else if (result.action === Purchasely.PresentationAction.open_presentation) {
 			console.log('User wants to open a new paywall');
-			Purchasely.onProcessAction(true);
-	    } else if (result.action === Purchasely.PaywallAction.open_placement) {
-            console.log('User wants to open a new placement');
-            Purchasely.onProcessAction(true);
-		} else if (result.action === Purchasely.PaywallAction.purchase) {
+			Purchasely.onProcessAction(Purchasely.InterceptResult.notHandled);
+		} else if (result.action === Purchasely.PresentationAction.open_placement) {
+			console.log('User wants to open a new placement');
+			Purchasely.onProcessAction(Purchasely.InterceptResult.notHandled);
+		} else if (result.action === Purchasely.PresentationAction.purchase) {
 			console.log('User wants to purchase');
-			//If you want to intercept it, close paywall and display your screen
-			Purchasely.hidePresentation();
-		} else if (result.action === Purchasely.PaywallAction.web_checkout) {
+			//Let the SDK proceed with the purchase
+			Purchasely.onProcessAction(Purchasely.InterceptResult.notHandled);
+		} else if (result.action === Purchasely.PresentationAction.web_checkout) {
 			console.log('User wants to proceed to web checkout');
 			console.log('web checkout url: ' + result.parameters.url);
 			console.log('web checkout provider: ' + result.parameters.webCheckoutProvider);
-	        console.log('web checkout client reference id: ' + result.parameters.clientReferenceId);
-	        console.log('web checkout query parameter key: ' + result.parameters.queryParameterKey);
-			Purchasely.onProcessAction(true);
+			console.log('web checkout client reference id: ' + result.parameters.clientReferenceId);
+			console.log('web checkout query parameter key: ' + result.parameters.queryParameterKey);
+			Purchasely.onProcessAction(Purchasely.InterceptResult.notHandled);
 		} else {
 			console.log('Action unknown ' + result.action);
-			Purchasely.onProcessAction(true);
+			Purchasely.onProcessAction(Purchasely.InterceptResult.notHandled);
 		}
 	});
 
@@ -294,7 +294,7 @@ function openPresentation() {
 	Purchasely.presentPresentationForPlacement(
 		'ONBOARDING', //placementId
 		null, //contentId
-		true, //fullscreen
+		Purchasely.TransitionType.fullScreen, //display mode
 		(callback) => {
 			console.log(callback);
 			if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
@@ -315,7 +315,7 @@ function fetchPresentation() {
 		null, //contentId
 		(presentation) => {
 			console.log(safeStringify(presentation));
-			Purchasely.presentPresentation(presentation, false, null,
+			Purchasely.presentPresentation(presentation, Purchasely.TransitionType.modal, null,
 				(callback) => {
 					console.log(callback);
 					if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
@@ -333,31 +333,21 @@ function fetchPresentation() {
 	);
 }
 
-function presentSubscriptions() {
-	Purchasely.presentSubscriptions();
-}
-
 function purchaseWithPlanVendorId() {
 	Purchasely.purchaseWithPlanVendorId("PURCHASELY_PLUS_MONTHLY");
 }
 
 function processToPayment() {
-	// Call this method open paywall again
-	Purchasely.showPresentation();
+	// Call this method in observer mode to synchronize purchases with Purchasely
+	// Purchasely.synchronize((ok) => console.log("synchronized " + ok), (e) => console.log(e));
 
-	// Call this method in paywallObserver mode to synchronize purchases with Purchasely
-	// Purchasely.synchronize();
-
-	// Call this method to process to payment or false if you handled it
-	Purchasely.onProcessAction(true);
+	// Report to Purchasely how the intercepted action was handled. notHandled lets
+	// the SDK proceed (e.g. process the purchase); success means the app handled it.
+	Purchasely.onProcessAction(Purchasely.InterceptResult.notHandled);
 }
 
-function showPresentation() {
-	Purchasely.showPresentation();
-}
-
-function hidePresentation() {
-	Purchasely.hidePresentation();
+function backPresentation() {
+	Purchasely.backPresentation();
 }
 
 function closePresentation() {
@@ -416,7 +406,7 @@ function signPromotionalOffer() {
 }
 
 function openDeeplink() {
-	Purchasely.isDeeplinkHandled(
+	Purchasely.handleDeeplink(
 		"purchasely://ply/presentations/CAROUSEL",
 		isHandled => {
 			console.log("Deeplink is handled ? " + isHandled)
