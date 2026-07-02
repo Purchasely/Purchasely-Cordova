@@ -8,22 +8,25 @@
 #import <Cordova/CDVPlugin.h>
 #import <Purchasely/Purchasely-Swift.h>
 
-@interface CDVPurchasely<PLYEventDelegate, PLYUserAttributeDelegate> : CDVPlugin {
+// Protocol conformance (PLYEventDelegate / PLYUserAttributeDelegate) is declared on the
+// CDVPurchasely (Events) and (UserAttributes) categories, which implement the delegate methods.
+@interface CDVPurchasely : CDVPlugin {
 }
 
-@property (nonatomic, retain) UIViewController* presentedPresentationViewController;
+// The presentation currently displayed (v6 uses id<PLYPresentation> for close()/back()).
+@property (nonatomic, strong) id<PLYPresentation> currentPresentation;
 
 @property CDVInvokedUrlCommand* purchasedCommand;
 @property CDVInvokedUrlCommand* eventCommand;
 @property CDVInvokedUrlCommand* attributeCommand;
 
-@property (nonatomic) NSMutableArray<PLYPresentation *> *presentationsLoaded;
-@property (nonatomic, assign) Boolean shouldReopenPaywall;
+@property (nonatomic) NSMutableArray<id<PLYPresentation>> *presentationsLoaded;
 
 @property (nonatomic) CDVInvokedUrlCommand* purchaseResolve;
 
 @property CDVInvokedUrlCommand* paywallActionInterceptorCommand;
-@property void (^onProcessActionHandler)(BOOL proceed);
+// v6: interceptor completion takes a PLYInterceptResult (was void(^)(BOOL) in v5).
+@property (nonatomic, copy) void (^interceptorCompletion)(enum PLYInterceptResult result);
 
 - (void)start:(CDVInvokedUrlCommand*)command;
 - (void)setLogLevel:(CDVInvokedUrlCommand*)command;
@@ -31,13 +34,12 @@
 - (void)userLogout:(CDVInvokedUrlCommand*)command;
 - (void)setAttribute:(CDVInvokedUrlCommand*)command;
 - (void)getAnonymousUserId:(CDVInvokedUrlCommand*)command;
-- (void)readyToOpenDeeplink:(CDVInvokedUrlCommand*)command;
-- (void)setDefaultPresentationResultHandler:(CDVInvokedUrlCommand*)command;
+- (void)allowDeeplink:(CDVInvokedUrlCommand*)command;
+- (void)allowCampaigns:(CDVInvokedUrlCommand*)command;
+- (void)handleDeeplink:(CDVInvokedUrlCommand*)command;
+- (void)setDefaultPresentationDismissHandler:(CDVInvokedUrlCommand*)command;
 - (void)presentPresentationWithIdentifier:(CDVInvokedUrlCommand*)command;
 - (void)presentPresentationForPlacement:(CDVInvokedUrlCommand*)command;
-- (void)presentPlanWithIdentifier:(CDVInvokedUrlCommand*)command;
-- (void)presentProductWithIdentifier:(CDVInvokedUrlCommand*)command;
-- (void)presentSubscriptions:(CDVInvokedUrlCommand*)command;
 - (void)purchaseWithPlanVendorId:(CDVInvokedUrlCommand*)command;
 - (void)restoreAllProducts:(CDVInvokedUrlCommand*)command;
 - (void)silentRestoreAllProducts:(CDVInvokedUrlCommand*)command;
@@ -50,12 +52,10 @@
 - (void)userSubscriptionsHistory:(CDVInvokedUrlCommand*)command;
 - (void)addEventsListener:(CDVInvokedUrlCommand*)command;
 - (void)removeEventsListener:(CDVInvokedUrlCommand*)command;
-- (void)isDeeplinkHandled:(CDVInvokedUrlCommand*)command;
 - (void)setPaywallActionInterceptor:(CDVInvokedUrlCommand*)command;
 - (void)onProcessAction:(CDVInvokedUrlCommand*)command;
 - (void)closePresentation:(CDVInvokedUrlCommand*)command;
-- (void)hidePresentation:(CDVInvokedUrlCommand*)command;
-- (void)showPresentation:(CDVInvokedUrlCommand*)command;
+- (void)backPresentation:(CDVInvokedUrlCommand*)command;
 - (void)userDidConsumeSubscriptionContent:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithStringArray:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithIntArray:(CDVInvokedUrlCommand*)command;

@@ -16,6 +16,7 @@
                              type:(enum PLYUserAttributeType)type
                             value:(id _Nullable)value
                            source:(enum PLYUserAttributeSource)source {
+    if (self.attributeCommand == nil) { return; }
     NSDictionary *attributeDic = [self dictionaryFromUserAttributeWithKey:key type:type value:value source:source];
     
     CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:attributeDic];
@@ -26,6 +27,7 @@
 
 - (void)onUserAttributeRemovedWithKey:(NSString * _Nonnull)key
                                source:(enum PLYUserAttributeSource)source {
+    if (self.attributeCommand == nil) { return; }
     NSString *sourceString = [PLYUserAttributeSourceHelper stringFromUserAttributeSource:source];
     
     NSMutableDictionary<NSString *, id> *attributeDic = [@{
