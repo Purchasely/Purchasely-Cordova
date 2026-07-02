@@ -1,0 +1,19 @@
+{
+  "name": "purchasely-cordova-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "End-to-end tests for the Purchasely Cordova example app (Appium + WebdriverIO). Drives the real native Purchasely 6.0 SDK inside the WebView (bridge assertions) and injects OS-level touches (interceptor / dismiss).",
+  "scripts": {
+    "test:android": "wdio run ./wdio.android.conf.js",
+    "test:ios": "wdio run ./wdio.ios.conf.js"
+  },
+  "devDependencies": {
+    "@wdio/cli": "^9.0.0",
+    "@wdio/local-runner": "^9.0.0",
+    "@wdio/mocha-framework": "^9.0.0",
+    "@wdio/spec-reporter": "^9.0.0",
+    "appium": "^2.11.0",
+    "appium-uiautomator2-driver": "^3.9.0",
+    "appium-xcuitest-driver": "^7.28.0"
+  }
+}
