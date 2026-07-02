@@ -8,7 +8,7 @@
 #import <Cordova/CDVPlugin.h>
 #import "CDVPurchasely.h"
 
-@interface CDVPurchasely (UserAttributes) {
+@interface CDVPurchasely (UserAttributes) <PLYUserAttributeDelegate> {
 
 }
 

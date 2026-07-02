@@ -8,6 +8,7 @@
 #import "CDVPurchasely.h"
 #import "Purchasely_Hybrid.h"
 #import "CDVPurchasely+Events.h"
+#import "CDVPurchasely+UserAttributes.h"
 #import "UIColor+PLYHelper.h"
 
 @implementation CDVPurchasely
@@ -16,35 +17,86 @@
     self = [super init];
 
     self.presentationsLoaded = [NSMutableArray new];
-    self.shouldReopenPaywall = NO;
 
     return self;
 }
 
 - (void)start:(CDVInvokedUrlCommand*)command {
-    NSString *apiKey = [command argumentAtIndex:0];
-    BOOL storeKit1 = [[command argumentAtIndex:2] boolValue];
-    NSString *userId = [command argumentAtIndex:3];
-    NSInteger logLevel = [[command argumentAtIndex:4] intValue];
-    NSInteger runningMode = [[command argumentAtIndex:5] intValue];
-    NSString *purchaselySdkVersion = [command argumentAtIndex:6];
+    // v6: a single options dictionary (see the JS↔native contract), no longer positional args.
+    NSDictionary *opts = [command argumentAtIndex:0];
+    if (![opts isKindOfClass:[NSDictionary class]]) {
+        [self failureFor:command resultString:@"start requires an options object"];
+        return;
+    }
 
-    [Purchasely setSdkBridgeVersion:purchaselySdkVersion];
+    NSString *apiKey = opts[@"apiKey"];
+    if (![apiKey isKindOfClass:[NSString class]] || apiKey.length == 0) {
+        [self failureFor:command resultString:@"apiKey is required"];
+        return;
+    }
 
-    [Purchasely setAppTechnology:PLYAppTechnologyCordova];
+    PurchaselyBuilder *builder = [Purchasely apiKey:apiKey];
+    builder = [builder appTechnology:PLYAppTechnologyCordova];
 
-    [Purchasely startWithAPIKey:apiKey
-                      appUserId:userId
-                    runningMode:runningMode
-                    paywallActionsInterceptor:nil
-               storekitSettings: storeKit1 ? [StorekitSettings storeKit1] : [StorekitSettings storeKit2]
-                       logLevel:logLevel
-                    initialized:^(BOOL initialized, NSError * _Nullable error) {
+    NSString *sdkVersion = opts[@"sdkVersion"];
+    if ([sdkVersion isKindOfClass:[NSString class]]) {
+        builder = [builder sdkBridgeVersion:sdkVersion];
+    }
 
+    NSString *appUserId = opts[@"appUserId"];
+    if ([appUserId isKindOfClass:[NSString class]] && appUserId.length > 0) {
+        builder = [builder appUserId:appUserId];
+    }
+
+    // runningMode is a string ("observer"/"full"), mapped by NAME (iOS enum: observer=2, full=3).
+    NSString *runningMode = opts[@"runningMode"];
+    enum PLYRunningMode mode = PLYRunningModeObserver;
+    if ([runningMode isKindOfClass:[NSString class]] && [runningMode.lowercaseString isEqualToString:@"full"]) {
+        mode = PLYRunningModeFull;
+    }
+    builder = [builder runningMode:mode];
+
+    NSNumber *logLevel = opts[@"logLevel"];
+    if ([logLevel isKindOfClass:[NSNumber class]]) {
+        builder = [builder logLevel:(enum PLYLogLevel)logLevel.integerValue];
+    }
+
+    // StoreKit selection (iOS): storeKit1 bool OR storekitVersion == "storeKit1" forces StoreKit 1.
+    BOOL storeKit1 = NO;
+    NSNumber *storeKit1Num = opts[@"storeKit1"];
+    if ([storeKit1Num isKindOfClass:[NSNumber class]]) {
+        storeKit1 = storeKit1Num.boolValue;
+    }
+    NSString *storekitVersion = opts[@"storekitVersion"];
+    if ([storekitVersion isKindOfClass:[NSString class]] && [storekitVersion isEqualToString:@"storeKit1"]) {
+        storeKit1 = YES;
+    }
+    builder = [builder storekitSettings: storeKit1 ? [StorekitSettings storeKit1] : [StorekitSettings storeKit2]];
+
+    NSNumber *allowDeeplink = opts[@"allowDeeplink"];
+    if ([allowDeeplink isKindOfClass:[NSNumber class]]) {
+        builder = [builder allowDeeplink:allowDeeplink.boolValue];
+    }
+
+    NSNumber *allowCampaigns = opts[@"allowCampaigns"];
+    if ([allowCampaigns isKindOfClass:[NSNumber class]]) {
+        builder = [builder allowCampaigns:allowCampaigns.boolValue];
+    }
+
+    // Cold-start deeplink URL captured at launch (handled automatically once start completes).
+    NSString *deeplink = opts[@"deeplink"];
+    if ([deeplink isKindOfClass:[NSString class]] && deeplink.length > 0) {
+        NSURL *url = [NSURL URLWithString:deeplink];
+        if (url != nil) {
+            builder = [builder handleDeeplink:url];
+        }
+    }
+
+    [builder startWithInitialized:^(NSError * _Nullable error) {
         if (error != nil) {
             [self failureFor:command resultString: error.localizedDescription];
         } else {
-            [self successFor:command resultBool:initialized];
+            [self successFor:command resultBool:YES];
         }
     }];
 }
@@ -80,7 +132,8 @@
     }
 
     NSInteger rawAttribute = [attributeNumber integerValue];
-    PLYAttribute *attribute = nil;
+    PLYAttribute attribute = PLYAttributeFirebaseAppInstanceId;
+    BOOL attributeFound = YES;
 
     switch (rawAttribute) {
         case CordovaPLYAttributeFirebaseAppInstanceId:
@@ -146,10 +199,13 @@
         case CordovaPLYAttributeBatchCustomUserId:
             attribute = PLYAttributeBatchCustomUserId;
             break;
+        default:
+            attributeFound = NO;
+            break;
     }
 
 
-    if (attribute == nil) {
+    if (!attributeFound) {
         return;
     }
 
@@ -161,14 +217,19 @@
     [self successFor:command resultString:anonymousId];
 }
 
-- (void)readyToOpenDeeplink:(CDVInvokedUrlCommand*)command {
-    BOOL isReadyToPurchase = [[command argumentAtIndex:0] boolValue];
-    [Purchasely readyToOpenDeeplink: isReadyToPurchase];
+- (void)allowDeeplink:(CDVInvokedUrlCommand*)command {
+    BOOL allow = [[command argumentAtIndex:0] boolValue];
+    [Purchasely allowDeeplink: allow];
 }
 
-- (void)setDefaultPresentationResultHandler:(CDVInvokedUrlCommand*)command {
-    [Purchasely setDefaultPresentationResultHandler:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
-        NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
+- (void)allowCampaigns:(CDVInvokedUrlCommand*)command {
+    BOOL allow = [[command argumentAtIndex:0] boolValue];
+    [Purchasely allowCampaigns: allow];
+}
+
+- (void)setDefaultPresentationDismissHandler:(CDVInvokedUrlCommand*)command {
+    [Purchasely setDefaultPresentationDismissHandler:^(PLYPresentationOutcome * _Nonnull outcome) {
+        NSDictionary *resultDict = [self resultDictionaryForOutcome:outcome];
 
         CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:resultDict];
         [pluginResult setKeepCallbackAsBool:YES];
@@ -179,115 +240,55 @@
 - (void)presentPresentationWithIdentifier:(CDVInvokedUrlCommand*)command {
     NSString *presentationVendorId = [command argumentAtIndex:0];
     NSString *contentId = [command argumentAtIndex:1];
-    BOOL isFullscreen = [[command argumentAtIndex:2] boolValue];
+    NSString *displayMode = [command argumentAtIndex:2];
 
-    UIViewController *ctrl = [Purchasely presentationControllerWith:presentationVendorId contentId:contentId loaded:nil completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
-        NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
-        [self successFor:command resultDict:resultDict];
-    }];
-
-    if (ctrl != nil) {
-        UINavigationController *navCtrl = [[UINavigationController alloc] initWithRootViewController:ctrl];
-        [navCtrl.navigationBar setTranslucent:YES];
-        [navCtrl.navigationBar setBackgroundImage:[UIImage new] forBarMetrics:UIBarMetricsDefault];
-        [navCtrl.navigationBar setShadowImage: [UIImage new]];
-        [navCtrl.navigationBar setTintColor: [UIColor whiteColor]];
-
-        self.presentedPresentationViewController = navCtrl;
-
-        if (isFullscreen) {
-            navCtrl.modalPresentationStyle = UIModalPresentationFullScreen;
-        }
-        [Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage from:nil];
+    if (![presentationVendorId isKindOfClass:[NSString class]]) {
+        [self failureFor:command resultString:@"presentationId is required"];
+        return;
     }
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        PLYPresentationBuilder *builder = [PLYPresentationBuilder forScreenId:presentationVendorId];
+        if ([contentId isKindOfClass:[NSString class]]) {
+            builder = [builder contentId:contentId];
+        }
+        builder = [builder onPresented:^(id<PLYPresentation> _Nullable presentation, NSError * _Nullable error) {
+            self.currentPresentation = presentation;
+        }];
+        builder = [builder onDismissed:^(PLYPresentationOutcome * _Nonnull outcome) {
+            [self successFor:command resultDict:[self resultDictionaryForOutcome:outcome]];
+        }];
+
+        id<PLYPresentationRequest> request = [builder build];
+        [request displayWithTransition:[self displayModeFromString:displayMode] completion:nil];
+    });
 }
 
 - (void)presentPresentationForPlacement:(CDVInvokedUrlCommand*)command {
     NSString *placementVendorId = [command argumentAtIndex:0];
     NSString *contentId = [command argumentAtIndex:1];
-    BOOL isFullscreen = [[command argumentAtIndex:2] boolValue];
+    NSString *displayMode = [command argumentAtIndex:2];
 
-    UIViewController *ctrl = [Purchasely presentationControllerFor:placementVendorId contentId:contentId loaded:nil completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
-        NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
-        [self successFor:command resultDict:resultDict];
-    }];
-
-    if (ctrl != nil) {
-        UINavigationController *navCtrl = [[UINavigationController alloc] initWithRootViewController:ctrl];
-        [navCtrl.navigationBar setTranslucent:YES];
-        [navCtrl.navigationBar setBackgroundImage:[UIImage new] forBarMetrics:UIBarMetricsDefault];
-        [navCtrl.navigationBar setShadowImage: [UIImage new]];
-        [navCtrl.navigationBar setTintColor: [UIColor whiteColor]];
-
-        self.presentedPresentationViewController = navCtrl;
-
-        if (isFullscreen) {
-            navCtrl.modalPresentationStyle = UIModalPresentationFullScreen;
-        }
-        [Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage from:nil];
+    if (![placementVendorId isKindOfClass:[NSString class]]) {
+        [self failureFor:command resultString:@"placementId is required"];
+        return;
     }
-}
 
-- (void)presentPlanWithIdentifier:(CDVInvokedUrlCommand*)command {
-    NSString *planVendorId = [command argumentAtIndex:0];
-    NSString *presentationVendorId = [command argumentAtIndex:1];
-    NSString *contentId = [command argumentAtIndex:2];
-    BOOL isFullscreen = [[command argumentAtIndex:3] boolValue];
-
-    UIViewController *ctrl = [Purchasely planControllerFor:planVendorId with:presentationVendorId contentId:contentId loaded:nil completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
-        NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
-        [self successFor:command resultDict:resultDict];
-    }];
-
-    if (ctrl != nil) {
-        UINavigationController *navCtrl = [[UINavigationController alloc] initWithRootViewController:ctrl];
-        [navCtrl.navigationBar setTranslucent:YES];
-        [navCtrl.navigationBar setBackgroundImage:[UIImage new] forBarMetrics:UIBarMetricsDefault];
-        [navCtrl.navigationBar setShadowImage: [UIImage new]];
-        [navCtrl.navigationBar setTintColor: [UIColor whiteColor]];
-
-        self.presentedPresentationViewController = navCtrl;
-
-        if (isFullscreen) {
-            navCtrl.modalPresentationStyle = UIModalPresentationFullScreen;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        PLYPresentationBuilder *builder = [PLYPresentationBuilder forPlacementId:placementVendorId];
+        if ([contentId isKindOfClass:[NSString class]]) {
+            builder = [builder contentId:contentId];
         }
-        [Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage from:nil];
-    }
-}
+        builder = [builder onPresented:^(id<PLYPresentation> _Nullable presentation, NSError * _Nullable error) {
+            self.currentPresentation = presentation;
+        }];
+        builder = [builder onDismissed:^(PLYPresentationOutcome * _Nonnull outcome) {
+            [self successFor:command resultDict:[self resultDictionaryForOutcome:outcome]];
+        }];
 
-- (void)presentProductWithIdentifier:(CDVInvokedUrlCommand*)command {
-    NSString *productVendorId = [command argumentAtIndex:0];
-    NSString *presentationVendorId = [command argumentAtIndex:1];
-    NSString *contentId = [command argumentAtIndex:2];
-    BOOL isFullscreen = [[command argumentAtIndex:3] boolValue];
-
-    UIViewController *ctrl = [Purchasely productControllerFor:productVendorId with:presentationVendorId contentId:contentId loaded:nil completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
-        NSDictionary *resultDict = [self resultDictionaryForPresentationController:result plan:plan];
-        [self successFor:command resultDict:resultDict];
-    }];
-
-    if (ctrl != nil) {
-        UINavigationController *navCtrl = [[UINavigationController alloc] initWithRootViewController:ctrl];
-        [navCtrl.navigationBar setTranslucent:YES];
-        [navCtrl.navigationBar setBackgroundImage:[UIImage new] forBarMetrics:UIBarMetricsDefault];
-        [navCtrl.navigationBar setShadowImage: [UIImage new]];
-        [navCtrl.navigationBar setTintColor: [UIColor whiteColor]];
-
-        self.presentedPresentationViewController = navCtrl;
-
-        if (isFullscreen) {
-            navCtrl.modalPresentationStyle = UIModalPresentationFullScreen;
-        }
-        [Purchasely showController:navCtrl type: PLYUIControllerTypeProductPage from:nil];
-    }
-}
-
-- (void)presentSubscriptions:(CDVInvokedUrlCommand*)command {
-    UIViewController *ctrl = [Purchasely subscriptionsController];
-    UINavigationController *navCtrl = [[UINavigationController alloc] initWithRootViewController:ctrl];
-    ctrl.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem: UIBarButtonSystemItemDone target:navCtrl action:@selector(close)];
-
-    [Purchasely showController:navCtrl type: PLYUIControllerTypeSubscriptionList from:nil];
+        id<PLYPresentationRequest> request = [builder build];
+        [request displayWithTransition:[self displayModeFromString:displayMode] completion:nil];
+    });
 }
 
 - (void)purchaseWithPlanVendorId:(CDVInvokedUrlCommand*)command {
@@ -358,7 +359,9 @@
 
 - (void)synchronize:(CDVInvokedUrlCommand*)command {
     [Purchasely synchronizeWithSuccess:^{
+        [self successFor:command resultBool:YES];
     } failure:^(NSError * _Nonnull error) {
+        [self failureFor:command resultString:error.localizedDescription];
     }];
 }
 
@@ -444,12 +447,14 @@
 }
 
 - (void)removeEventsListener:(CDVInvokedUrlCommand*)command {
-    [Purchasely setEventDelegate:nil];
+    // v6 `setEventDelegate:` is _Nonnull (no native unregister). The delegate stays
+    // registered; clearing eventCommand makes `eventTriggered:` a no-op.
     self.eventCommand = nil;
 }
 
 - (void)removeUserAttributeListener:(CDVInvokedUrlCommand*)command {
-    [Purchasely setUserAttributeDelegate:nil];
+    // v6 `setUserAttributeDelegate:` is _Nonnull (no native unregister). Clearing
+    // attributeCommand makes the user-attribute callbacks a no-op.
     self.attributeCommand = nil;
 }
 
@@ -458,12 +463,12 @@
     self.attributeCommand = command;
 }
 
-- (void)isDeeplinkHandled:(CDVInvokedUrlCommand*)command {
+- (void)handleDeeplink:(CDVInvokedUrlCommand*)command {
     NSString *deeplinkString = [command argumentAtIndex:0];
     NSURL *deeplink = [NSURL URLWithString:deeplinkString];
 
     if (deeplink != nil) {
-        BOOL result = [Purchasely isDeeplinkHandledWithDeeplink:deeplink];
+        BOOL result = [Purchasely handleDeeplink:deeplink];
         [self successFor:command resultBool:result];
     } else {
         [self successFor:command resultBool:NO];
@@ -509,33 +514,96 @@
 
 // Helpers
 
-- (NSDictionary<NSString *, NSObject *> *) resultDictionaryForPresentationController:(PLYProductViewControllerResult)result plan:(PLYPlan * _Nullable)plan {
-    NSMutableDictionary<NSString *, NSObject *> *productViewResult = [NSMutableDictionary new];
-    int resultString;
+// v6: builds a PLYDisplayMode from the JS display-mode string (see TransitionType).
+// Returns nil for an unknown/absent value so the backend-defined default is honored.
+- (PLYDisplayMode * _Nullable) displayModeFromString:(NSString * _Nullable) displayMode {
+    if (![displayMode isKindOfClass:[NSString class]]) {
+        return nil;
+    }
+    if ([displayMode isEqualToString:@"fullScreen"]) {
+        return [PLYDisplayMode fullScreen];
+    } else if ([displayMode isEqualToString:@"modal"]) {
+        return [PLYDisplayMode modal];
+    } else if ([displayMode isEqualToString:@"push"]) {
+        return [PLYDisplayMode push];
+    } else if ([displayMode isEqualToString:@"inlinePaywall"]) {
+        return [PLYDisplayMode inlinePaywall];
+    } else if ([displayMode isEqualToString:@"drawer"]) {
+        // TODO(v6-verify): the Cordova contract passes only a display-mode string with no
+        // dimension info, so drawer defaults to hug height (nil) + dismissible. Wire up
+        // PLYDimension width/height if the JS contract starts sending them.
+        return [[PLYDisplayMode alloc] initWithType:PLYDisplayModeTypeDrawer heightPercentage:nil backgroundColors:nil dismissible:YES];
+    } else if ([displayMode isEqualToString:@"popin"]) {
+        // TODO(v6-verify): same as drawer — hug size + dismissible default (no dimension in the string contract).
+        return [[PLYDisplayMode alloc] initWithType:PLYDisplayModeTypePopin heightPercentage:nil backgroundColors:nil dismissible:YES];
+    }
+    return nil;
+}
 
-    switch (result) {
-        case PLYProductViewControllerResultPurchased:
-            resultString = PLYProductViewControllerResultPurchased;
+// v6: the dismiss outcome now arrives as a PLYPresentationOutcome (replaces the
+// (PLYProductViewControllerResult, PLYPlan) pair). Serialized per the JS↔native contract.
+- (NSDictionary<NSString *, NSObject *> *) resultDictionaryForOutcome:(PLYPresentationOutcome * _Nonnull)outcome {
+    NSMutableDictionary<NSString *, NSObject *> *dict = [NSMutableDictionary new];
+
+    // Map the v6 PLYPurchaseResult (cancelled=0, purchased=1, restored=2, none=3) to the
+    // JS PurchaseResult enum (PURCHASED=0, CANCELLED=1, RESTORED=2) for back-compat.
+    int result;
+    switch (outcome.purchaseResult) {
+        case PLYPurchaseResultPurchased:
+            result = 0;
             break;
-        case PLYProductViewControllerResultRestored:
-            resultString = PLYProductViewControllerResultRestored;
+        case PLYPurchaseResultCancelled:
+            result = 1;
             break;
-        case PLYProductViewControllerResultCancelled:
-            resultString = PLYProductViewControllerResultCancelled;
+        case PLYPurchaseResultRestored:
+            result = 2;
+            break;
+        case PLYPurchaseResultNone:
+            // TODO(v6-verify): PLYPurchaseResultNone (no purchase action) has no JS PurchaseResult
+            // equivalent; mapped to CANCELLED(1). closeReason still conveys the precise reason.
+            result = 1;
             break;
     }
+    [dict setObject:[NSNumber numberWithInt:result] forKey:@"result"];
 
-    [productViewResult setObject:[NSNumber numberWithInt:resultString] forKey:@"result"];
-
-    if (plan != nil) {
-        [productViewResult setObject:[plan asDictionary] forKey:@"plan"];
+    if (outcome.plan != nil) {
+        [dict setObject:[outcome.plan asDictionary] forKey:@"plan"];
     }
-    return productViewResult;
+
+    // closeReason strings match the JS Purchasely.CloseReason enum.
+    NSString *closeReason = nil;
+    switch (outcome.closeReason) {
+        case PLYCloseReasonNone:
+            closeReason = @"none";
+            break;
+        case PLYCloseReasonButton:
+            closeReason = @"button";
+            break;
+        case PLYCloseReasonInteractiveDismiss:
+            closeReason = @"interactive_dismiss";
+            break;
+        case PLYCloseReasonProgrammatic:
+            closeReason = @"programmatic";
+            break;
+    }
+    if (closeReason != nil) {
+        [dict setObject:closeReason forKey:@"closeReason"];
+    }
+
+    if (outcome.error != nil) {
+        [dict setObject:outcome.error.localizedDescription forKey:@"error"];
+    }
+
+    if (outcome.presentation != nil) {
+        [dict setObject:[self resultDictionaryForFetchPresentation:outcome.presentation] forKey:@"presentation"];
+    }
+
+    return dict;
 }
 
 - (NSDictionary<NSString *, NSObject *> *) resultDictionaryForActionInterceptor:(PLYPresentationAction) action
                                                                      parameters: (PLYPresentationActionParameters * _Nullable) params
-                                                              presentationInfos: (PLYPresentationInfo * _Nullable) infos {
+                                                                            info: (PLYInterceptorInfo * _Nullable) info {
     NSMutableDictionary<NSString *, NSObject *> *actionInterceptorResult = [NSMutableDictionary new];
 
     NSString* actionString;
@@ -575,22 +643,27 @@
 
     [actionInterceptorResult setObject:actionString forKey:@"action"];
 
-    if (infos != nil) {
+    // v6: PLYPresentationInfo was replaced by PLYInterceptorInfo. The flat id fields
+    // (presentationId/placementId/abTestId/…) are now accessed through info.presentation.
+    if (info != nil) {
         NSMutableDictionary<NSString *, NSObject *> *infosResult = [NSMutableDictionary new];
-        if (infos.contentId != nil) {
-            [infosResult setObject:infos.contentId forKey:@"contentId"];
+        if (info.contentId != nil) {
+            [infosResult setObject:info.contentId forKey:@"contentId"];
         }
-        if (infos.presentationId != nil) {
-            [infosResult setObject:infos.presentationId forKey:@"presentationId"];
-        }
-        if (infos.placementId != nil) {
-            [infosResult setObject:infos.placementId forKey:@"placementId"];
-        }
-        if (infos.abTestId != nil) {
-            [infosResult setObject:infos.abTestId forKey:@"abTestId"];
-        }
-        if (infos.abTestVariantId != nil) {
-            [infosResult setObject:infos.abTestVariantId forKey:@"abTestVariantId"];
+        id<PLYPresentation> presentation = info.presentation;
+        if (presentation != nil) {
+            if (presentation.id != nil) {
+                [infosResult setObject:presentation.id forKey:@"presentationId"];
+            }
+            if (presentation.placementId != nil) {
+                [infosResult setObject:presentation.placementId forKey:@"placementId"];
+            }
+            if (presentation.abTestId != nil) {
+                [infosResult setObject:presentation.abTestId forKey:@"abTestId"];
+            }
+            if (presentation.abTestVariantId != nil) {
+                [infosResult setObject:presentation.abTestVariantId forKey:@"abTestVariantId"];
+            }
         }
 
         [actionInterceptorResult setObject:infosResult forKey:@"info"];
@@ -608,6 +681,9 @@
         }
         if (params.presentation != nil) {
             [paramsResult setObject:params.presentation forKey:@"presentation"];
+        }
+        if (params.placement != nil) {
+            [paramsResult setObject:params.placement forKey:@"placementId"];
         }
         if (params.promoOffer != nil) {
             NSMutableDictionary<NSString *, NSObject *> *promoOffer = [NSMutableDictionary new];
@@ -635,6 +711,8 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
             return @"stripe";
         case PLYWebCheckoutProviderOther:
             return @"other";
+        case PLYWebCheckoutProviderNone:
+            return @"none";
         default:
             return @"unknown";
     }
@@ -642,51 +720,70 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
 
 - (void)setPaywallActionInterceptor:(CDVInvokedUrlCommand*)command {
     self.paywallActionInterceptorCommand = command;
-    [Purchasely setPaywallActionsInterceptor:^(enum PLYPresentationAction action, PLYPresentationActionParameters * _Nullable parameters, PLYPresentationInfo * _Nullable infos, void (^ _Nonnull onProcessActionHandler)(BOOL)) {
-        self.onProcessActionHandler = onProcessActionHandler;
-        NSDictionary *resultDict = [self resultDictionaryForActionInterceptor:action parameters:parameters presentationInfos:infos];
 
-        CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:resultDict];
-        [pluginResult setKeepCallbackAsBool:YES];
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:self.paywallActionInterceptorCommand.callbackId];
+    // v6: the single global setPaywallActionsInterceptor is gone. Register one interceptor
+    // per PLYPresentationAction kind, all routed to the single Cordova callback.
+    [Purchasely removeAllActionInterceptors];
 
-    }];
+    PLYPresentationAction actions[] = {
+        PLYPresentationActionClose,
+        PLYPresentationActionCloseAll,
+        PLYPresentationActionLogin,
+        PLYPresentationActionNavigate,
+        PLYPresentationActionPurchase,
+        PLYPresentationActionRestore,
+        PLYPresentationActionOpenPresentation,
+        PLYPresentationActionOpenPlacement,
+        PLYPresentationActionPromoCode,
+        PLYPresentationActionWebCheckout
+    };
+    NSUInteger count = sizeof(actions) / sizeof(actions[0]);
+
+    for (NSUInteger i = 0; i < count; i++) {
+        PLYPresentationAction action = actions[i];
+        [Purchasely interceptAction:action handler:^(PLYInterceptorInfo * _Nonnull info, PLYPresentationActionParameters * _Nullable params, void (^ _Nonnull completion)(enum PLYInterceptResult)) {
+            // TODO(v6-verify): the Cordova JS onProcessAction contract carries no invocation id,
+            // so only the latest interceptor completion is stashed. Concurrent intercepts would
+            // overwrite; matches the single-handler v5 behavior the JS contract preserves.
+            self.interceptorCompletion = completion;
+            NSDictionary *resultDict = [self resultDictionaryForActionInterceptor:action parameters:params info:info];
+
+            CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:resultDict];
+            [pluginResult setKeepCallbackAsBool:YES];
+            [self.commandDelegate sendPluginResult:pluginResult callbackId:self.paywallActionInterceptorCommand.callbackId];
+        }];
+    }
 }
 
 - (void)onProcessAction:(CDVInvokedUrlCommand*)command {
-    BOOL processAction = [[command argumentAtIndex:0] boolValue];
-    if (self.onProcessActionHandler != nil) {
-        self.onProcessActionHandler(processAction);
+    // v6: result is a string ("success"/"failed"/"notHandled") mapped to PLYInterceptResult.
+    NSString *resultString = [command argumentAtIndex:0];
+    enum PLYInterceptResult result = PLYInterceptResultNotHandled;
+    if ([resultString isEqualToString:@"success"]) {
+        result = PLYInterceptResultSuccess;
+    } else if ([resultString isEqualToString:@"failed"]) {
+        result = PLYInterceptResultFailed;
+    } else if ([resultString isEqualToString:@"notHandled"]) {
+        result = PLYInterceptResultNotHandled;
+    }
+
+    if (self.interceptorCompletion != nil) {
+        self.interceptorCompletion(result);
+        self.interceptorCompletion = nil;
     }
 }
 
 - (void)closePresentation:(CDVInvokedUrlCommand*)command {
-    if (self.presentedPresentationViewController != nil) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self.presentedPresentationViewController dismissViewControllerAnimated:true completion:^{
-                self.presentedPresentationViewController = nil;
-                self.shouldReopenPaywall = NO;
-            }];
-        });
-    }
-}
-
-- (void)hidePresentation:(CDVInvokedUrlCommand*)command {
-    if (self.presentedPresentationViewController != nil) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self.presentedPresentationViewController dismissViewControllerAnimated:true completion:^{ }];
-            self.shouldReopenPaywall = YES;
-        });
-    }
-}
-
-- (void)showPresentation:(CDVInvokedUrlCommand*)command {
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (self.presentedPresentationViewController && self.shouldReopenPaywall) {
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                self.shouldReopenPaywall = NO;
-                [Purchasely showController:self.presentedPresentationViewController type:PLYUIControllerTypeProductPage from:nil];
-            });
+        [Purchasely closeAllScreens];
+        self.currentPresentation = nil;
+    });
+}
+
+- (void)backPresentation:(CDVInvokedUrlCommand*)command {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self.currentPresentation != nil) {
+            [self.currentPresentation back];
         }
     });
 }
@@ -887,84 +984,75 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
     NSString *contentId = [command argumentAtIndex:2];
 
     dispatch_async(dispatch_get_main_queue(), ^{
-           if (placementId != nil) {
-               [Purchasely fetchPresentationFor:placementId contentId: contentId fetchCompletion:^(PLYPresentation * _Nullable presentation, NSError * _Nullable error) {
-                   if (error != nil) {
-                       [self failureFor:command resultString: error.localizedDescription];
-                   } else if (presentation != nil) {
-                       [self.presentationsLoaded addObject:presentation];
-                       [self successFor:command resultDict:[self resultDictionaryForFetchPresentation:presentation]];
-                   }
-               } completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
-                   if (self.purchaseResolve != nil){
-                       [self successFor:self.purchaseResolve resultDict:[self resultDictionaryForPresentationController:result plan:plan]];
-                   }
-               } loadedCompletion:nil];
-           } else {
-               [Purchasely fetchPresentationWith:presentationId contentId: contentId fetchCompletion:^(PLYPresentation * _Nullable presentation, NSError * _Nullable error) {
-                   if (error != nil) {
-                       [self failureFor:command resultString: error.localizedDescription];
-                   } else if (presentation != nil) {
-                       [self.presentationsLoaded addObject:presentation];
-                       [self successFor:command resultDict:[self resultDictionaryForFetchPresentation:presentation]];
-                   }
-               } completion:^(enum PLYProductViewControllerResult result, PLYPlan * _Nullable plan) {
-                   if (self.purchaseResolve != nil) {
-                       [self successFor:self.purchaseResolve resultDict:[self resultDictionaryForPresentationController:result plan:plan]];
-                   }
-               } loadedCompletion:nil];
-           }
-       });
+        PLYPresentationBuilder *builder;
+        if ([placementId isKindOfClass:[NSString class]]) {
+            builder = [PLYPresentationBuilder forPlacementId:placementId];
+        } else if ([presentationId isKindOfClass:[NSString class]]) {
+            builder = [PLYPresentationBuilder forScreenId:presentationId];
+        } else {
+            [self failureFor:command resultString:@"placementId or presentationId is required"];
+            return;
+        }
+
+        if ([contentId isKindOfClass:[NSString class]]) {
+            builder = [builder contentId:contentId];
+        }
+
+        // v6: build a request and preload it (fetch without display). The purchase/dismiss
+        // outcome now flows through the later presentPresentation: display, not fetch.
+        id<PLYPresentationRequest> request = [builder build];
+        [request preloadWithCompletion:^(id<PLYPresentation> _Nullable presentation, NSError * _Nullable error) {
+            if (error != nil) {
+                [self failureFor:command resultString: error.localizedDescription];
+            } else if (presentation != nil) {
+                [self.presentationsLoaded addObject:presentation];
+                [self successFor:command resultDict:[self resultDictionaryForFetchPresentation:presentation]];
+            }
+        }];
+    });
 }
 
 - (void)presentPresentation:(CDVInvokedUrlCommand *)command {
     NSDictionary<NSString *, id> *presentationDictionary = [command argumentAtIndex:0];
-    BOOL isFullscreen = [[command argumentAtIndex:1] boolValue];
+    NSString *displayMode = [command argumentAtIndex:1];
     NSString *loadingBackgroundColor = [command argumentAtIndex:2];
 
     if (presentationDictionary == nil) {
-            [self failureFor:command resultString: @"Presentation cannot be null"];
+        [self failureFor:command resultString: @"Presentation cannot be null"];
+        return;
+    }
+
+    self.purchaseResolve = command;
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSString *presentationId = (NSString *)[presentationDictionary objectForKey:@"id"];
+        id<PLYPresentation> presentationLoaded = [self findPresentationLoadedFor:presentationId];
+
+        if (presentationLoaded == nil || presentationLoaded.controller == nil) {
+            [self failureFor:command resultString: @"Presentation not loaded"];
             return;
         }
 
-        self.purchaseResolve = command;
+        NSInteger index = [self findIndexPresentationLoadedFor:presentationId];
+        if (index >= 0) {
+            [self.presentationsLoaded removeObjectAtIndex:index];
+        }
 
-        dispatch_async(dispatch_get_main_queue(), ^{
-
-            PLYPresentation *presentationLoaded = [self findPresentationLoadedFor:(NSString *)[presentationDictionary objectForKey:@"id"]];
-
-            if (presentationLoaded == nil || presentationLoaded.controller == nil) {
-                [self failureFor:command resultString: @"Presentation not loaded"];
-                return;
+        if (loadingBackgroundColor != nil) {
+            UIColor *backColor = [UIColor ply_fromHex:loadingBackgroundColor];
+            if (backColor != nil) {
+                [presentationLoaded.controller.view setBackgroundColor:backColor];
             }
+        }
 
-            [self.presentationsLoaded removeObjectAtIndex:[self findIndexPresentationLoadedFor:(NSString *)[presentationDictionary objectForKey:@"id"]]];
+        // Deliver the dismiss outcome to this command through onDismissed.
+        presentationLoaded.onDismissed = ^(PLYPresentationOutcome * _Nonnull outcome) {
+            [self successFor:command resultDict:[self resultDictionaryForOutcome:outcome]];
+        };
 
-            if (presentationLoaded.controller != nil) {
-                if (loadingBackgroundColor != nil) {
-                    UIColor *backColor = [UIColor ply_fromHex:loadingBackgroundColor];
-                    if (backColor != nil) {
-                        [presentationLoaded.controller.view setBackgroundColor:backColor];
-                    }
-                }
-
-                if (isFullscreen) {
-                    presentationLoaded.controller.modalPresentationStyle = UIModalPresentationFullScreen;
-                }
-
-                self.shouldReopenPaywall = NO;
-
-                [Purchasely closeDisplayedPresentation];
-                self.presentedPresentationViewController = presentationLoaded.controller;
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                    if (presentationLoaded.isFlow) {
-                        [presentationLoaded displayFrom:nil];
-                    } else {
-                        [Purchasely showController:presentationLoaded.controller type: PLYUIControllerTypeProductPage from:nil];
-                    }
-                });
-            }
-        });
+        self.currentPresentation = presentationLoaded;
+        [presentationLoaded displayFrom:nil transitionType:[self displayModeFromString:displayMode]];
+    });
 }
 
 - (void) revokeDataProcessingConsent:(CDVInvokedUrlCommand *)command {
@@ -996,8 +1084,8 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
     [Purchasely setDebugModeWithEnabled: enabled];
 }
 
-- (PLYPresentation *) findPresentationLoadedFor:(NSString * _Nullable) presentationId {
-    for (PLYPresentation *presentationLoaded in self.presentationsLoaded) {
+- (id<PLYPresentation>) findPresentationLoadedFor:(NSString * _Nullable) presentationId {
+    for (id<PLYPresentation> presentationLoaded in self.presentationsLoaded) {
         if ([presentationLoaded.id isEqualToString: presentationId]) {
             return presentationLoaded;
         }
@@ -1007,7 +1095,7 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
 
 - (NSInteger) findIndexPresentationLoadedFor:(NSString * _Nullable) presentationId {
     NSInteger index = 0;
-    for (PLYPresentation *presentationLoaded in self.presentationsLoaded) {
+    for (id<PLYPresentation> presentationLoaded in self.presentationsLoaded) {
         if ([presentationLoaded.id isEqualToString: presentationId]) {
             return index;
         }
@@ -1038,10 +1126,9 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
     return dict;
 }
 
-- (NSDictionary<NSString *, NSObject *> *) resultDictionaryForFetchPresentation:(PLYPresentation * _Nullable) presentation {
+- (NSDictionary<NSString *, NSObject *> *) resultDictionaryForFetchPresentation:(id<PLYPresentation> _Nullable) presentation {
     NSMutableDictionary<NSString *, NSObject *> *presentationResult = [NSMutableDictionary new];
 
-    // TODO: fill all parameters.
     if (presentation != nil) {
 
         if (presentation.id != nil) {
@@ -1063,6 +1150,17 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
         if (presentation.abTestVariantId != nil) {
             [presentationResult setObject:presentation.abTestVariantId forKey:@"abTestVariantId"];
         }
+
+        // New in v6: campaignId, flowId, height.
+        if (presentation.campaignId != nil) {
+            [presentationResult setObject:presentation.campaignId forKey:@"campaignId"];
+        }
+
+        if (presentation.flowId != nil) {
+            [presentationResult setObject:presentation.flowId forKey:@"flowId"];
+        }
+
+        [presentationResult setObject:[NSNumber numberWithInteger:presentation.height] forKey:@"height"];
 
         if (presentation.language != nil) {
             [presentationResult setObject:presentation.language forKey:@"language"];
