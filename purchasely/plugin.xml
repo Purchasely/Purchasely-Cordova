@@ -51,27 +51,8 @@
             <preference name="GradlePluginKotlinEnabled" value="true" />
             <preference name="GradlePluginKotlinCodeStyle" value="official" />
         </config-file>
-        <config-file parent="/manifest/application" target="AndroidManifest.xml">
-            <activity
-                android:label="PLYProductActivity"
-                android:name="cordova.plugin.purchasely.PLYProductActivity"
-                android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-            </activity>
-            <activity
-                android:label="PLYSubscriptionsActivity"
-                android:name="cordova.plugin.purchasely.PLYSubscriptionsActivity"
-                android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-            </activity>
-        </config-file>
         <framework src="src/android/build-extras.gradle" custom="true" type="gradleReference" />
         <framework src="io.purchasely:core:6.0.0-rc.2" />
         <source-file src="src/android/PurchaselyPlugin.kt" target-dir="java/cordova/plugin/purchasely" />
-        <source-file src="src/android/PLYProductActivity.kt" target-dir="java/cordova/plugin/purchasely" />
-        <source-file src="src/android/PLYSubscriptionsActivity.java" target-dir="src/cordova/plugin/purchasely" />
-        <source-file src="src/android/activity_ply_product_activity.xml" target-dir="res/layout"/>
-        <source-file src="src/android/activity_ply_subscriptions_activity.xml" target-dir="res/layout"/>
-        <source-file src="src/android/theme_purchasely_fullscreen.xml" target-dir="res/values"/>
-        <source-file src="src/android/theme_purchasely_fullscreen_v23_light_status_bar.xml" target-dir="res/values-v23"/>
-        <source-file src="src/android/theme_purchasely_fullscreen_v23.xml" target-dir="res/values-v23"/>
     </platform>
 </plugin>

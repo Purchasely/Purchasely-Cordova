@@ -4,4 +4,15 @@ android {
             excludes += ['META-INF/versions/9/OSGI-INF/MANIFEST.MF']
         }
     }
+    // Purchasely 6.0 native SDK (io.purchasely:core:6.0.0-rc.2) ships Java 11 bytecode.
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    kotlinOptions {
+        jvmTarget = '11'
+    }
 }
