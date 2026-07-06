@@ -1,0 +1,8 @@
+# macOS
+.DS_Store
+
+# IDE artifacts (regenerated locally; not shared)
+.idea/caches/
+.idea/copilot.data.migration.*.xml
+.idea/markdown.xml
+.idea/inspectionProfiles/

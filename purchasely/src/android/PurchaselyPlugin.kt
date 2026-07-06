@@ -61,11 +61,12 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
     private val job = SupervisorJob()
     override val coroutineContext = job + Dispatchers.Main
 
-    // Single JS callback registered for the paywall action interceptor. v6 registers
-    // one interceptor per action kind; all of them fan into this single Cordova callback.
-    private var interceptorCallback: CallbackContext? = null
-    // Completion of the currently intercepted action, resolved by onProcessAction().
-    private var pendingInterceptCompletion: ((PLYInterceptResult) -> Unit)? = null
+    // v6 per-action interceptor state. Each registered action kind keeps its own
+    // Cordova callback (to emit intercept events); each intercepted invocation stashes
+    // its completion under a unique id so concurrent intercepts resolve independently.
+    private val actionInterceptorCallbacks = ConcurrentHashMap<String, CallbackContext>()
+    private val pendingInterceptCompletions = ConcurrentHashMap<String, (PLYInterceptResult) -> Unit>()
+    private var interceptorInvocationCounter = 0
 
     // Presentation currently displayed (used for back()/close()).
     private var displayedPresentation: PLYPresentationBase.Loaded? = null
@@ -159,8 +160,9 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                     getStringFromJson(args.getString(2)),
                     callbackContext
                 )
-                "setPaywallActionInterceptor" -> setPaywallActionInterceptor(callbackContext)
-                "onProcessAction" -> onProcessAction(getStringFromJson(args.getString(0)))
+                "registerActionInterceptor" -> registerActionInterceptor(getStringFromJson(args.getString(0)), callbackContext)
+                "unregisterActionInterceptor" -> unregisterActionInterceptor(getStringFromJson(args.getString(0)))
+                "completeActionInterceptor" -> completeActionInterceptor(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)))
                 "closePresentation" -> closePresentation(callbackContext)
                 "backPresentation" -> backPresentation(callbackContext)
                 "userDidConsumeSubscriptionContent" -> userDidConsumeSubscriptionContent()
@@ -302,8 +304,8 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
     private fun close() {
         defaultCallback = null
         purchaseCallback = null
-        interceptorCallback = null
-        pendingInterceptCompletion = null
+        actionInterceptorCallbacks.clear()
+        pendingInterceptCompletions.clear()
         displayedPresentation = null
         // TODO(v6-verify): the global Purchasely.close() teardown was removed/lumped with
         // presentation close in v6 (Flutter never calls it). Not invoked here to avoid a
@@ -780,41 +782,56 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
     }
 
     //region Action interceptor
-    // Action kinds recognised by v6. We register one interceptor per kind and fan them
-    // all into the single Cordova JS callback registered by setPaywallActionInterceptor.
-    private val interceptorKinds = listOf(
-        "close", "close_all", "login", "navigate", "purchase",
-        "restore", "open_presentation", "open_placement", "promo_code", "web_checkout"
-    )
-
-    private fun setPaywallActionInterceptor(callbackContext: CallbackContext) {
-        interceptorCallback = callbackContext
-        Purchasely.removeAllActionInterceptors()
-        for (kind in interceptorKinds) {
-            val clazz = PLYPresentationAction.fromValue(kind)?.java ?: continue
-            Purchasely.interceptAction(clazz, object : PLYActionInterceptorCallback {
-                override fun onIntercept(
-                    info: PLYInterceptorInfo,
-                    action: PLYPresentationAction,
-                    completion: (PLYInterceptResult) -> Unit
-                ) {
-                    pendingInterceptCompletion = completion
-
-                    val map = hashMapOf<String, Any?>(
-                        "action" to kind,
-                        "info" to mapOf(
-                            // TODO(v6-verify): presentationId derived from info.presentation?.screenId;
-                            // v6 PLYInterceptorInfo exposes {contentId, presentation}, not a raw id.
-                            "contentId" to info.contentId,
-                            "presentationId" to info.presentation?.screenId
-                        ),
-                        "parameters" to (actionPayloadToMap(action) ?: emptyMap<String, Any?>())
-                    )
-                    val result = PluginResult(PluginResult.Status.OK, JSONObject(map))
-                    result.keepCallback = true
-                    interceptorCallback?.sendPluginResult(result)
+    // v6: register a JS handler for a single action kind. Each intercept emits an
+    // event carrying a unique callbackId; JS replies via completeActionInterceptor.
+    private fun registerActionInterceptor(kind: String?, callbackContext: CallbackContext) {
+        if (kind == null) return
+        val clazz = PLYPresentationAction.fromValue(kind)?.java
+        if (clazz == null) {
+            Log.w("Purchasely", "Unknown interceptor kind: $kind")
+            return
+        }
+        actionInterceptorCallbacks[kind] = callbackContext
+        Purchasely.interceptAction(clazz, object : PLYActionInterceptorCallback {
+            override fun onIntercept(
+                info: PLYInterceptorInfo,
+                action: PLYPresentationAction,
+                completion: (PLYInterceptResult) -> Unit
+            ) {
+                val callback = actionInterceptorCallbacks[kind]
+                if (callback == null) {
+                    completion(PLYInterceptResult.NOT_HANDLED)
+                    return
                 }
-            })
+                // Unique id per intercepted invocation so concurrent intercepts resolve independently.
+                val invocationId = "$kind#${++interceptorInvocationCounter}"
+                pendingInterceptCompletions[invocationId] = completion
+
+                val map = hashMapOf<String, Any?>(
+                    "action" to kind,
+                    "callbackId" to invocationId,
+                    "info" to mapOf(
+                        // TODO(v6-verify): presentationId derived from info.presentation?.screenId;
+                        // v6 PLYInterceptorInfo exposes {contentId, presentation}, not a raw id.
+                        "contentId" to info.contentId,
+                        "presentationId" to info.presentation?.screenId
+                    ),
+                    "parameters" to (actionPayloadToMap(action) ?: emptyMap<String, Any?>())
+                )
+                val result = PluginResult(PluginResult.Status.OK, JSONObject(map))
+                result.keepCallback = true
+                callback.sendPluginResult(result)
+            }
+        })
+    }
+
+    // v6: stop intercepting a single action kind.
+    private fun unregisterActionInterceptor(kind: String?) {
+        if (kind == null) return
+        val clazz = PLYPresentationAction.fromValue(kind)?.java ?: return
+        actionInterceptorCallbacks.remove(kind)
+        runCatching { Purchasely.removeActionInterceptor(clazz) }.onFailure {
+            Log.w("Purchasely", "removeActionInterceptor($kind) failed: ${it.message}")
         }
     }
 
@@ -848,21 +865,21 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         }
     }
 
-    // v6: result is a string ("success"/"failed"/"notHandled"), not a boolean. Resolves the
-    // stashed interceptor completion.
-    private fun onProcessAction(result: String?) {
+    // v6: JS reports how an intercepted action was handled, keyed by the invocation id
+    // carried on the intercept event. Result is "success"/"failed"/"notHandled".
+    private fun completeActionInterceptor(callbackId: String?, result: String?) {
+        if (callbackId == null) return
+        val completion = pendingInterceptCompletions.remove(callbackId) ?: return
         val plyResult = when (result) {
             "success" -> PLYInterceptResult.SUCCESS
             "failed" -> PLYInterceptResult.FAILED
             else -> PLYInterceptResult.NOT_HANDLED
         }
-        val completion = pendingInterceptCompletion
-        pendingInterceptCompletion = null
         val activity = cordova.activity
         if (activity != null) {
-            activity.runOnUiThread { completion?.invoke(plyResult) }
+            activity.runOnUiThread { completion.invoke(plyResult) }
         } else {
-            completion?.invoke(plyResult)
+            completion.invoke(plyResult)
         }
     }
     //endregion

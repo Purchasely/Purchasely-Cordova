@@ -17,6 +17,8 @@
     self = [super init];
 
     self.presentationsLoaded = [NSMutableArray new];
+    self.actionInterceptorCallbackIds = [NSMutableDictionary new];
+    self.pendingInterceptCompletions = [NSMutableDictionary new];
 
     return self;
 }
@@ -718,59 +720,92 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
     }
 }
 
-- (void)setPaywallActionInterceptor:(CDVInvokedUrlCommand*)command {
-    self.paywallActionInterceptorCommand = command;
-
-    // v6: the single global setPaywallActionsInterceptor is gone. Register one interceptor
-    // per PLYPresentationAction kind, all routed to the single Cordova callback.
-    [Purchasely removeAllActionInterceptors];
-
-    PLYPresentationAction actions[] = {
-        PLYPresentationActionClose,
-        PLYPresentationActionCloseAll,
-        PLYPresentationActionLogin,
-        PLYPresentationActionNavigate,
-        PLYPresentationActionPurchase,
-        PLYPresentationActionRestore,
-        PLYPresentationActionOpenPresentation,
-        PLYPresentationActionOpenPlacement,
-        PLYPresentationActionPromoCode,
-        PLYPresentationActionWebCheckout
-    };
-    NSUInteger count = sizeof(actions) / sizeof(actions[0]);
-
-    for (NSUInteger i = 0; i < count; i++) {
-        PLYPresentationAction action = actions[i];
-        [Purchasely interceptAction:action handler:^(PLYInterceptorInfo * _Nonnull info, PLYPresentationActionParameters * _Nullable params, void (^ _Nonnull completion)(enum PLYInterceptResult)) {
-            // TODO(v6-verify): the Cordova JS onProcessAction contract carries no invocation id,
-            // so only the latest interceptor completion is stashed. Concurrent intercepts would
-            // overwrite; matches the single-handler v5 behavior the JS contract preserves.
-            self.interceptorCompletion = completion;
-            NSDictionary *resultDict = [self resultDictionaryForActionInterceptor:action parameters:params info:info];
-
-            CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:resultDict];
-            [pluginResult setKeepCallbackAsBool:YES];
-            [self.commandDelegate sendPluginResult:pluginResult callbackId:self.paywallActionInterceptorCommand.callbackId];
-        }];
-    }
+// Maps a JS action-kind string (see Purchasely.PaywallAction) to a PLYPresentationAction.
+// Returns NO for an unknown kind.
+static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationAction *out) {
+    static NSDictionary<NSString *, NSNumber *> *map;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        map = @{
+            @"login": @(PLYPresentationActionLogin),
+            @"purchase": @(PLYPresentationActionPurchase),
+            @"close": @(PLYPresentationActionClose),
+            @"close_all": @(PLYPresentationActionCloseAll),
+            @"restore": @(PLYPresentationActionRestore),
+            @"navigate": @(PLYPresentationActionNavigate),
+            @"promo_code": @(PLYPresentationActionPromoCode),
+            @"open_presentation": @(PLYPresentationActionOpenPresentation),
+            @"open_placement": @(PLYPresentationActionOpenPlacement),
+            @"web_checkout": @(PLYPresentationActionWebCheckout),
+        };
+    });
+    NSNumber *value = [kind isKindOfClass:[NSString class]] ? map[kind] : nil;
+    if (value == nil) return NO;
+    if (out != NULL) *out = (PLYPresentationAction)value.integerValue;
+    return YES;
 }
 
-- (void)onProcessAction:(CDVInvokedUrlCommand*)command {
-    // v6: result is a string ("success"/"failed"/"notHandled") mapped to PLYInterceptResult.
-    NSString *resultString = [command argumentAtIndex:0];
+// v6: register a JS handler for a single action kind. Each intercept emits an
+// event carrying a unique `callbackId`; JS replies via completeActionInterceptor.
+- (void)registerActionInterceptor:(CDVInvokedUrlCommand*)command {
+    NSString *kind = [command argumentAtIndex:0];
+    PLYPresentationAction action;
+    if (!PLYPresentationActionFromString(kind, &action)) {
+        NSLog(@"[Purchasely] unknown interceptor kind: %@", kind);
+        return;
+    }
+    self.actionInterceptorCallbackIds[kind] = command.callbackId;
+
+    __weak CDVPurchasely *weakSelf = self;
+    [Purchasely interceptAction:action handler:^(PLYInterceptorInfo * _Nonnull info, PLYPresentationActionParameters * _Nullable params, void (^ _Nonnull completion)(enum PLYInterceptResult)) {
+        CDVPurchasely *strongSelf = weakSelf;
+        if (strongSelf == nil) { completion(PLYInterceptResultNotHandled); return; }
+
+        NSString *callbackId = strongSelf.actionInterceptorCallbackIds[kind];
+        if (callbackId == nil) { completion(PLYInterceptResultNotHandled); return; }
+
+        // Unique id per intercepted invocation so concurrent intercepts resolve independently.
+        NSString *invocationId = [NSString stringWithFormat:@"%@#%lu", kind, (unsigned long)(++strongSelf.interceptorInvocationCounter)];
+        // Copy the escaping completion onto the heap before stashing (the dictionary retains but
+        // does not copy; the old single-slot property was declared `copy`).
+        strongSelf.pendingInterceptCompletions[invocationId] = [completion copy];
+
+        NSMutableDictionary *event = [[strongSelf resultDictionaryForActionInterceptor:action parameters:params info:info] mutableCopy];
+        event[@"callbackId"] = invocationId;
+
+        CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:event];
+        [pluginResult setKeepCallbackAsBool:YES];
+        [strongSelf.commandDelegate sendPluginResult:pluginResult callbackId:callbackId];
+    }];
+}
+
+// v6: stop intercepting a single action kind.
+- (void)unregisterActionInterceptor:(CDVInvokedUrlCommand*)command {
+    NSString *kind = [command argumentAtIndex:0];
+    PLYPresentationAction action;
+    if (!PLYPresentationActionFromString(kind, &action)) return;
+    [self.actionInterceptorCallbackIds removeObjectForKey:kind];
+    [Purchasely removeActionInterceptor:action];
+}
+
+// v6: JS reports how an intercepted action was handled, keyed by the invocation
+// id carried on the intercept event. Result is "success"/"failed"/"notHandled".
+- (void)completeActionInterceptor:(CDVInvokedUrlCommand*)command {
+    NSString *invocationId = [command argumentAtIndex:0];
+    NSString *resultString = [command argumentAtIndex:1];
+    if (![invocationId isKindOfClass:[NSString class]]) return;
+
+    void (^completion)(enum PLYInterceptResult) = self.pendingInterceptCompletions[invocationId];
+    if (completion == nil) return;
+    [self.pendingInterceptCompletions removeObjectForKey:invocationId];
+
     enum PLYInterceptResult result = PLYInterceptResultNotHandled;
     if ([resultString isEqualToString:@"success"]) {
         result = PLYInterceptResultSuccess;
     } else if ([resultString isEqualToString:@"failed"]) {
         result = PLYInterceptResultFailed;
-    } else if ([resultString isEqualToString:@"notHandled"]) {
-        result = PLYInterceptResultNotHandled;
     }
-
-    if (self.interceptorCompletion != nil) {
-        self.interceptorCompletion(result);
-        self.interceptorCompletion = nil;
-    }
+    completion(result);
 }
 
 - (void)closePresentation:(CDVInvokedUrlCommand*)command {

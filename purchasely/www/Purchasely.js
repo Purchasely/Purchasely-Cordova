@@ -161,22 +161,86 @@ exports.productWithIdentifier = function (productId, success) {
     exec(success, defaultError, 'Purchasely', 'productWithIdentifier', [productId]);
 };
 
-// Purchasely 6.0: the paywall action interceptor. `success` is invoked for each
-// intercepted action with { action, info, parameters }. After handling, report
-// the outcome with onProcessAction(result) (see Purchasely.InterceptResult).
-exports.setPaywallActionInterceptor = function (success) {
-    exec(success, defaultError, 'Purchasely', 'setPaywallActionInterceptor', []);
+// Purchasely 6.0: per-action interceptor. Registers a handler for a single
+// action kind (see Purchasely.PaywallAction). The handler receives
+// (info, parameters) and returns — or resolves to — a Purchasely.InterceptResult
+// ('success' | 'failed' | 'notHandled'); legacy booleans are also accepted
+// (true -> notHandled, false -> success). Registering a kind again replaces its
+// handler. This maps 1:1 onto the native v6 SDK, which intercepts per action.
+var _actionInterceptors = {}; // kind -> true (registered)
+
+function normalizeInterceptResult(result) {
+    if (result === true) return 'notHandled';
+    if (result === false) return 'success';
+    if (result === 'success' || result === 'failed' || result === 'notHandled') return result;
+    return 'notHandled';
+}
+
+exports.interceptAction = function (kind, handler) {
+    exports.removeActionInterceptor(kind);
+    _actionInterceptors[kind] = true;
+    exec(function (event) {
+        // Native registers one interceptor per kind, so events only arrive for
+        // this kind; guard anyway. `callbackId` ties the async reply back to the
+        // exact intercepted invocation, so concurrent intercepts never clobber.
+        if (!event || event.action !== kind) return;
+        Promise.resolve()
+            .then(function () { return handler(event.info || null, event.parameters || null); })
+            .then(function (result) {
+                exec(function () {}, defaultError, 'Purchasely', 'completeActionInterceptor',
+                    [event.callbackId, normalizeInterceptResult(result)]);
+            })
+            .catch(function () {
+                exec(function () {}, defaultError, 'Purchasely', 'completeActionInterceptor',
+                    [event.callbackId, 'failed']);
+            });
+    }, defaultError, 'Purchasely', 'registerActionInterceptor', [kind]);
 };
 
-// Purchasely 6.0: report how the intercepted action was handled.
-// `result` is a Purchasely.InterceptResult value ('success' | 'failed' | 'notHandled').
-// Legacy booleans are still accepted: true -> notHandled (let the SDK proceed),
-// false -> success (the app handled it).
+// Purchasely 6.0: stop intercepting a single action kind.
+exports.removeActionInterceptor = function (kind, success, error) {
+    delete _actionInterceptors[kind];
+    exec(function () {}, defaultError, 'Purchasely', 'unregisterActionInterceptor', [kind]);
+    if (success) setTimeout(success, 0);
+};
+
+// Purchasely 6.0: stop intercepting every registered action kind.
+exports.removeAllActionInterceptors = function (success, error) {
+    Object.keys(_actionInterceptors).forEach(function (kind) {
+        delete _actionInterceptors[kind];
+        exec(function () {}, defaultError, 'Purchasely', 'unregisterActionInterceptor', [kind]);
+    });
+    if (success) setTimeout(success, 0);
+};
+
+// @deprecated Purchasely 6.0 — prefer interceptAction(kind, handler). Kept as a
+// compatibility shim: registers every action kind and fans them into the single
+// `success` callback with { action, info, parameters }. The app reports the
+// outcome by calling onProcessAction(result). This legacy contract carries no
+// invocation id, so outcomes match intercepts in FIFO order — correct for the
+// usual one-action-at-a-time flow.
+var _legacyInterceptQueue = [];
+
+exports.setPaywallActionInterceptor = function (success) {
+    exports.removeAllActionInterceptors();
+    Object.keys(exports.PaywallAction).forEach(function (key) {
+        var kind = exports.PaywallAction[key];
+        exports.interceptAction(kind, function (info, parameters) {
+            return new Promise(function (resolve) {
+                _legacyInterceptQueue.push(resolve);
+                success({ action: kind, info: info, parameters: parameters });
+            });
+        });
+    });
+};
+
+// @deprecated Purchasely 6.0 — report how the intercepted action was handled.
+// Only used with the deprecated setPaywallActionInterceptor; interceptAction
+// handlers report their result by returning it. Accepts an InterceptResult
+// string or a legacy boolean (true -> notHandled, false -> success).
 exports.onProcessAction = function (result) {
-    var value = result;
-    if (result === true) value = 'notHandled';
-    else if (result === false) value = 'success';
-    exec(() => {}, defaultError, 'Purchasely', 'onProcessAction', [value]);
+    var resolve = _legacyInterceptQueue.shift();
+    if (resolve) resolve(normalizeInterceptResult(result));
 };
 
 exports.userDidConsumeSubscriptionContent = function () {

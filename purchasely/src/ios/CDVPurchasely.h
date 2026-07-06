@@ -24,9 +24,13 @@
 
 @property (nonatomic) CDVInvokedUrlCommand* purchaseResolve;
 
-@property CDVInvokedUrlCommand* paywallActionInterceptorCommand;
-// v6: interceptor completion takes a PLYInterceptResult (was void(^)(BOOL) in v5).
-@property (nonatomic, copy) void (^interceptorCompletion)(enum PLYInterceptResult result);
+// v6 per-action interceptor state. Each registered action kind keeps its own
+// Cordova callbackId (to emit intercept events); each intercepted invocation
+// stashes its PLYInterceptResult completion under a unique id so concurrent
+// intercepts resolve independently (was a single stashed completion before).
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *actionInterceptorCallbackIds;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, void (^)(enum PLYInterceptResult)> *pendingInterceptCompletions;
+@property (nonatomic) NSUInteger interceptorInvocationCounter;
 
 - (void)start:(CDVInvokedUrlCommand*)command;
 - (void)setLogLevel:(CDVInvokedUrlCommand*)command;
@@ -52,8 +56,9 @@
 - (void)userSubscriptionsHistory:(CDVInvokedUrlCommand*)command;
 - (void)addEventsListener:(CDVInvokedUrlCommand*)command;
 - (void)removeEventsListener:(CDVInvokedUrlCommand*)command;
-- (void)setPaywallActionInterceptor:(CDVInvokedUrlCommand*)command;
-- (void)onProcessAction:(CDVInvokedUrlCommand*)command;
+- (void)registerActionInterceptor:(CDVInvokedUrlCommand*)command;
+- (void)unregisterActionInterceptor:(CDVInvokedUrlCommand*)command;
+- (void)completeActionInterceptor:(CDVInvokedUrlCommand*)command;
 - (void)closePresentation:(CDVInvokedUrlCommand*)command;
 - (void)backPresentation:(CDVInvokedUrlCommand*)command;
 - (void)userDidConsumeSubscriptionContent:(CDVInvokedUrlCommand*)command;
