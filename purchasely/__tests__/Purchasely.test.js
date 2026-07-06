@@ -682,56 +682,169 @@ describe('Purchasely', () => {
     });
   });
 
-  describe('setPaywallActionInterceptor', () => {
-    it('should call exec with correct parameters', () => {
-      const success = jest.fn();
+  // Flush pending microtasks (the interceptor result is reported through a Promise chain).
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-      Purchasely.setPaywallActionInterceptor(success);
+  // Returns the native success callback exec() was given for a registerActionInterceptor(kind).
+  const nativeInterceptorFor = (kind) => {
+    const call = mockExec.mock.calls.find(
+      (c) => c[3] === 'registerActionInterceptor' && c[4][0] === kind
+    );
+    return call && call[0];
+  };
+
+  describe('interceptAction (v6 per-action)', () => {
+    it('registers a native interceptor for the given kind', () => {
+      Purchasely.interceptAction('purchase', jest.fn());
 
       expect(mockExec).toHaveBeenCalledWith(
-        success,
+        expect.any(Function),
         expect.any(Function),
         'Purchasely',
-        'setPaywallActionInterceptor',
-        []
+        'registerActionInterceptor',
+        ['purchase']
+      );
+    });
+
+    it('invokes the handler with (info, parameters) and reports its result', async () => {
+      const handler = jest.fn().mockReturnValue(Purchasely.InterceptResult.success);
+      Purchasely.interceptAction('purchase', handler);
+      const nativeSuccess = nativeInterceptorFor('purchase');
+      mockExec.mockClear();
+
+      const event = {
+        action: 'purchase',
+        callbackId: 'purchase#1',
+        info: { contentId: 'c1' },
+        parameters: { plan: 'p1' },
+      };
+      nativeSuccess(event);
+      await flush();
+
+      expect(handler).toHaveBeenCalledWith(event.info, event.parameters);
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'completeActionInterceptor',
+        ['purchase#1', 'success']
+      );
+    });
+
+    it('ignores events whose action does not match the registered kind', async () => {
+      const handler = jest.fn();
+      Purchasely.interceptAction('restore', handler);
+      const nativeSuccess = nativeInterceptorFor('restore');
+
+      nativeSuccess({ action: 'purchase', callbackId: 'purchase#2' });
+      await flush();
+
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it('normalizes a legacy boolean handler result (false -> success)', async () => {
+      Purchasely.interceptAction('navigate', jest.fn().mockReturnValue(false));
+      const nativeSuccess = nativeInterceptorFor('navigate');
+      mockExec.mockClear();
+
+      nativeSuccess({ action: 'navigate', callbackId: 'navigate#1' });
+      await flush();
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'completeActionInterceptor',
+        ['navigate#1', 'success']
+      );
+    });
+
+    it('reports failed when the handler throws', async () => {
+      Purchasely.interceptAction('purchase', () => { throw new Error('boom'); });
+      const nativeSuccess = nativeInterceptorFor('purchase');
+      mockExec.mockClear();
+
+      nativeSuccess({ action: 'purchase', callbackId: 'purchase#3' });
+      await flush();
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'completeActionInterceptor',
+        ['purchase#3', 'failed']
       );
     });
   });
 
-  describe('onProcessAction', () => {
-    it('should map a legacy true to notHandled', () => {
-      Purchasely.onProcessAction(true);
+  describe('removeActionInterceptor', () => {
+    it('unregisters a single kind', () => {
+      Purchasely.removeActionInterceptor('purchase');
 
       expect(mockExec).toHaveBeenCalledWith(
         expect.any(Function),
         expect.any(Function),
         'Purchasely',
-        'onProcessAction',
-        ['notHandled']
+        'unregisterActionInterceptor',
+        ['purchase']
+      );
+    });
+  });
+
+  describe('removeAllActionInterceptors', () => {
+    it('unregisters every registered kind', () => {
+      Purchasely.interceptAction('purchase', jest.fn());
+      Purchasely.interceptAction('restore', jest.fn());
+      mockExec.mockClear();
+
+      Purchasely.removeAllActionInterceptors();
+
+      const unregistered = mockExec.mock.calls
+        .filter((c) => c[3] === 'unregisterActionInterceptor')
+        .map((c) => c[4][0]);
+      expect(unregistered).toEqual(expect.arrayContaining(['purchase', 'restore']));
+    });
+  });
+
+  describe('setPaywallActionInterceptor (deprecated)', () => {
+    it('registers an interceptor for every action kind', () => {
+      Purchasely.setPaywallActionInterceptor(jest.fn());
+
+      const registered = mockExec.mock.calls
+        .filter((c) => c[3] === 'registerActionInterceptor')
+        .map((c) => c[4][0]);
+      expect(registered).toEqual(
+        expect.arrayContaining(Object.values(Purchasely.PaywallAction))
       );
     });
 
-    it('should map a legacy false to success', () => {
-      Purchasely.onProcessAction(false);
+    it('fans intercepts into the single callback, resolved by onProcessAction', async () => {
+      const success = jest.fn();
+      Purchasely.setPaywallActionInterceptor(success);
+      const nativeSuccess = nativeInterceptorFor('purchase');
+      mockExec.mockClear();
 
-      expect(mockExec).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.any(Function),
-        'Purchasely',
-        'onProcessAction',
-        ['success']
+      nativeSuccess({
+        action: 'purchase',
+        callbackId: 'purchase#7',
+        info: { contentId: 'c' },
+        parameters: {},
+      });
+      await flush();
+
+      expect(success).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'purchase' })
       );
-    });
 
-    it('should pass an InterceptResult string through unchanged', () => {
-      Purchasely.onProcessAction(Purchasely.InterceptResult.failed);
+      Purchasely.onProcessAction(Purchasely.InterceptResult.success);
+      await flush();
 
       expect(mockExec).toHaveBeenCalledWith(
         expect.any(Function),
         expect.any(Function),
         'Purchasely',
-        'onProcessAction',
-        ['failed']
+        'completeActionInterceptor',
+        ['purchase#7', 'success']
       );
     });
   });

@@ -238,53 +238,58 @@ function onPurchaselySdkReady() {
 
 	Purchasely.removeUserAttributeListener();
 
-	Purchasely.setPaywallActionInterceptor((result) => {
-		console.log(result);
-		console.log('Received action from paywall ' + result.info.presentationId);
+	// Purchasely 6.0: per-action interceptor. Register a handler per action kind; each
+	// handler receives (info, parameters) and returns a Purchasely.InterceptResult telling
+	// the SDK how it was handled (notHandled = let the SDK proceed, success = app handled it).
+	Purchasely.removeAllActionInterceptors();
 
-		if (result.action === Purchasely.PresentationAction.navigate) {
-			console.log(
-			'User wants to navigate to website ' +
-				result.parameters.title +
-				' ' +
-				result.parameters.url
-			);
-			console.log('let the Purchasely SDK navigate to website');
-			Purchasely.onProcessAction(Purchasely.InterceptResult.notHandled);
-		} else if (result.action === Purchasely.PresentationAction.close) {
-			console.log('User wants to close paywall - close reason ' + result.parameters.closeReason);
-			Purchasely.onProcessAction(Purchasely.InterceptResult.notHandled);
-		} else if (result.action === Purchasely.PresentationAction.close_all) {
-			console.log('User wants to close all paywalls');
-			Purchasely.onProcessAction(Purchasely.InterceptResult.notHandled);
-		} else if (result.action === Purchasely.PresentationAction.login) {
-			console.log('User wants to login');
-			//Present your own screen for user to log in
-			Purchasely.closePresentation();
-			Purchasely.userLogin('MY_USER_ID');
-			//Report success so the Purchasely paywall refreshes
-			Purchasely.onProcessAction(Purchasely.InterceptResult.success);
-		} else if (result.action === Purchasely.PresentationAction.open_presentation) {
-			console.log('User wants to open a new paywall');
-			Purchasely.onProcessAction(Purchasely.InterceptResult.notHandled);
-		} else if (result.action === Purchasely.PresentationAction.open_placement) {
-			console.log('User wants to open a new placement');
-			Purchasely.onProcessAction(Purchasely.InterceptResult.notHandled);
-		} else if (result.action === Purchasely.PresentationAction.purchase) {
-			console.log('User wants to purchase');
-			//Let the SDK proceed with the purchase
-			Purchasely.onProcessAction(Purchasely.InterceptResult.notHandled);
-		} else if (result.action === Purchasely.PresentationAction.web_checkout) {
-			console.log('User wants to proceed to web checkout');
-			console.log('web checkout url: ' + result.parameters.url);
-			console.log('web checkout provider: ' + result.parameters.webCheckoutProvider);
-			console.log('web checkout client reference id: ' + result.parameters.clientReferenceId);
-			console.log('web checkout query parameter key: ' + result.parameters.queryParameterKey);
-			Purchasely.onProcessAction(Purchasely.InterceptResult.notHandled);
-		} else {
-			console.log('Action unknown ' + result.action);
-			Purchasely.onProcessAction(Purchasely.InterceptResult.notHandled);
-		}
+	Purchasely.interceptAction(Purchasely.PaywallAction.navigate, (info, parameters) => {
+		console.log('User wants to navigate to website ' + parameters.title + ' ' + parameters.url);
+		console.log('let the Purchasely SDK navigate to website');
+		return Purchasely.InterceptResult.notHandled;
+	});
+
+	Purchasely.interceptAction(Purchasely.PaywallAction.close, (info, parameters) => {
+		console.log('User wants to close paywall - close reason ' + parameters.closeReason);
+		return Purchasely.InterceptResult.notHandled;
+	});
+
+	Purchasely.interceptAction(Purchasely.PaywallAction.close_all, () => {
+		console.log('User wants to close all paywalls');
+		return Purchasely.InterceptResult.notHandled;
+	});
+
+	Purchasely.interceptAction(Purchasely.PaywallAction.login, () => {
+		console.log('User wants to login');
+		// Present your own screen for the user to log in, then report success so the paywall refreshes.
+		Purchasely.closePresentation();
+		Purchasely.userLogin('MY_USER_ID');
+		return Purchasely.InterceptResult.success;
+	});
+
+	Purchasely.interceptAction(Purchasely.PaywallAction.open_presentation, () => {
+		console.log('User wants to open a new paywall');
+		return Purchasely.InterceptResult.notHandled;
+	});
+
+	Purchasely.interceptAction(Purchasely.PaywallAction.open_placement, () => {
+		console.log('User wants to open a new placement');
+		return Purchasely.InterceptResult.notHandled;
+	});
+
+	Purchasely.interceptAction(Purchasely.PaywallAction.purchase, () => {
+		console.log('User wants to purchase');
+		// Let the SDK proceed with the purchase.
+		return Purchasely.InterceptResult.notHandled;
+	});
+
+	Purchasely.interceptAction(Purchasely.PaywallAction.web_checkout, (info, parameters) => {
+		console.log('User wants to proceed to web checkout');
+		console.log('web checkout url: ' + parameters.url);
+		console.log('web checkout provider: ' + parameters.webCheckoutProvider);
+		console.log('web checkout client reference id: ' + parameters.clientReferenceId);
+		console.log('web checkout query parameter key: ' + parameters.queryParameterKey);
+		return Purchasely.InterceptResult.notHandled;
 	});
 
 	Purchasely.clearBuiltInAttributes();
@@ -341,9 +346,10 @@ function processToPayment() {
 	// Call this method in observer mode to synchronize purchases with Purchasely
 	// Purchasely.synchronize((ok) => console.log("synchronized " + ok), (e) => console.log(e));
 
-	// Report to Purchasely how the intercepted action was handled. notHandled lets
-	// the SDK proceed (e.g. process the purchase); success means the app handled it.
-	Purchasely.onProcessAction(Purchasely.InterceptResult.notHandled);
+	// Purchasely 6.0: with the per-action interceptor (interceptAction), each handler returns
+	// its own Purchasely.InterceptResult, so there is no separate "process action" step.
+	// Kept as a no-op for the example's existing button wiring.
+	console.log('processToPayment: no-op in v6 — interceptAction handlers report their own result');
 }
 
 function backPresentation() {

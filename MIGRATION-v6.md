@@ -109,24 +109,52 @@ Purchasely.presentPresentationForPlacement(
 | `presentPlanWithIdentifier()` | Same as above. |
 | `showPresentation()` / `hidePresentation()` | No hide/show primitive in 6.0. Use `closePresentation()`; `backPresentation()` was added to navigate back. |
 
-## 5. Action interceptor result
+## 5. Action interceptor
 
-`onProcessAction` now takes an `InterceptResult` value instead of a boolean. Legacy
-booleans are mapped automatically (`true` → `notHandled`, `false` → `success`).
+Purchasely 6.0 intercepts actions **per kind**, matching the native SDK. Register a
+handler for each action you care about with `interceptAction(kind, handler)`. The handler
+receives `(info, parameters)` and returns — or resolves to — an `InterceptResult`
+(`success`, `failed`, `notHandled`). Legacy booleans are still accepted
+(`true` → `notHandled`, `false` → `success`).
+
+```js
+Purchasely.interceptAction(Purchasely.PaywallAction.purchase, (info, parameters) => {
+  // let the SDK proceed with the purchase
+  return Purchasely.InterceptResult.notHandled;
+});
+
+Purchasely.interceptAction(Purchasely.PaywallAction.login, (info, parameters) => {
+  // the app fully handled this action
+  Purchasely.userLogin('MY_USER_ID');
+  return Purchasely.InterceptResult.success;
+});
+
+// Stop intercepting one kind, or all of them:
+Purchasely.removeActionInterceptor(Purchasely.PaywallAction.purchase);
+Purchasely.removeAllActionInterceptors();
+```
+
+- `InterceptResult`: `success`, `failed`, `notHandled`.
+- Handlers may return a value or a `Promise`; async work (e.g. showing your own login
+  screen) is supported — report the result once it resolves.
+- Each intercept resolves independently, so concurrent intercepts never clobber one another.
+
+### Deprecated: the single global interceptor
+
+`setPaywallActionInterceptor(callback)` + `onProcessAction(result)` still work as a
+compatibility shim over the per-action API — the callback receives `{ action, info,
+parameters }` and you report the outcome with `onProcessAction`. Prefer `interceptAction`.
 
 ```js
 Purchasely.setPaywallActionInterceptor((result) => {
   if (result.action === Purchasely.PresentationAction.purchase) {
-    // let the SDK proceed with the purchase
     Purchasely.onProcessAction(Purchasely.InterceptResult.notHandled);
   } else if (result.action === Purchasely.PresentationAction.login) {
-    // the app fully handled this action
     Purchasely.onProcessAction(Purchasely.InterceptResult.success);
   }
 });
 ```
 
-- `InterceptResult`: `success`, `failed`, `notHandled`.
 - The `PaywallAction` constant was renamed to **`PresentationAction`** (same string
   values); `PaywallAction` is kept as a deprecated alias.
 
