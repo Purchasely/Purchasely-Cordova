@@ -412,18 +412,18 @@ describe('Purchasely', () => {
   });
 
   describe('presentPresentationWithIdentifier', () => {
-    it('should pass a display mode string', () => {
+    it('should pass a display-mode string as a transition object', () => {
       const success = jest.fn();
       const error = jest.fn();
 
       Purchasely.presentPresentationWithIdentifier('presentation1', 'content1', Purchasely.TransitionType.drawer, success, error);
 
       expect(mockExec).toHaveBeenCalledWith(
-        success,
+        expect.any(Function),
         error,
         'Purchasely',
         'presentPresentationWithIdentifier',
-        ['presentation1', 'content1', 'drawer']
+        ['presentation1', 'content1', { type: 'drawer' }]
       );
     });
 
@@ -434,11 +434,27 @@ describe('Purchasely', () => {
       Purchasely.presentPresentationWithIdentifier('presentation1', 'content1', true, success, error);
 
       expect(mockExec).toHaveBeenCalledWith(
-        success,
+        expect.any(Function),
         error,
         'Purchasely',
         'presentPresentationWithIdentifier',
-        ['presentation1', 'content1', 'fullScreen']
+        ['presentation1', 'content1', { type: 'fullScreen' }]
+      );
+    });
+
+    it('should pass a full transition object (dimensions/dismissible) through unchanged', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+      const transition = { type: 'drawer', dismissible: false, height: { type: 'percentage', value: 0.8 } };
+
+      Purchasely.presentPresentationWithIdentifier('presentation1', null, transition, success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        error,
+        'Purchasely',
+        'presentPresentationWithIdentifier',
+        ['presentation1', null, transition]
       );
     });
   });
@@ -451,11 +467,61 @@ describe('Purchasely', () => {
       Purchasely.presentPresentationForPlacement('placement1', 'content1', false, success, error);
 
       expect(mockExec).toHaveBeenCalledWith(
-        success,
+        expect.any(Function),
         error,
         'Purchasely',
         'presentPresentationForPlacement',
-        ['placement1', 'content1', 'modal']
+        ['placement1', 'content1', { type: 'modal' }]
+      );
+    });
+  });
+
+  describe('presentPresentationForDefault', () => {
+    it('should present the default presentation with a transition object', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.presentPresentationForDefault('content1', Purchasely.TransitionType.fullScreen, success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        error,
+        'Purchasely',
+        'presentPresentationForDefault',
+        ['content1', { type: 'fullScreen' }]
+      );
+    });
+  });
+
+  describe('presentation lifecycle callbacks', () => {
+    it('routes presented/closeRequested envelopes to callbacks and the final outcome to success', () => {
+      const success = jest.fn();
+      const onPresented = jest.fn();
+      const onCloseRequested = jest.fn();
+
+      Purchasely.presentPresentationForPlacement('p', null, 'fullScreen', success, jest.fn(), { onPresented, onCloseRequested });
+
+      const dispatch = mockExec.mock.calls[0][0];
+      dispatch({ event: 'presented', presentation: { screenId: 's' } });
+      dispatch({ event: 'closeRequested' });
+      dispatch({ result: 1, purchaseResult: 'cancelled', closeReason: 'button' });
+
+      expect(onPresented).toHaveBeenCalledWith({ screenId: 's' }, null);
+      expect(onCloseRequested).toHaveBeenCalledTimes(1);
+      expect(success).toHaveBeenCalledWith({ result: 1, purchaseResult: 'cancelled', closeReason: 'button' });
+    });
+  });
+
+  describe('removeDefaultPresentationDismissHandler', () => {
+    it('should call exec with correct parameters', () => {
+      Purchasely.removeDefaultPresentationDismissHandler();
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'removeDefaultPresentationDismissHandler',
+        []
       );
     });
   });
@@ -494,8 +560,25 @@ describe('Purchasely', () => {
     });
   });
 
+  describe('fetchPresentationForDefault', () => {
+    it('should call exec with both ids null', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.fetchPresentationForDefault('content1', success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        success,
+        error,
+        'Purchasely',
+        'fetchPresentation',
+        [null, null, 'content1']
+      );
+    });
+  });
+
   describe('presentPresentation', () => {
-    it('should call exec with a display mode string', () => {
+    it('should call exec with a transition object', () => {
       const success = jest.fn();
       const error = jest.fn();
       const presentation = { id: 'test' };
@@ -503,11 +586,11 @@ describe('Purchasely', () => {
       Purchasely.presentPresentation(presentation, Purchasely.TransitionType.fullScreen, '#FFFFFF', success, error);
 
       expect(mockExec).toHaveBeenCalledWith(
-        success,
+        expect.any(Function),
         error,
         'Purchasely',
         'presentPresentation',
-        [presentation, 'fullScreen', '#FFFFFF']
+        [presentation, { type: 'fullScreen' }, '#FFFFFF']
       );
     });
   });

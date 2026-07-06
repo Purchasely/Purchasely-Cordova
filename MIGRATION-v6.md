@@ -82,23 +82,60 @@ Purchasely.synchronize(
 );
 ```
 
-## 4. Presentation display mode replaces `isFullscreen`
+## 4. Presentation display mode & transitions
 
-The `isFullscreen` boolean on the `present*` methods is replaced by a **display mode
-string** (`Purchasely.TransitionType`). Booleans are still accepted for compatibility
-(`true` → `fullScreen`, `false` → `modal`).
+The `isFullscreen` boolean on the `present*` methods is replaced by a **display mode**.
+Pass either a `Purchasely.TransitionType` string or a full **transition object** (for
+drawer/popin sizing). Legacy booleans still work (`true` → `fullScreen`, `false` → `modal`).
 
 ```js
-// Before
-Purchasely.presentPresentationForPlacement('ONBOARDING', null, true, ok, err);
+// Simple: a display-mode string
+Purchasely.presentPresentationForPlacement('ONBOARDING', null, Purchasely.TransitionType.fullScreen, ok, err);
 
-// After
-Purchasely.presentPresentationForPlacement(
-  'ONBOARDING', null, Purchasely.TransitionType.fullScreen, ok, err
-);
+// Rich: a transition object (drawer/popin sizing, dismissible, background color)
+Purchasely.presentPresentationForPlacement('ONBOARDING', null, {
+  type: Purchasely.TransitionType.drawer,
+  dismissible: true,
+  height: { type: Purchasely.DimensionType.percentage, value: 0.8 }, // 0.0–1.0
+  backgroundColor: '#000000'
+}, ok, err);
 ```
 
 `TransitionType`: `fullScreen`, `modal`, `drawer`, `popin`, `push`, `inlinePaywall`.
+`DimensionType`: `pixel`, `percentage`. `width` applies to `popin` only; `height` drives `drawer` + `popin`.
+
+> Platform note: on **iOS** only a *percentage* `height` (plus `dismissible` and
+> `backgroundColor`) is applied to drawer/popin — pixel sizing and popin `width` are not
+> exposed to the bridge by the native iOS SDK. **Android** honors the full set.
+
+### Presentation lifecycle callbacks
+
+The `present*` methods accept an optional final `callbacks` object to observe the
+presentation lifecycle. The `success` callback still receives the final dismiss outcome.
+
+```js
+Purchasely.presentPresentationForPlacement('ONBOARDING', null, Purchasely.TransitionType.fullScreen,
+  (outcome) => console.log('dismissed', outcome.purchaseResult, outcome.closeReason),
+  (err) => console.error(err),
+  {
+    onPresented: (presentation, error) => console.log('presented', presentation && presentation.screenId),
+    onCloseRequested: () => console.log('user requested close'),
+  }
+);
+```
+
+> `onPresented` / `onCloseRequested` fire for the direct `present*` methods on both
+> platforms; on Android they do not fire for the `fetchPresentation` → `presentPresentation`
+> re-display path (iOS covers both).
+
+### Default (audience-targeted) presentation
+
+Present or fetch the default presentation — no placement or presentation id:
+
+```js
+Purchasely.presentPresentationForDefault(null /* contentId */, Purchasely.TransitionType.fullScreen, ok, err);
+Purchasely.fetchPresentationForDefault(null /* contentId */, onLoaded, err);
+```
 
 ### Removed presentation methods
 
@@ -160,9 +197,19 @@ The old `readyToOpenDeeplink` / `isDeeplinkHandled` names were **removed** — u
 ## 7. Default dismiss handler rename
 
 `setDefaultPresentationResultHandler(success, error)` → **`setDefaultPresentationDismissHandler(success, error)`**
-(old name **removed**). The dismiss outcome now also carries a
-`closeReason` (`button` / `back_system` / `programmatic`), matching the native
-PLYCloseReason contract shared with the Flutter bridge.
+(old name **removed**). Stop receiving these with **`removeDefaultPresentationDismissHandler()`**.
+
+The dismiss **outcome** object (delivered to this handler and to every `present*` success
+callback) exposes:
+
+| Field | Type | Notes |
+|---|---|---|
+| `result` | int | Legacy `PurchaseResult` (`0` purchased / `1` cancelled / `2` restored). |
+| `purchaseResult` | string | `'purchased'` / `'cancelled'` / `'restored'` (omitted when no purchase). Matches the Flutter bridge. |
+| `closeReason` | string | `button` / `back_system` / `programmatic` (native PLYCloseReason contract). |
+| `plan` | object | The purchased plan, when applicable. |
+| `presentation` | object | The presentation that closed. |
+| `error` | string | Present only on failure. |
 
 > iOS note: a swipe-to-dismiss is reported as `back_system`; a close with no
 > dismiss reason (e.g. after a purchase) omits `closeReason`.

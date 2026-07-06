@@ -2,14 +2,39 @@ var exec = require('cordova/exec');
 
 var defaultError = (e) => { console.log(e); }
 
-// Normalize a presentation display mode. Historically the presentation methods
-// took an `isFullscreen` boolean; Purchasely 6.0 replaced it with a display mode
-// (see Purchasely.TransitionType). Booleans are still accepted for source
-// compatibility: true -> fullScreen, false -> modal.
-function normalizeDisplayMode(mode) {
-    if (mode === true) return 'fullScreen';
-    if (mode === false) return 'modal';
-    return mode || 'fullScreen';
+// Normalize a presentation transition. Accepts, for source compatibility:
+//   - a display-mode string ('fullScreen'|'modal'|'drawer'|'popin'|'push'|'inlinePaywall')
+//   - a legacy boolean (true -> fullScreen, false -> modal)
+//   - a full transition object { type, dismissible?, width?, height?, backgroundColor? }
+//     where width/height are { type: 'pixel'|'percentage', value: Number } (width is
+//     popin-only, height drives drawer+popin) and backgroundColor is a hex string.
+// Always returns a transition object for the native bridge.
+function normalizeTransition(mode) {
+    if (mode === true) return { type: 'fullScreen' };
+    if (mode === false) return { type: 'modal' };
+    if (typeof mode === 'string') return { type: mode };
+    if (mode && typeof mode === 'object' && mode.type) return mode;
+    return { type: 'fullScreen' };
+}
+
+// Wire a present* command's callback stream. Purchasely 6.0 emits presentation
+// lifecycle events during display: the native side sends keep-alive envelopes
+// { event: 'presented', presentation } and { event: 'closeRequested' }, then the
+// dismiss OUTCOME (which has no `event` key) as the final, non-kept callback.
+// `callbacks` may carry onPresented(presentation, error) and onCloseRequested().
+function presentationDispatcher(success, callbacks) {
+    callbacks = callbacks || {};
+    return function (payload) {
+        if (payload && payload.event === 'presented') {
+            if (callbacks.onPresented) callbacks.onPresented(payload.presentation || null, payload.error || null);
+            return;
+        }
+        if (payload && payload.event === 'closeRequested') {
+            if (callbacks.onCloseRequested) callbacks.onCloseRequested();
+            return;
+        }
+        if (success) success(payload);
+    };
 }
 
 // Purchasely 6.0: `start` now takes a single options object instead of a
@@ -87,18 +112,33 @@ exports.setDefaultPresentationDismissHandler = function (success, error) {
     exec(success, error, 'Purchasely', 'setDefaultPresentationDismissHandler', []);
 };
 
+// Purchasely 6.0: stop receiving default (campaign/deeplink) presentation dismiss outcomes.
+exports.removeDefaultPresentationDismissHandler = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'removeDefaultPresentationDismissHandler', []);
+};
+
 // Purchasely 6.0: synchronize now reports completion. success receives true on
 // success; error is invoked on failure (previously fire-and-forget).
 exports.synchronize = function (success, error) {
     exec(success || (() => {}), error || defaultError, 'Purchasely', 'synchronize', []);
 };
 
-exports.presentPresentationWithIdentifier = function (presentationId, contentId, displayMode, success, error) {
-    exec(success, error, 'Purchasely', 'presentPresentationWithIdentifier', [presentationId, contentId, normalizeDisplayMode(displayMode)]);
+// present* methods: `displayMode` accepts a mode string, a legacy boolean, or a
+// full transition object (see normalizeTransition). `callbacks` is optional and
+// may carry { onPresented(presentation, error), onCloseRequested() }; `success`
+// still receives the final dismiss outcome.
+exports.presentPresentationWithIdentifier = function (presentationId, contentId, displayMode, success, error, callbacks) {
+    exec(presentationDispatcher(success, callbacks), error, 'Purchasely', 'presentPresentationWithIdentifier', [presentationId, contentId, normalizeTransition(displayMode)]);
 };
 
-exports.presentPresentationForPlacement = function (placementId, contentId, displayMode, success, error) {
-    exec(success, error, 'Purchasely', 'presentPresentationForPlacement', [placementId, contentId, normalizeDisplayMode(displayMode)]);
+exports.presentPresentationForPlacement = function (placementId, contentId, displayMode, success, error, callbacks) {
+    exec(presentationDispatcher(success, callbacks), error, 'Purchasely', 'presentPresentationForPlacement', [placementId, contentId, normalizeTransition(displayMode)]);
+};
+
+// Purchasely 6.0: present the default (audience-targeted) presentation, with no
+// placement or presentation id (mirrors the native default presentation source).
+exports.presentPresentationForDefault = function (contentId, displayMode, success, error, callbacks) {
+    exec(presentationDispatcher(success, callbacks), error, 'Purchasely', 'presentPresentationForDefault', [contentId, normalizeTransition(displayMode)]);
 };
 
 exports.fetchPresentation = function (presentationId, contentId, success, error) {
@@ -109,8 +149,13 @@ exports.fetchPresentationForPlacement = function (placementId, contentId, succes
     exec(success, error, 'Purchasely', 'fetchPresentation', [placementId, null, contentId]);
 };
 
-exports.presentPresentation = function (presentation, displayMode, backgroundColor, success, error) {
-    exec(success, error, 'Purchasely', 'presentPresentation', [presentation, normalizeDisplayMode(displayMode), backgroundColor]);
+// Purchasely 6.0: fetch the default (audience-targeted) presentation.
+exports.fetchPresentationForDefault = function (contentId, success, error) {
+    exec(success, error, 'Purchasely', 'fetchPresentation', [null, null, contentId]);
+};
+
+exports.presentPresentation = function (presentation, displayMode, backgroundColor, success, error, callbacks) {
+    exec(presentationDispatcher(success, callbacks), error, 'Purchasely', 'presentPresentation', [presentation, normalizeTransition(displayMode), backgroundColor]);
 };
 
 exports.purchaseWithPlanVendorId = function (planId, offerId, contentId, success, error) {

@@ -239,10 +239,63 @@
     }];
 }
 
+// v6: stop receiving default (campaign/deeplink) presentation dismiss outcomes.
+- (void)removeDefaultPresentationDismissHandler:(CDVInvokedUrlCommand*)command {
+    [Purchasely setDefaultPresentationDismissHandler:nil];
+}
+
+// v6: wire a builder's presentation lifecycle onto a single Cordova callback.
+// onPresented / onCloseRequested stream keep-alive envelopes ({ event: ... });
+// onDismissed delivers the final outcome (no `event` key) and ends the callback.
+// Must run on the main queue (UIKit). `transition` is the JS transition object.
+- (void)displayWithBuilder:(PLYPresentationBuilder *)builder
+                 contentId:(NSString *)contentId
+                transition:(id)transition
+                   command:(CDVInvokedUrlCommand *)command {
+    if ([contentId isKindOfClass:[NSString class]]) {
+        builder = [builder contentId:contentId];
+    }
+    if ([transition isKindOfClass:[NSDictionary class]]) {
+        NSString *bgHex = ((NSDictionary *)transition)[@"backgroundColor"];
+        if ([bgHex isKindOfClass:[NSString class]]) {
+            UIColor *bg = [UIColor ply_fromHex:bgHex];
+            if (bg != nil) { builder = [builder backgroundColor:bg]; }
+        }
+    }
+
+    __weak CDVPurchasely *weakSelf = self;
+    NSString *callbackId = command.callbackId;
+    builder = [builder onPresented:^(id<PLYPresentation> _Nullable presentation, NSError * _Nullable error) {
+        CDVPurchasely *strongSelf = weakSelf; if (strongSelf == nil) return;
+        strongSelf.currentPresentation = presentation;
+        NSMutableDictionary *env = [NSMutableDictionary new];
+        env[@"event"] = @"presented";
+        if (presentation != nil) { env[@"presentation"] = [strongSelf resultDictionaryForFetchPresentation:presentation]; }
+        if (error != nil) { env[@"error"] = error.localizedDescription; }
+        CDVPluginResult *r = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:env];
+        [r setKeepCallbackAsBool:YES];
+        [strongSelf.commandDelegate sendPluginResult:r callbackId:callbackId];
+    }];
+    builder = [builder onClose:^{
+        CDVPurchasely *strongSelf = weakSelf; if (strongSelf == nil) return;
+        CDVPluginResult *r = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:@{@"event": @"closeRequested"}];
+        [r setKeepCallbackAsBool:YES];
+        [strongSelf.commandDelegate sendPluginResult:r callbackId:callbackId];
+    }];
+    builder = [builder onDismissed:^(PLYPresentationOutcome * _Nonnull outcome) {
+        CDVPurchasely *strongSelf = weakSelf; if (strongSelf == nil) return;
+        strongSelf.currentPresentation = nil;
+        [strongSelf successFor:command resultDict:[strongSelf resultDictionaryForOutcome:outcome]];
+    }];
+
+    id<PLYPresentationRequest> request = [builder build];
+    [request displayWithTransition:[self displayModeFromTransition:transition] completion:nil];
+}
+
 - (void)presentPresentationWithIdentifier:(CDVInvokedUrlCommand*)command {
     NSString *presentationVendorId = [command argumentAtIndex:0];
     NSString *contentId = [command argumentAtIndex:1];
-    NSString *displayMode = [command argumentAtIndex:2];
+    id transition = [command argumentAtIndex:2];
 
     if (![presentationVendorId isKindOfClass:[NSString class]]) {
         [self failureFor:command resultString:@"presentationId is required"];
@@ -250,26 +303,14 @@
     }
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        PLYPresentationBuilder *builder = [PLYPresentationBuilder forScreenId:presentationVendorId];
-        if ([contentId isKindOfClass:[NSString class]]) {
-            builder = [builder contentId:contentId];
-        }
-        builder = [builder onPresented:^(id<PLYPresentation> _Nullable presentation, NSError * _Nullable error) {
-            self.currentPresentation = presentation;
-        }];
-        builder = [builder onDismissed:^(PLYPresentationOutcome * _Nonnull outcome) {
-            [self successFor:command resultDict:[self resultDictionaryForOutcome:outcome]];
-        }];
-
-        id<PLYPresentationRequest> request = [builder build];
-        [request displayWithTransition:[self displayModeFromString:displayMode] completion:nil];
+        [self displayWithBuilder:[PLYPresentationBuilder forScreenId:presentationVendorId] contentId:contentId transition:transition command:command];
     });
 }
 
 - (void)presentPresentationForPlacement:(CDVInvokedUrlCommand*)command {
     NSString *placementVendorId = [command argumentAtIndex:0];
     NSString *contentId = [command argumentAtIndex:1];
-    NSString *displayMode = [command argumentAtIndex:2];
+    id transition = [command argumentAtIndex:2];
 
     if (![placementVendorId isKindOfClass:[NSString class]]) {
         [self failureFor:command resultString:@"placementId is required"];
@@ -277,19 +318,17 @@
     }
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        PLYPresentationBuilder *builder = [PLYPresentationBuilder forPlacementId:placementVendorId];
-        if ([contentId isKindOfClass:[NSString class]]) {
-            builder = [builder contentId:contentId];
-        }
-        builder = [builder onPresented:^(id<PLYPresentation> _Nullable presentation, NSError * _Nullable error) {
-            self.currentPresentation = presentation;
-        }];
-        builder = [builder onDismissed:^(PLYPresentationOutcome * _Nonnull outcome) {
-            [self successFor:command resultDict:[self resultDictionaryForOutcome:outcome]];
-        }];
+        [self displayWithBuilder:[PLYPresentationBuilder forPlacementId:placementVendorId] contentId:contentId transition:transition command:command];
+    });
+}
 
-        id<PLYPresentationRequest> request = [builder build];
-        [request displayWithTransition:[self displayModeFromString:displayMode] completion:nil];
+// v6: present the default (audience-targeted) presentation — no placement/screen id.
+- (void)presentPresentationForDefault:(CDVInvokedUrlCommand*)command {
+    NSString *contentId = [command argumentAtIndex:0];
+    id transition = [command argumentAtIndex:1];
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self displayWithBuilder:[[PLYPresentationBuilder alloc] init] contentId:contentId transition:transition command:command];
     });
 }
 
@@ -516,28 +555,55 @@
 
 // Helpers
 
-// v6: builds a PLYDisplayMode from the JS display-mode string (see TransitionType).
+// v6: builds a PLYDisplayMode from the JS transition object (see normalizeTransition):
+//   { type, dismissible?, height?: { type: 'pixel'|'percentage', value }, backgroundColor? }
+// (a bare mode string is also tolerated). Objective-C only exposes percentage height for
+// drawer/popin (pixel height and popin width are Swift-only in the SDK), so those honor a
+// percentage height + dismissible + background colors; other dimensions are ignored.
 // Returns nil for an unknown/absent value so the backend-defined default is honored.
-- (PLYDisplayMode * _Nullable) displayModeFromString:(NSString * _Nullable) displayMode {
-    if (![displayMode isKindOfClass:[NSString class]]) {
+- (PLYDisplayMode * _Nullable) displayModeFromTransition:(id) transition {
+    NSDictionary *map = [transition isKindOfClass:[NSDictionary class]] ? transition : nil;
+    NSString *type = map != nil ? map[@"type"] : ([transition isKindOfClass:[NSString class]] ? transition : nil);
+    if (![type isKindOfClass:[NSString class]]) {
         return nil;
     }
-    if ([displayMode isEqualToString:@"fullScreen"]) {
+
+    BOOL dismissible = YES;
+    if ([map[@"dismissible"] isKindOfClass:[NSNumber class]]) {
+        dismissible = [map[@"dismissible"] boolValue];
+    }
+
+    // Percentage height only (ObjC-accessible). Pixel height / popin width are not
+    // exposed to Objective-C by the SDK; a percentage value is expected in 0.0–1.0.
+    NSNumber *heightPercentage = nil;
+    NSDictionary *height = map[@"height"];
+    if ([height isKindOfClass:[NSDictionary class]] &&
+        [height[@"type"] isEqual:@"percentage"] &&
+        [height[@"value"] isKindOfClass:[NSNumber class]]) {
+        heightPercentage = height[@"value"];
+    }
+
+    PLYColors *backgroundColors = nil;
+    NSString *bgHex = map[@"backgroundColor"];
+    if ([bgHex isKindOfClass:[NSString class]]) {
+        UIColor *c = [UIColor ply_fromHex:bgHex];
+        if (c != nil) {
+            backgroundColors = [[PLYColors alloc] initWithLightColor:c darkColor:c];
+        }
+    }
+
+    if ([type isEqualToString:@"fullScreen"]) {
         return [PLYDisplayMode fullScreen];
-    } else if ([displayMode isEqualToString:@"modal"]) {
-        return [PLYDisplayMode modal];
-    } else if ([displayMode isEqualToString:@"push"]) {
+    } else if ([type isEqualToString:@"modal"]) {
+        return [PLYDisplayMode modalWithDismissible:dismissible];
+    } else if ([type isEqualToString:@"push"]) {
         return [PLYDisplayMode push];
-    } else if ([displayMode isEqualToString:@"inlinePaywall"]) {
+    } else if ([type isEqualToString:@"inlinePaywall"]) {
         return [PLYDisplayMode inlinePaywall];
-    } else if ([displayMode isEqualToString:@"drawer"]) {
-        // TODO(v6-verify): the Cordova contract passes only a display-mode string with no
-        // dimension info, so drawer defaults to hug height (nil) + dismissible. Wire up
-        // PLYDimension width/height if the JS contract starts sending them.
-        return [[PLYDisplayMode alloc] initWithType:PLYDisplayModeTypeDrawer heightPercentage:nil backgroundColors:nil dismissible:YES];
-    } else if ([displayMode isEqualToString:@"popin"]) {
-        // TODO(v6-verify): same as drawer — hug size + dismissible default (no dimension in the string contract).
-        return [[PLYDisplayMode alloc] initWithType:PLYDisplayModeTypePopin heightPercentage:nil backgroundColors:nil dismissible:YES];
+    } else if ([type isEqualToString:@"drawer"]) {
+        return [[PLYDisplayMode alloc] initWithType:PLYDisplayModeTypeDrawer heightPercentage:heightPercentage backgroundColors:backgroundColors dismissible:dismissible];
+    } else if ([type isEqualToString:@"popin"]) {
+        return [[PLYDisplayMode alloc] initWithType:PLYDisplayModeTypePopin heightPercentage:heightPercentage backgroundColors:backgroundColors dismissible:dismissible];
     }
     return nil;
 }
@@ -567,6 +633,19 @@
             break;
     }
     [dict setObject:[NSNumber numberWithInt:result] forKey:@"result"];
+
+    // v6: also expose the string purchaseResult (matches the Flutter outcome contract);
+    // omitted for PLYPurchaseResultNone (no purchase action).
+    NSString *purchaseResultString = nil;
+    switch (outcome.purchaseResult) {
+        case PLYPurchaseResultPurchased: purchaseResultString = @"purchased"; break;
+        case PLYPurchaseResultCancelled: purchaseResultString = @"cancelled"; break;
+        case PLYPurchaseResultRestored:  purchaseResultString = @"restored"; break;
+        case PLYPurchaseResultNone:      break;
+    }
+    if (purchaseResultString != nil) {
+        [dict setObject:purchaseResultString forKey:@"purchaseResult"];
+    }
 
     if (outcome.plan != nil) {
         [dict setObject:[outcome.plan asDictionary] forKey:@"plan"];
@@ -1028,8 +1107,8 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
         } else if ([presentationId isKindOfClass:[NSString class]]) {
             builder = [PLYPresentationBuilder forScreenId:presentationId];
         } else {
-            [self failureFor:command resultString:@"placementId or presentationId is required"];
-            return;
+            // Neither id provided → the default (audience-targeted) presentation.
+            builder = [[PLYPresentationBuilder alloc] init];
         }
 
         if ([contentId isKindOfClass:[NSString class]]) {
@@ -1052,7 +1131,7 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
 
 - (void)presentPresentation:(CDVInvokedUrlCommand *)command {
     NSDictionary<NSString *, id> *presentationDictionary = [command argumentAtIndex:0];
-    NSString *displayMode = [command argumentAtIndex:1];
+    id transition = [command argumentAtIndex:1];
     NSString *loadingBackgroundColor = [command argumentAtIndex:2];
 
     if (presentationDictionary == nil) {
@@ -1083,13 +1162,34 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
             }
         }
 
-        // Deliver the dismiss outcome to this command through onDismissed.
+        // Stream the presentation lifecycle to this command (keep-alive envelopes for
+        // presented/closeRequested, final outcome on dismiss).
+        __weak CDVPurchasely *weakSelf = self;
+        NSString *callbackId = command.callbackId;
+        presentationLoaded.onPresented = ^(id<PLYPresentation> _Nullable presentation, NSError * _Nullable error) {
+            CDVPurchasely *strongSelf = weakSelf; if (strongSelf == nil) return;
+            NSMutableDictionary *env = [NSMutableDictionary new];
+            env[@"event"] = @"presented";
+            if (presentation != nil) { env[@"presentation"] = [strongSelf resultDictionaryForFetchPresentation:presentation]; }
+            if (error != nil) { env[@"error"] = error.localizedDescription; }
+            CDVPluginResult *r = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:env];
+            [r setKeepCallbackAsBool:YES];
+            [strongSelf.commandDelegate sendPluginResult:r callbackId:callbackId];
+        };
+        presentationLoaded.onClose = ^{
+            CDVPurchasely *strongSelf = weakSelf; if (strongSelf == nil) return;
+            CDVPluginResult *r = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:@{@"event": @"closeRequested"}];
+            [r setKeepCallbackAsBool:YES];
+            [strongSelf.commandDelegate sendPluginResult:r callbackId:callbackId];
+        };
         presentationLoaded.onDismissed = ^(PLYPresentationOutcome * _Nonnull outcome) {
-            [self successFor:command resultDict:[self resultDictionaryForOutcome:outcome]];
+            CDVPurchasely *strongSelf = weakSelf; if (strongSelf == nil) return;
+            strongSelf.currentPresentation = nil;
+            [strongSelf successFor:command resultDict:[strongSelf resultDictionaryForOutcome:outcome]];
         };
 
         self.currentPresentation = presentationLoaded;
-        [presentationLoaded displayFrom:nil transitionType:[self displayModeFromString:displayMode]];
+        [presentationLoaded displayFrom:nil transitionType:[self displayModeFromTransition:transition]];
     });
 }
 
