@@ -83,18 +83,8 @@ exports.allowCampaigns = function (allow) {
     exec(() => {}, defaultError, 'Purchasely', 'allowCampaigns', [allow]);
 };
 
-// @deprecated Purchasely 6.0 — renamed to allowDeeplink.
-exports.readyToOpenDeeplink = function (isReady) {
-    exports.allowDeeplink(isReady);
-};
-
 exports.setDefaultPresentationDismissHandler = function (success, error) {
     exec(success, error, 'Purchasely', 'setDefaultPresentationDismissHandler', []);
-};
-
-// @deprecated Purchasely 6.0 — renamed to setDefaultPresentationDismissHandler.
-exports.setDefaultPresentationResultHandler = function (success, error) {
-    exports.setDefaultPresentationDismissHandler(success, error);
 };
 
 // Purchasely 6.0: synchronize now reports completion. success receives true on
@@ -144,11 +134,6 @@ exports.handleDeeplink = function (deepLink, success, error) {
     exec(success, error, 'Purchasely', 'handleDeeplink', [deepLink]);
 };
 
-// @deprecated Purchasely 6.0 — renamed to handleDeeplink.
-exports.isDeeplinkHandled = function (deepLink, success, error) {
-    exports.handleDeeplink(deepLink, success, error);
-};
-
 exports.allProducts = function (success, error) {
     exec(success, defaultError, 'Purchasely', 'allProducts', []);
 };
@@ -162,16 +147,13 @@ exports.productWithIdentifier = function (productId, success) {
 };
 
 // Purchasely 6.0: per-action interceptor. Registers a handler for a single
-// action kind (see Purchasely.PaywallAction). The handler receives
+// action kind (see Purchasely.PresentationAction). The handler receives
 // (info, parameters) and returns — or resolves to — a Purchasely.InterceptResult
-// ('success' | 'failed' | 'notHandled'); legacy booleans are also accepted
-// (true -> notHandled, false -> success). Registering a kind again replaces its
+// ('success' | 'failed' | 'notHandled'). Registering a kind again replaces its
 // handler. This maps 1:1 onto the native v6 SDK, which intercepts per action.
 var _actionInterceptors = {}; // kind -> true (registered)
 
 function normalizeInterceptResult(result) {
-    if (result === true) return 'notHandled';
-    if (result === false) return 'success';
     if (result === 'success' || result === 'failed' || result === 'notHandled') return result;
     return 'notHandled';
 }
@@ -211,36 +193,6 @@ exports.removeAllActionInterceptors = function (success, error) {
         exec(function () {}, defaultError, 'Purchasely', 'unregisterActionInterceptor', [kind]);
     });
     if (success) setTimeout(success, 0);
-};
-
-// @deprecated Purchasely 6.0 — prefer interceptAction(kind, handler). Kept as a
-// compatibility shim: registers every action kind and fans them into the single
-// `success` callback with { action, info, parameters }. The app reports the
-// outcome by calling onProcessAction(result). This legacy contract carries no
-// invocation id, so outcomes match intercepts in FIFO order — correct for the
-// usual one-action-at-a-time flow.
-var _legacyInterceptQueue = [];
-
-exports.setPaywallActionInterceptor = function (success) {
-    exports.removeAllActionInterceptors();
-    Object.keys(exports.PaywallAction).forEach(function (key) {
-        var kind = exports.PaywallAction[key];
-        exports.interceptAction(kind, function (info, parameters) {
-            return new Promise(function (resolve) {
-                _legacyInterceptQueue.push(resolve);
-                success({ action: kind, info: info, parameters: parameters });
-            });
-        });
-    });
-};
-
-// @deprecated Purchasely 6.0 — report how the intercepted action was handled.
-// Only used with the deprecated setPaywallActionInterceptor; interceptAction
-// handlers report their result by returning it. Accepts an InterceptResult
-// string or a legacy boolean (true -> notHandled, false -> success).
-exports.onProcessAction = function (result) {
-    var resolve = _legacyInterceptQueue.shift();
-    if (resolve) resolve(normalizeInterceptResult(result));
 };
 
 exports.userDidConsumeSubscriptionContent = function () {
@@ -409,15 +361,14 @@ exports.PlanType = {
 }
 
 // Purchasely 6.0: running mode is passed by name (the native iOS and Android
-// enums use different raw values). `paywallObserver` was merged into `observer`
-// and is kept here as a deprecated alias.
+// enums use different raw values). Native 6.0 exposes only observer and full.
 exports.RunningMode = {
     observer: 'observer',
-    full: 'full',
-    paywallObserver: 'observer'
+    full: 'full'
 }
 
-exports.PaywallAction = {
+// Purchasely 6.0: the paywall action kinds handled by interceptAction.
+exports.PresentationAction = {
     close: 'close',
     close_all: 'close_all',
     login: 'login',
@@ -430,12 +381,8 @@ exports.PaywallAction = {
     web_checkout: 'web_checkout'
 }
 
-// Purchasely 6.0: PaywallAction was renamed to PresentationAction (same values).
-// PaywallAction is kept above as a deprecated alias.
-exports.PresentationAction = exports.PaywallAction;
-
-// Purchasely 6.0: result reported to onProcessAction after handling an
-// intercepted paywall action.
+// Purchasely 6.0: result returned by an interceptAction handler after handling
+// an intercepted paywall action.
 exports.InterceptResult = {
     success: 'success',
     failed: 'failed',
