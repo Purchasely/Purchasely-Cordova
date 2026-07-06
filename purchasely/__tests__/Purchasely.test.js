@@ -148,9 +148,8 @@ describe('Purchasely', () => {
 
     describe('CloseReason', () => {
       it('should have correct close reason values', () => {
-        expect(Purchasely.CloseReason.none).toBe('none');
         expect(Purchasely.CloseReason.button).toBe('button');
-        expect(Purchasely.CloseReason.interactiveDismiss).toBe('interactive_dismiss');
+        expect(Purchasely.CloseReason.backSystem).toBe('back_system');
         expect(Purchasely.CloseReason.programmatic).toBe('programmatic');
       });
     });

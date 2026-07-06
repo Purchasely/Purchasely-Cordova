@@ -172,9 +172,11 @@ The old names remain as deprecated aliases that delegate to the new ones.
 
 `setDefaultPresentationResultHandler(success, error)` → **`setDefaultPresentationDismissHandler(success, error)`**
 (old name kept as a deprecated alias). The dismiss outcome now also carries a
-`closeReason` (`none` / `button` / `interactive_dismiss` / `programmatic`).
+`closeReason` (`button` / `back_system` / `programmatic`), matching the native
+PLYCloseReason contract shared with the Flutter bridge.
 
-> iOS note: a swipe-to-dismiss is reported as `interactive_dismiss`.
+> iOS note: a swipe-to-dismiss is reported as `back_system`; a close with no
+> dismiss reason (e.g. after a purchase) omits `closeReason`.
 
 ## 8. New exported constants
 

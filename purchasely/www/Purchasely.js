@@ -451,10 +451,13 @@ exports.PresentationType = {
 }
 
 // Purchasely 6.0: why a presentation closed (delivered in the dismiss outcome).
+// Matches the native PLYCloseReason wire contract (identical to the Flutter
+// PLYCloseReason enum): `button`, `back_system`, `programmatic`. Android emits
+// these directly; on iOS a swipe/interactive dismiss maps to `back_system`, and
+// a close with no dismiss reason (e.g. after a purchase) omits the key.
 exports.CloseReason = {
-    none: 'none',
     button: 'button',
-    interactiveDismiss: 'interactive_dismiss',
+    backSystem: 'back_system',
     programmatic: 'programmatic'
 }
 
