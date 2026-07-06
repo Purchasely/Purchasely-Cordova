@@ -243,23 +243,23 @@ function onPurchaselySdkReady() {
 	// the SDK how it was handled (notHandled = let the SDK proceed, success = app handled it).
 	Purchasely.removeAllActionInterceptors();
 
-	Purchasely.interceptAction(Purchasely.PaywallAction.navigate, (info, parameters) => {
+	Purchasely.interceptAction(Purchasely.PresentationAction.navigate, (info, parameters) => {
 		console.log('User wants to navigate to website ' + parameters.title + ' ' + parameters.url);
 		console.log('let the Purchasely SDK navigate to website');
 		return Purchasely.InterceptResult.notHandled;
 	});
 
-	Purchasely.interceptAction(Purchasely.PaywallAction.close, (info, parameters) => {
+	Purchasely.interceptAction(Purchasely.PresentationAction.close, (info, parameters) => {
 		console.log('User wants to close paywall - close reason ' + parameters.closeReason);
 		return Purchasely.InterceptResult.notHandled;
 	});
 
-	Purchasely.interceptAction(Purchasely.PaywallAction.close_all, () => {
+	Purchasely.interceptAction(Purchasely.PresentationAction.close_all, () => {
 		console.log('User wants to close all paywalls');
 		return Purchasely.InterceptResult.notHandled;
 	});
 
-	Purchasely.interceptAction(Purchasely.PaywallAction.login, () => {
+	Purchasely.interceptAction(Purchasely.PresentationAction.login, () => {
 		console.log('User wants to login');
 		// Present your own screen for the user to log in, then report success so the paywall refreshes.
 		Purchasely.closePresentation();
@@ -267,23 +267,23 @@ function onPurchaselySdkReady() {
 		return Purchasely.InterceptResult.success;
 	});
 
-	Purchasely.interceptAction(Purchasely.PaywallAction.open_presentation, () => {
+	Purchasely.interceptAction(Purchasely.PresentationAction.open_presentation, () => {
 		console.log('User wants to open a new paywall');
 		return Purchasely.InterceptResult.notHandled;
 	});
 
-	Purchasely.interceptAction(Purchasely.PaywallAction.open_placement, () => {
+	Purchasely.interceptAction(Purchasely.PresentationAction.open_placement, () => {
 		console.log('User wants to open a new placement');
 		return Purchasely.InterceptResult.notHandled;
 	});
 
-	Purchasely.interceptAction(Purchasely.PaywallAction.purchase, () => {
+	Purchasely.interceptAction(Purchasely.PresentationAction.purchase, () => {
 		console.log('User wants to purchase');
 		// Let the SDK proceed with the purchase.
 		return Purchasely.InterceptResult.notHandled;
 	});
 
-	Purchasely.interceptAction(Purchasely.PaywallAction.web_checkout, (info, parameters) => {
+	Purchasely.interceptAction(Purchasely.PresentationAction.web_checkout, (info, parameters) => {
 		console.log('User wants to proceed to web checkout');
 		console.log('web checkout url: ' + parameters.url);
 		console.log('web checkout provider: ' + parameters.webCheckoutProvider);

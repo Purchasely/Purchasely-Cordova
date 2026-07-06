@@ -65,7 +65,7 @@ Native 6.0 removed `transactionOnly` and `paywallObserver`; only **`observer`** 
   the underlying native enums use different raw values per platform, so the bridge maps by
   name. If you passed the numeric constants (`Purchasely.RunningMode.full`) you don't need
   to change anything.
-- `RunningMode.paywallObserver` is kept as a **deprecated alias of `observer`**.
+- `RunningMode.paywallObserver` was **removed** — use `observer`.
 - **To keep the 5.x behaviour where Purchasely owns the purchase flow, pass
   `runningMode: Purchasely.RunningMode.full`.**
 
@@ -114,23 +114,22 @@ Purchasely.presentPresentationForPlacement(
 Purchasely 6.0 intercepts actions **per kind**, matching the native SDK. Register a
 handler for each action you care about with `interceptAction(kind, handler)`. The handler
 receives `(info, parameters)` and returns — or resolves to — an `InterceptResult`
-(`success`, `failed`, `notHandled`). Legacy booleans are still accepted
-(`true` → `notHandled`, `false` → `success`).
+(`success`, `failed`, `notHandled`).
 
 ```js
-Purchasely.interceptAction(Purchasely.PaywallAction.purchase, (info, parameters) => {
+Purchasely.interceptAction(Purchasely.PresentationAction.purchase, (info, parameters) => {
   // let the SDK proceed with the purchase
   return Purchasely.InterceptResult.notHandled;
 });
 
-Purchasely.interceptAction(Purchasely.PaywallAction.login, (info, parameters) => {
+Purchasely.interceptAction(Purchasely.PresentationAction.login, (info, parameters) => {
   // the app fully handled this action
   Purchasely.userLogin('MY_USER_ID');
   return Purchasely.InterceptResult.success;
 });
 
 // Stop intercepting one kind, or all of them:
-Purchasely.removeActionInterceptor(Purchasely.PaywallAction.purchase);
+Purchasely.removeActionInterceptor(Purchasely.PresentationAction.purchase);
 Purchasely.removeAllActionInterceptors();
 ```
 
@@ -139,39 +138,29 @@ Purchasely.removeAllActionInterceptors();
   screen) is supported — report the result once it resolves.
 - Each intercept resolves independently, so concurrent intercepts never clobber one another.
 
-### Deprecated: the single global interceptor
+### Removed: the single global interceptor
 
-`setPaywallActionInterceptor(callback)` + `onProcessAction(result)` still work as a
-compatibility shim over the per-action API — the callback receives `{ action, info,
-parameters }` and you report the outcome with `onProcessAction`. Prefer `interceptAction`.
+`setPaywallActionInterceptor(callback)` + `onProcessAction(result)` were **removed**.
+Migrate to per-action `interceptAction(kind, handler)`; each handler reports its outcome
+by returning an `InterceptResult` instead of calling `onProcessAction`.
 
-```js
-Purchasely.setPaywallActionInterceptor((result) => {
-  if (result.action === Purchasely.PresentationAction.purchase) {
-    Purchasely.onProcessAction(Purchasely.InterceptResult.notHandled);
-  } else if (result.action === Purchasely.PresentationAction.login) {
-    Purchasely.onProcessAction(Purchasely.InterceptResult.success);
-  }
-});
-```
-
-- The `PaywallAction` constant was renamed to **`PresentationAction`** (same string
-  values); `PaywallAction` is kept as a deprecated alias.
+- The `PaywallAction` constant was **renamed to `PresentationAction`** (same string
+  values); the old `PaywallAction` name was removed.
 
 ## 6. Deeplink API renames
 
-| Before | After |
+| Before (removed) | After |
 |---|---|
 | `readyToOpenDeeplink(allow)` | `allowDeeplink(allow)` |
 | `isDeeplinkHandled(url, ok, err)` | `handleDeeplink(url, ok, err)` |
 | — | `allowCampaigns(allow)` (new) |
 
-The old names remain as deprecated aliases that delegate to the new ones.
+The old `readyToOpenDeeplink` / `isDeeplinkHandled` names were **removed** — use the new ones.
 
 ## 7. Default dismiss handler rename
 
 `setDefaultPresentationResultHandler(success, error)` → **`setDefaultPresentationDismissHandler(success, error)`**
-(old name kept as a deprecated alias). The dismiss outcome now also carries a
+(old name **removed**). The dismiss outcome now also carries a
 `closeReason` (`button` / `back_system` / `programmatic`), matching the native
 PLYCloseReason contract shared with the Flutter bridge.
 

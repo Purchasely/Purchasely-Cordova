@@ -101,31 +101,20 @@ describe('Purchasely', () => {
         expect(Purchasely.RunningMode.observer).toBe('observer');
         expect(Purchasely.RunningMode.full).toBe('full');
       });
-
-      it('should keep paywallObserver as a deprecated alias of observer', () => {
-        expect(Purchasely.RunningMode.paywallObserver).toBe('observer');
-      });
-    });
-
-    describe('PaywallAction', () => {
-      it('should have correct paywall action values', () => {
-        expect(Purchasely.PaywallAction.close).toBe('close');
-        expect(Purchasely.PaywallAction.close_all).toBe('close_all');
-        expect(Purchasely.PaywallAction.login).toBe('login');
-        expect(Purchasely.PaywallAction.navigate).toBe('navigate');
-        expect(Purchasely.PaywallAction.purchase).toBe('purchase');
-        expect(Purchasely.PaywallAction.restore).toBe('restore');
-        expect(Purchasely.PaywallAction.open_presentation).toBe('open_presentation');
-        expect(Purchasely.PaywallAction.open_placement).toBe('open_placement');
-        expect(Purchasely.PaywallAction.promo_code).toBe('promo_code');
-        expect(Purchasely.PaywallAction.web_checkout).toBe('web_checkout');
-      });
     });
 
     describe('PresentationAction', () => {
-      it('should mirror PaywallAction (renamed in 6.0, kept as alias)', () => {
-        expect(Purchasely.PresentationAction).toBe(Purchasely.PaywallAction);
+      it('should have correct presentation action values', () => {
+        expect(Purchasely.PresentationAction.close).toBe('close');
+        expect(Purchasely.PresentationAction.close_all).toBe('close_all');
+        expect(Purchasely.PresentationAction.login).toBe('login');
+        expect(Purchasely.PresentationAction.navigate).toBe('navigate');
         expect(Purchasely.PresentationAction.purchase).toBe('purchase');
+        expect(Purchasely.PresentationAction.restore).toBe('restore');
+        expect(Purchasely.PresentationAction.open_presentation).toBe('open_presentation');
+        expect(Purchasely.PresentationAction.open_placement).toBe('open_placement');
+        expect(Purchasely.PresentationAction.promo_code).toBe('promo_code');
+        expect(Purchasely.PresentationAction.web_checkout).toBe('web_checkout');
       });
     });
 
@@ -388,37 +377,12 @@ describe('Purchasely', () => {
     });
   });
 
-  describe('readyToOpenDeeplink (deprecated alias)', () => {
-    it('should delegate to allowDeeplink', () => {
-      Purchasely.readyToOpenDeeplink(true);
-
-      expect(mockExec).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.any(Function),
-        'Purchasely',
-        'allowDeeplink',
-        [true]
-      );
-    });
-  });
-
   describe('setDefaultPresentationDismissHandler', () => {
     it('should call exec with correct parameters', () => {
       const success = jest.fn();
       const error = jest.fn();
 
       Purchasely.setDefaultPresentationDismissHandler(success, error);
-
-      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'setDefaultPresentationDismissHandler', []);
-    });
-  });
-
-  describe('setDefaultPresentationResultHandler (deprecated alias)', () => {
-    it('should delegate to setDefaultPresentationDismissHandler', () => {
-      const success = jest.fn();
-      const error = jest.fn();
-
-      Purchasely.setDefaultPresentationResultHandler(success, error);
 
       expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'setDefaultPresentationDismissHandler', []);
     });
@@ -615,23 +579,6 @@ describe('Purchasely', () => {
     });
   });
 
-  describe('isDeeplinkHandled (deprecated alias)', () => {
-    it('should delegate to handleDeeplink', () => {
-      const success = jest.fn();
-      const error = jest.fn();
-
-      Purchasely.isDeeplinkHandled('https://example.com/deeplink', success, error);
-
-      expect(mockExec).toHaveBeenCalledWith(
-        success,
-        error,
-        'Purchasely',
-        'handleDeeplink',
-        ['https://example.com/deeplink']
-      );
-    });
-  });
-
   describe('allProducts', () => {
     it('should call exec with correct parameters', () => {
       const success = jest.fn();
@@ -741,23 +688,6 @@ describe('Purchasely', () => {
       expect(handler).not.toHaveBeenCalled();
     });
 
-    it('normalizes a legacy boolean handler result (false -> success)', async () => {
-      Purchasely.interceptAction('navigate', jest.fn().mockReturnValue(false));
-      const nativeSuccess = nativeInterceptorFor('navigate');
-      mockExec.mockClear();
-
-      nativeSuccess({ action: 'navigate', callbackId: 'navigate#1' });
-      await flush();
-
-      expect(mockExec).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.any(Function),
-        'Purchasely',
-        'completeActionInterceptor',
-        ['navigate#1', 'success']
-      );
-    });
-
     it('reports failed when the handler throws', async () => {
       Purchasely.interceptAction('purchase', () => { throw new Error('boom'); });
       const nativeSuccess = nativeInterceptorFor('purchase');
@@ -802,49 +732,6 @@ describe('Purchasely', () => {
         .filter((c) => c[3] === 'unregisterActionInterceptor')
         .map((c) => c[4][0]);
       expect(unregistered).toEqual(expect.arrayContaining(['purchase', 'restore']));
-    });
-  });
-
-  describe('setPaywallActionInterceptor (deprecated)', () => {
-    it('registers an interceptor for every action kind', () => {
-      Purchasely.setPaywallActionInterceptor(jest.fn());
-
-      const registered = mockExec.mock.calls
-        .filter((c) => c[3] === 'registerActionInterceptor')
-        .map((c) => c[4][0]);
-      expect(registered).toEqual(
-        expect.arrayContaining(Object.values(Purchasely.PaywallAction))
-      );
-    });
-
-    it('fans intercepts into the single callback, resolved by onProcessAction', async () => {
-      const success = jest.fn();
-      Purchasely.setPaywallActionInterceptor(success);
-      const nativeSuccess = nativeInterceptorFor('purchase');
-      mockExec.mockClear();
-
-      nativeSuccess({
-        action: 'purchase',
-        callbackId: 'purchase#7',
-        info: { contentId: 'c' },
-        parameters: {},
-      });
-      await flush();
-
-      expect(success).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'purchase' })
-      );
-
-      Purchasely.onProcessAction(Purchasely.InterceptResult.success);
-      await flush();
-
-      expect(mockExec).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.any(Function),
-        'Purchasely',
-        'completeActionInterceptor',
-        ['purchase#7', 'success']
-      );
     });
   });
 

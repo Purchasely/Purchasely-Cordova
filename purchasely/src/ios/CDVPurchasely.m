@@ -723,7 +723,7 @@ static NSString * PLYWebCheckoutProviderToString(PLYWebCheckoutProvider provider
     }
 }
 
-// Maps a JS action-kind string (see Purchasely.PaywallAction) to a PLYPresentationAction.
+// Maps a JS action-kind string (see Purchasely.PresentationAction) to a PLYPresentationAction.
 // Returns NO for an unknown kind.
 static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationAction *out) {
     static NSDictionary<NSString *, NSNumber *> *map;
