@@ -34,7 +34,9 @@ import io.purchasely.models.PLYPresentationPlan
 import io.purchasely.models.PLYProduct
 import io.purchasely.models.PLYSubscriptionData
 import io.purchasely.views.presentation.PLYThemeMode
+import io.purchasely.views.presentation.models.PLYDimensionType
 import io.purchasely.views.presentation.models.PLYTransition
+import io.purchasely.views.presentation.models.PLYTransitionDimension
 import io.purchasely.views.presentation.models.PLYTransitionType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -103,6 +105,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 "setDefaultPresentationDismissHandler" -> setDefaultPresentationDismissHandler(
                     callbackContext
                 )
+                "removeDefaultPresentationDismissHandler" -> removeDefaultPresentationDismissHandler(callbackContext)
 
                 "purchasedSubscription" -> purchasedSubscription(callbackContext)
                 "allowDeeplink" -> allowDeeplink(args.getBoolean(0))
@@ -111,14 +114,20 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 "presentPresentationWithIdentifier" -> presentPresentationWithIdentifier(
                     getStringFromJson(args.getString(0)),
                     getStringFromJson(args.getString(1)),
-                    getStringFromJson(args.getString(2)),
+                    args.optJSONObject(2),
                     callbackContext
                 )
 
                 "presentPresentationForPlacement" -> presentPresentationForPlacement(
                     getStringFromJson(args.getString(0)),
                     getStringFromJson(args.getString(1)),
-                    getStringFromJson(args.getString(2)),
+                    args.optJSONObject(2),
+                    callbackContext
+                )
+
+                "presentPresentationForDefault" -> presentPresentationForDefault(
+                    getStringFromJson(args.getString(0)),
+                    args.optJSONObject(1),
                     callbackContext
                 )
 
@@ -130,7 +139,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 )
                 "presentPresentation" -> presentPresentation(
                     args.getJSONObject(0),
-                    getStringFromJson(args.getString(1)),
+                    args.optJSONObject(1),
                     getStringFromJson(args.getString(2)),
                     callbackContext
                 )
@@ -491,7 +500,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
     private fun presentPresentationWithIdentifier(
         presentationVendorId: String?,
         contentId: String?,
-        displayMode: String?,
+        transition: JSONObject?,
         callbackContext: CallbackContext
     ) {
         purchaseCallback = callbackContext
@@ -499,7 +508,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
             screenId = presentationVendorId,
             placementId = null,
             contentId = contentId,
-            displayMode = displayMode,
+            transition = transition,
             callbackContext = callbackContext
         )
     }
@@ -507,7 +516,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
     private fun presentPresentationForPlacement(
         placementVendorId: String?,
         contentId: String?,
-        displayMode: String?,
+        transition: JSONObject?,
         callbackContext: CallbackContext
     ) {
         purchaseCallback = callbackContext
@@ -515,7 +524,23 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
             screenId = null,
             placementId = placementVendorId,
             contentId = contentId,
-            displayMode = displayMode,
+            transition = transition,
+            callbackContext = callbackContext
+        )
+    }
+
+    // v6: present the default (audience-targeted) presentation — no placement/screen id.
+    private fun presentPresentationForDefault(
+        contentId: String?,
+        transition: JSONObject?,
+        callbackContext: CallbackContext
+    ) {
+        purchaseCallback = callbackContext
+        displayPresentation(
+            screenId = null,
+            placementId = null,
+            contentId = contentId,
+            transition = transition,
             callbackContext = callbackContext
         )
     }
@@ -524,7 +549,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         screenId: String?,
         placementId: String?,
         contentId: String?,
-        displayMode: String?,
+        transition: JSONObject?,
         callbackContext: CallbackContext
     ) {
         launch {
@@ -533,12 +558,29 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                     when {
                         placementId != null -> this.placementId(placementId)
                         screenId != null -> this.screenId(screenId)
+                        // else: default (audience-targeted) source — no id
                     }
                     contentId(contentId)
+                    // v6: stream the presentation lifecycle to the JS callback via keep-alive
+                    // envelopes; the dismiss outcome is delivered as the final (non-kept)
+                    // result by sendPurchaseResult.
+                    onPresented { presentation, error ->
+                        val env = mutableMapOf<String, Any?>("event" to "presented")
+                        presentation?.let { env["presentation"] = presentationToMap(it) }
+                        error?.let { env["error"] = it.message }
+                        val r = PluginResult(PluginResult.Status.OK, JSONObject(env))
+                        r.keepCallback = true
+                        callbackContext.sendPluginResult(r)
+                    }
+                    onCloseRequested {
+                        val r = PluginResult(PluginResult.Status.OK, JSONObject(mapOf("event" to "closeRequested")))
+                        r.keepCallback = true
+                        callbackContext.sendPluginResult(r)
+                    }
                 }
                 val loaded = builder.build().preload()
                 displayedPresentation = loaded
-                loaded.display(cordova.activity, transitionForDisplayMode(displayMode)) { outcome ->
+                loaded.display(cordova.activity, transitionFromMap(transition)) { outcome ->
                     sendPurchaseResult(outcome)
                 }
             } catch (t: Throwable) {
@@ -559,6 +601,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                     when {
                         placementId != null -> this.placementId(placementId)
                         presentationId != null -> this.screenId(presentationId)
+                        // else: neither id → the default (audience-targeted) presentation
                     }
                     contentId(contentId)
                 }
@@ -576,7 +619,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
     }
 
     private fun presentPresentation(presentationMap: JSONObject?,
-                            displayMode: String?,
+                            transition: JSONObject?,
                             loadingBackgroundColor: String?,
                             callbackContext: CallbackContext) {
         if (presentationMap == null) {
@@ -595,17 +638,31 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         displayedPresentation = loaded
 
         // TODO(v6-verify): loadingBackgroundColor cannot be applied to an already-preloaded
-        // presentation in v6 (background/progress colors are builder options set before preload).
+        // presentation in v6 (colors are builder options set before preload). The re-display
+        // path delivers the dismiss outcome only; onPresented/onCloseRequested are wired on the
+        // direct present* methods (builder-seeded before preload).
         cordova.activity?.runOnUiThread {
-            loaded.display(cordova.activity, transitionForDisplayMode(displayMode)) { outcome ->
+            loaded.display(cordova.activity, transitionFromMap(transition)) { outcome ->
                 sendPurchaseResult(outcome)
             }
         }
     }
 
-    // Maps a JS display-mode string to a v6 PLYTransition. Null → surface default (full screen).
-    private fun transitionForDisplayMode(mode: String?): PLYTransition? {
-        val type = when (mode) {
+    // v6: stop receiving default (campaign/deeplink) presentation dismiss outcomes.
+    private fun removeDefaultPresentationDismissHandler(callbackContext: CallbackContext) {
+        // Android's setter is non-null; install a no-op handler and drop the JS callback
+        // so default (campaign/deeplink) dismiss outcomes are no longer forwarded.
+        Purchasely.setDefaultPresentationDismissHandler { }
+        defaultCallback = null
+        callbackContext.success()
+    }
+
+    // Maps the JS transition object to a v6 PLYTransition. Shape:
+    //   { type, dismissible?, width?: {type,value}, height?: {type,value} }
+    // width is popin-only; height drives drawer+popin. Null → surface default.
+    private fun transitionFromMap(map: JSONObject?): PLYTransition? {
+        if (map == null) return null
+        val type = when (map.optString("type")) {
             "fullScreen" -> PLYTransitionType.FULLSCREEN
             "push" -> PLYTransitionType.PUSH
             "modal" -> PLYTransitionType.MODAL
@@ -614,9 +671,20 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
             "inlinePaywall" -> PLYTransitionType.INLINE_PAYWALL
             else -> return null
         }
-        // TODO(v6-verify): drawer/popin sizing (PLYTransitionDimension) is not derivable from a
-        // plain display-mode string, so width/height default to null (surface default / hug).
-        return PLYTransition(type = type, width = null, height = null, dismissible = true)
+        return PLYTransition(
+            type = type,
+            width = dimensionFromMap(map.optJSONObject("width")),
+            height = dimensionFromMap(map.optJSONObject("height")),
+            dismissible = map.optBoolean("dismissible", true)
+        )
+    }
+
+    // { type: 'pixel'|'percentage', value: Number } → PLYTransitionDimension. Null when absent.
+    private fun dimensionFromMap(map: JSONObject?): PLYTransitionDimension? {
+        if (map == null || !map.has("value")) return null
+        val value = map.optDouble("value").toFloat()
+        val type = if (map.optString("type") == "pixel") PLYDimensionType.PIXEL else PLYDimensionType.PERCENTAGE
+        return PLYTransitionDimension(type, value)
     }
 
     private fun closePresentation(callbackContext: CallbackContext) {
@@ -1144,6 +1212,9 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
             }
             val map = HashMap<String?, Any?>()
             map["result"] = result
+            // v6: also expose the string purchaseResult ('purchased'|'cancelled'|'restored'|null)
+            // alongside the legacy int `result`, matching the Flutter outcome contract.
+            map["purchaseResult"] = outcome.purchaseResult?.name?.lowercase(Locale.US)
             map["plan"] = transformPlanToMap(outcome.plan)
             map["closeReason"] = outcome.closeReason?.value
             map["error"] = outcome.error?.message
