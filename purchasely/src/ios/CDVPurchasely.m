@@ -572,20 +572,23 @@
         [dict setObject:[outcome.plan asDictionary] forKey:@"plan"];
     }
 
-    // closeReason strings match the JS Purchasely.CloseReason enum.
+    // closeReason strings match the JS Purchasely.CloseReason enum, aligned with the
+    // native PLYCloseReason wire contract shared with Flutter (button / back_system /
+    // programmatic). iOS's interactive (swipe) dismiss maps onto `back_system`; a close
+    // with no dismiss reason (PLYCloseReasonNone, e.g. after a purchase) omits the key,
+    // mirroring the null closeReason the Flutter bridge reports on iOS.
     NSString *closeReason = nil;
     switch (outcome.closeReason) {
-        case PLYCloseReasonNone:
-            closeReason = @"none";
-            break;
         case PLYCloseReasonButton:
             closeReason = @"button";
             break;
         case PLYCloseReasonInteractiveDismiss:
-            closeReason = @"interactive_dismiss";
+            closeReason = @"back_system";
             break;
         case PLYCloseReasonProgrammatic:
             closeReason = @"programmatic";
+            break;
+        case PLYCloseReasonNone:
             break;
     }
     if (closeReason != nil) {
