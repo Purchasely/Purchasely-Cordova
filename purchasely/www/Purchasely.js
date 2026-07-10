@@ -56,7 +56,7 @@ exports.start = function (options, success, error) {
     var opts = options || {};
     var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
     if(!cordovaSdkVersion) {
-        cordovaSdkVersion = "6.0.0-rc.1";
+        cordovaSdkVersion = "6.0.0-rc.3";
     }
     opts.sdkVersion = cordovaSdkVersion;
     exec(success, error, 'Purchasely', 'start', [opts]);

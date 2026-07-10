@@ -276,7 +276,7 @@
         [r setKeepCallbackAsBool:YES];
         [strongSelf.commandDelegate sendPluginResult:r callbackId:callbackId];
     }];
-    builder = [builder onClose:^{
+    builder = [builder onCloseRequested:^{
         CDVPurchasely *strongSelf = weakSelf; if (strongSelf == nil) return;
         CDVPluginResult *r = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:@{@"event": @"closeRequested"}];
         [r setKeepCallbackAsBool:YES];
@@ -555,13 +555,13 @@
 
 // Helpers
 
-// v6: builds a PLYDisplayMode from the JS transition object (see normalizeTransition):
+// v6: builds a PLYTransition from the JS transition object (see normalizeTransition):
 //   { type, dismissible?, height?: { type: 'pixel'|'percentage', value }, backgroundColor? }
 // (a bare mode string is also tolerated). Objective-C only exposes percentage height for
 // drawer/popin (pixel height and popin width are Swift-only in the SDK), so those honor a
 // percentage height + dismissible + background colors; other dimensions are ignored.
 // Returns nil for an unknown/absent value so the backend-defined default is honored.
-- (PLYDisplayMode * _Nullable) displayModeFromTransition:(id) transition {
+- (PLYTransition * _Nullable) displayModeFromTransition:(id) transition {
     NSDictionary *map = [transition isKindOfClass:[NSDictionary class]] ? transition : nil;
     NSString *type = map != nil ? map[@"type"] : ([transition isKindOfClass:[NSString class]] ? transition : nil);
     if (![type isKindOfClass:[NSString class]]) {
@@ -593,17 +593,17 @@
     }
 
     if ([type isEqualToString:@"fullScreen"]) {
-        return [PLYDisplayMode fullScreen];
+        return [PLYTransition fullScreen];
     } else if ([type isEqualToString:@"modal"]) {
-        return [PLYDisplayMode modalWithDismissible:dismissible];
+        return [PLYTransition modalWithDismissible:dismissible];
     } else if ([type isEqualToString:@"push"]) {
-        return [PLYDisplayMode push];
+        return [PLYTransition push];
     } else if ([type isEqualToString:@"inlinePaywall"]) {
-        return [PLYDisplayMode inlinePaywall];
+        return [PLYTransition inlinePaywall];
     } else if ([type isEqualToString:@"drawer"]) {
-        return [[PLYDisplayMode alloc] initWithType:PLYDisplayModeTypeDrawer heightPercentage:heightPercentage backgroundColors:backgroundColors dismissible:dismissible];
+        return [[PLYTransition alloc] initWithType:PLYTransitionTypeDrawer heightPercentage:heightPercentage backgroundColors:backgroundColors dismissible:dismissible];
     } else if ([type isEqualToString:@"popin"]) {
-        return [[PLYDisplayMode alloc] initWithType:PLYDisplayModeTypePopin heightPercentage:heightPercentage backgroundColors:backgroundColors dismissible:dismissible];
+        return [[PLYTransition alloc] initWithType:PLYTransitionTypePopin heightPercentage:heightPercentage backgroundColors:backgroundColors dismissible:dismissible];
     }
     return nil;
 }
@@ -736,8 +736,8 @@
         }
         id<PLYPresentation> presentation = info.presentation;
         if (presentation != nil) {
-            if (presentation.id != nil) {
-                [infosResult setObject:presentation.id forKey:@"presentationId"];
+            if (presentation.screenId != nil) {
+                [infosResult setObject:presentation.screenId forKey:@"presentationId"];
             }
             if (presentation.placementId != nil) {
                 [infosResult setObject:presentation.placementId forKey:@"placementId"];
@@ -1176,7 +1176,7 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
             [r setKeepCallbackAsBool:YES];
             [strongSelf.commandDelegate sendPluginResult:r callbackId:callbackId];
         };
-        presentationLoaded.onClose = ^{
+        presentationLoaded.onCloseRequested = ^{
             CDVPurchasely *strongSelf = weakSelf; if (strongSelf == nil) return;
             CDVPluginResult *r = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:@{@"event": @"closeRequested"}];
             [r setKeepCallbackAsBool:YES];
@@ -1224,7 +1224,7 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
 
 - (id<PLYPresentation>) findPresentationLoadedFor:(NSString * _Nullable) presentationId {
     for (id<PLYPresentation> presentationLoaded in self.presentationsLoaded) {
-        if ([presentationLoaded.id isEqualToString: presentationId]) {
+        if ([presentationLoaded.screenId isEqualToString: presentationId]) {
             return presentationLoaded;
         }
     }
@@ -1234,7 +1234,7 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
 - (NSInteger) findIndexPresentationLoadedFor:(NSString * _Nullable) presentationId {
     NSInteger index = 0;
     for (id<PLYPresentation> presentationLoaded in self.presentationsLoaded) {
-        if ([presentationLoaded.id isEqualToString: presentationId]) {
+        if ([presentationLoaded.screenId isEqualToString: presentationId]) {
             return index;
         }
         index++;
@@ -1269,8 +1269,8 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
 
     if (presentation != nil) {
 
-        if (presentation.id != nil) {
-            [presentationResult setObject:presentation.id forKey:@"id"];
+        if (presentation.screenId != nil) {
+            [presentationResult setObject:presentation.screenId forKey:@"id"];
         }
 
         if (presentation.placementId != nil) {

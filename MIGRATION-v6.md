@@ -1,7 +1,7 @@
 # Migrating the Purchasely Cordova plugin to 6.0
 
-`@purchasely/cordova-plugin-purchasely@6.0.0-rc.1` wraps the Purchasely **6.0** native
-SDKs (iOS `Purchasely 6.0.0-rc.2`, Android `io.purchasely:core 6.0.0-rc.2`). This guide
+`@purchasely/cordova-plugin-purchasely@6.0.0-rc.3` wraps the Purchasely **6.0** native
+SDKs (iOS `Purchasely 6.0.0-rc.3`, Android `io.purchasely:core 6.0.0-rc.3`). This guide
 lists every change to the JavaScript API. Most of the SDK is source-compatible; the
 breaking surfaces are **SDK start**, **presentation display mode**, and the **action
 interceptor result**.
@@ -12,8 +12,8 @@ interceptor result**.
 ## Install
 
 ```bash
-cordova plugin add @purchasely/cordova-plugin-purchasely@6.0.0-rc.1
-cordova plugin add @purchasely/cordova-plugin-purchasely-google@6.0.0-rc.1   # Google Play
+cordova plugin add @purchasely/cordova-plugin-purchasely@6.0.0-rc.3
+cordova plugin add @purchasely/cordova-plugin-purchasely-google@6.0.0-rc.3   # Google Play
 ```
 
 ---
@@ -222,5 +222,5 @@ callback) exposes:
 ---
 
 See `VERSIONS.md` for the Cordova ↔ native SDK version mapping, and the native release
-notes for [Purchasely-iOS 6.0.0-rc.2](https://github.com/Purchasely/Purchasely-iOS/releases)
-and [Purchasely-Android 6.0.0-rc.2](https://github.com/Purchasely/Purchasely-Android/releases).
+notes for [Purchasely-iOS 6.0.0-rc.3](https://github.com/Purchasely/Purchasely-iOS/releases)
+and [Purchasely-Android 6.0.0-rc.3](https://github.com/Purchasely/Purchasely-Android/releases).

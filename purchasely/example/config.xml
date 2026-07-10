@@ -18,7 +18,7 @@
     <platform name="android">
         <allow-intent href="market:*" />
         <preference name="GradlePluginKotlinEnabled" value="true" />
-        <preference name="GradlePluginKotlinVersion" value="2.1.21" />
+        <preference name="GradlePluginKotlinVersion" value="2.3.21" />
     </platform>
     <platform name="ios">
         <allow-intent href="itms:*" />

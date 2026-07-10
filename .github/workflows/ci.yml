@@ -136,10 +136,12 @@ jobs:
       - name: Check version consistency
         run: |
           # Extract versions from different files
-          PLUGIN_XML_VERSION=$(grep -oP 'plugin id="@purchasely/cordova-plugin-purchasely" version="\K[^"]+' purchasely/plugin.xml)
+          PLUGIN_XML_VERSION=$(sed -nE 's/.*plugin id="@purchasely\/cordova-plugin-purchasely" version="([^"]+)".*/\1/p' purchasely/plugin.xml)
           PACKAGE_JSON_VERSION=$(jq -r '.version' purchasely/package.json)
-          GOOGLE_PLUGIN_XML_VERSION=$(grep -oP 'plugin id="@purchasely/cordova-plugin-purchasely-google" version="\K[^"]+' purchasely-google/plugin.xml)
+          GOOGLE_PLUGIN_XML_VERSION=$(sed -nE 's/.*plugin id="@purchasely\/cordova-plugin-purchasely-google" version="([^"]+)".*/\1/p' purchasely-google/plugin.xml)
           GOOGLE_PACKAGE_JSON_VERSION=$(jq -r '.version' purchasely-google/package.json)
+          GOOGLE_LOCK_TOP_VERSION=$(jq -r '.version' purchasely-google/package-lock.json)
+          GOOGLE_LOCK_PKG_VERSION=$(jq -r '.packages[""].version' purchasely-google/package-lock.json)
           LOCK_TOP_VERSION=$(jq -r '.version' purchasely/package-lock.json)
           LOCK_PKG_VERSION=$(jq -r '.packages[""].version' purchasely/package-lock.json)
           EXAMPLE_LOCK_PLUGIN_VERSION=$(jq -r '.packages[".."].version' purchasely/example/package-lock.json)
@@ -149,6 +151,8 @@ jobs:
           echo "purchasely/package.json: $PACKAGE_JSON_VERSION"
           echo "purchasely-google/plugin.xml: $GOOGLE_PLUGIN_XML_VERSION"
           echo "purchasely-google/package.json: $GOOGLE_PACKAGE_JSON_VERSION"
+          echo "purchasely-google/package-lock.json (top): $GOOGLE_LOCK_TOP_VERSION"
+          echo "purchasely-google/package-lock.json (packages['']): $GOOGLE_LOCK_PKG_VERSION"
           echo "purchasely/package-lock.json (top): $LOCK_TOP_VERSION"
           echo "purchasely/package-lock.json (packages['']): $LOCK_PKG_VERSION"
           echo "purchasely/example/package-lock.json (packages['..']): $EXAMPLE_LOCK_PLUGIN_VERSION"
@@ -164,6 +168,8 @@ jobs:
           check "purchasely/package.json" "$PACKAGE_JSON_VERSION"
           check "purchasely-google/plugin.xml" "$GOOGLE_PLUGIN_XML_VERSION"
           check "purchasely-google/package.json" "$GOOGLE_PACKAGE_JSON_VERSION"
+          check "purchasely-google/package-lock.json (top)" "$GOOGLE_LOCK_TOP_VERSION"
+          check "purchasely-google/package-lock.json (packages[''])" "$GOOGLE_LOCK_PKG_VERSION"
           check "purchasely/package-lock.json (top)" "$LOCK_TOP_VERSION"
           check "purchasely/package-lock.json (packages[''])" "$LOCK_PKG_VERSION"
           check "purchasely/example/package-lock.json (packages['..'])" "$EXAMPLE_LOCK_PLUGIN_VERSION"
