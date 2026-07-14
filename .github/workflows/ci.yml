@@ -26,7 +26,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: purchasely
-        run: npm install
+        run: npm ci
 
       - name: Run tests
         working-directory: purchasely
@@ -53,7 +53,7 @@ jobs:
 
       - name: Install example dependencies
         working-directory: purchasely/example
-        run: npm install
+        run: npm ci
 
       # Restore CocoaPods downloaded pod sources BEFORE `cordova platform add`
       # so the implicit `pod install` triggered by `cordova prepare` reuses
@@ -71,14 +71,31 @@ jobs:
       - name: Setup iOS platform and plugins
         working-directory: purchasely/example
         run: |
-          cordova plugin remove @purchasely/cordova-plugin-purchasely || true
-          cordova platform remove ios || true
-          cordova platform add ios
-          cordova plugin add ../ --link
+          cordova plugin remove @purchasely/cordova-plugin-purchasely --nosave || true
+          cordova platform remove ios --nosave || true
+          cordova platform add ios@8.1.1 --nosave
+          cordova plugin add ../ --link --nosave
 
-      - name: Build iOS
+      - name: Build iOS release unsigned
         working-directory: purchasely/example
-        run: cordova build ios --emulator
+        run: |
+          xcodebuild build \
+            -workspace platforms/ios/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Archive iOS release unsigned
+        working-directory: purchasely/example
+        run: |
+          xcodebuild archive \
+            -workspace platforms/ios/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/App.xcarchive \
+            CODE_SIGNING_ALLOWED=NO
 
   build-android:
     name: Build Android
@@ -109,7 +126,7 @@ jobs:
 
       - name: Install example dependencies
         working-directory: purchasely/example
-        run: npm install
+        run: npm ci
 
       - name: Setup Android platform and plugins
         working-directory: purchasely/example
