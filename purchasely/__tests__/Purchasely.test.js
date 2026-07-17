@@ -228,6 +228,46 @@ describe('Purchasely', () => {
         ]
       );
     });
+
+    it('should fall back to the literal default sdkVersion when plugin_list metadata is missing', () => {
+      const metadata = global.cordova.define.moduleMap['cordova/plugin_list'].exports.metadata;
+      const original = metadata['cordova-plugin-purchasely'];
+      delete metadata['cordova-plugin-purchasely'];
+
+      try {
+        Purchasely.start({ apiKey: 'API_KEY' }, jest.fn(), jest.fn());
+
+        expect(mockExec).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.any(Function),
+          'Purchasely',
+          'start',
+          [{ apiKey: 'API_KEY', sdkVersion: '6.0.0-rc.3' }]
+        );
+      } finally {
+        metadata['cordova-plugin-purchasely'] = original;
+      }
+    });
+
+    it('should treat a v5-style positional call as broken (no longer supported)', () => {
+      // Purchasely 6.0: `start` takes a single options object. A v5-style positional
+      // call (apiKey, stores, storeKit1, ...) is NOT supported: `options` becomes the
+      // raw apiKey string (sdkVersion silently fails to attach to a string primitive),
+      // and `success`/`error` are mis-bound to the 2nd/3rd positional args instead of
+      // the real callbacks. This documents the breaking change from MIGRATION-v6.md.
+      const legacyStores = ['Google'];
+      const legacyStoreKit1 = false;
+
+      Purchasely.start('API_KEY', legacyStores, legacyStoreKit1, null, 0, 'full', jest.fn(), jest.fn());
+
+      expect(mockExec).toHaveBeenCalledWith(
+        legacyStores,
+        legacyStoreKit1,
+        'Purchasely',
+        'start',
+        ['API_KEY']
+      );
+    });
   });
 
   describe('addEventsListener', () => {
@@ -472,6 +512,21 @@ describe('Purchasely', () => {
         'Purchasely',
         'presentPresentationForPlacement',
         ['placement1', 'content1', { type: 'modal' }]
+      );
+    });
+
+    it('should default to fullScreen when no displayMode is provided (normalizeTransition default)', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.presentPresentationForPlacement('placement1', 'content1', undefined, success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        error,
+        'Purchasely',
+        'presentPresentationForPlacement',
+        ['placement1', 'content1', { type: 'fullScreen' }]
       );
     });
   });
@@ -1156,6 +1211,40 @@ describe('Purchasely', () => {
         'setDebugMode',
         [true]
       );
+    });
+  });
+
+  // Purchasely 6.0: these v5 APIs were deliberately removed (see MIGRATION-v6.md).
+  // Asserting their absence guards against accidental resurrection/typos reintroducing
+  // a v5-shaped surface alongside the v6 replacements.
+  describe('Removed v5 APIs (should not exist in v6)', () => {
+    it('removes the presentation methods with no v6 native screen equivalent', () => {
+      expect(Purchasely.presentSubscriptions).toBeUndefined();
+      expect(Purchasely.presentProductWithIdentifier).toBeUndefined();
+      expect(Purchasely.presentPlanWithIdentifier).toBeUndefined();
+      expect(Purchasely.showPresentation).toBeUndefined();
+      expect(Purchasely.hidePresentation).toBeUndefined();
+    });
+
+    it('removes the single global action interceptor in favor of interceptAction(kind, handler)', () => {
+      expect(Purchasely.setPaywallActionInterceptor).toBeUndefined();
+      expect(Purchasely.onProcessAction).toBeUndefined();
+      expect(Purchasely.PaywallAction).toBeUndefined();
+    });
+
+    it('removes the renamed deeplink methods', () => {
+      expect(Purchasely.readyToOpenDeeplink).toBeUndefined();
+      expect(Purchasely.isDeeplinkHandled).toBeUndefined();
+    });
+
+    it('removes the renamed default dismiss handler', () => {
+      expect(Purchasely.setDefaultPresentationResultHandler).toBeUndefined();
+    });
+
+    it('removes the RunningMode values dropped by native 6.0', () => {
+      expect(Purchasely.RunningMode.paywallObserver).toBeUndefined();
+      expect(Purchasely.RunningMode.transactionOnly).toBeUndefined();
+      expect(Object.keys(Purchasely.RunningMode).sort()).toEqual(['full', 'observer']);
     });
   });
 });

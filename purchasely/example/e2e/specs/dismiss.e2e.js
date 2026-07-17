@@ -34,4 +34,26 @@ describe('Presentation dismiss outcome', () => {
     }
     await switchToNative().catch(() => {});
   });
+
+  // v6 default (audience-targeted) presentation: same shape as the placement flow above,
+  // just with no placement/presentation id. Best-effort: depends on a default audience
+  // being configured on the backend for this app id.
+  it('presentPresentationForDefault + closePresentation delivers a dismiss outcome', async () => {
+    const outcomePromise = callBridge(
+      'presentPresentationForDefault',
+      [null, 'fullScreen'],
+      90000
+    );
+
+    await browser.pause(6000);
+    await callBridge('closePresentation');
+
+    const outcome = await outcomePromise;
+    expect(outcome.ok).toBe(true);
+    expect(outcome.value).toBeDefined();
+    if (outcome.value && outcome.value.closeReason) {
+      expect(typeof outcome.value.closeReason).toBe('string');
+    }
+    await switchToNative().catch(() => {});
+  });
 });

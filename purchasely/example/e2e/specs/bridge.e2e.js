@@ -48,4 +48,29 @@ describe('Purchasely bridge (WEBVIEW context)', () => {
     expect(res.ok).toBe(true);
     expect(res.value).toBe('e2e_value');
   });
+
+  // user-attribute round-trip, int variant
+  it('setUserAttributeWithInt then userAttribute round-trips', async () => {
+    await callBridge('setUserAttributeWithInt', ['e2e_key_int', 7, 'ESSENTIAL']);
+    const res = await callBridge('userAttribute', ['e2e_key_int']);
+    expect(res.ok).toBe(true);
+    expect(res.value).toBe(7);
+  });
+
+  // user-attribute round-trip, boolean variant (see CDV-W-09: Android returns 0/1,
+  // iOS returns a real boolean -- assert loosely on truthiness rather than strict type).
+  it('setUserAttributeWithBoolean then userAttribute round-trips', async () => {
+    await callBridge('setUserAttributeWithBoolean', ['e2e_key_bool', true, 'ESSENTIAL']);
+    const res = await callBridge('userAttribute', ['e2e_key_bool']);
+    expect(res.ok).toBe(true);
+    expect(res.value).toBeTruthy();
+  });
+
+  // userSubscriptions on a fresh anonymous user: no purchases exist, so this must
+  // resolve with an empty (not error) list rather than actually validating any store.
+  it('userSubscriptions returns a list', async () => {
+    const res = await callBridge('userSubscriptions');
+    expect(res.ok).toBe(true);
+    expect(Array.isArray(res.value)).toBe(true);
+  });
 });
