@@ -47,6 +47,9 @@ describe('Purchasely', () => {
         expect(Purchasely.Attribute.APPSFLYER_ID).toBe(5);
         expect(Purchasely.Attribute.AMPLITUDE_USER_ID).toBe(16);
         expect(Purchasely.Attribute.BATCH_CUSTOM_USER_ID).toBe(20);
+        // ENM-02 / REC-11
+        expect(Purchasely.Attribute.ONESIGNAL_USER_ID).toBe(21);
+        expect(Purchasely.Attribute.oneSignalPlayerId).toBeUndefined();
       });
     });
 
@@ -270,7 +273,18 @@ describe('Purchasely', () => {
     });
   });
 
-  describe('addEventsListener', () => {
+  describe('addEventListener (canonical, REC-18/PAR-18)', () => {
+    it('should call exec with correct parameters', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.addEventListener(success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'addEventsListener', []);
+    });
+  });
+
+  describe('addEventsListener (deprecated alias)', () => {
     it('should call exec with correct parameters', () => {
       const success = jest.fn();
       const error = jest.fn();
@@ -292,7 +306,21 @@ describe('Purchasely', () => {
     });
   });
 
-  describe('removeEventsListener', () => {
+  describe('removeEventListener (canonical, REC-18/PAR-18)', () => {
+    it('should call exec with correct parameters', () => {
+      Purchasely.removeEventListener();
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'removeEventsListener',
+        []
+      );
+    });
+  });
+
+  describe('removeEventsListener (deprecated alias)', () => {
     it('should call exec with correct parameters', () => {
       Purchasely.removeEventsListener();
 
@@ -331,6 +359,17 @@ describe('Purchasely', () => {
     });
   });
 
+  describe('isAnonymous (REC-12 / PAR-04)', () => {
+    it('should call exec with correct parameters', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.isAnonymous(success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'isAnonymous', []);
+    });
+  });
+
   describe('userLogin', () => {
     it('should call exec with correct parameters', () => {
       const success = jest.fn();
@@ -348,7 +387,7 @@ describe('Purchasely', () => {
   });
 
   describe('userLogout', () => {
-    it('should call exec with correct parameters', () => {
+    it('defaults clearUserAttributes to true when omitted (PAR-30)', () => {
       Purchasely.userLogout();
 
       expect(mockExec).toHaveBeenCalledWith(
@@ -356,7 +395,19 @@ describe('Purchasely', () => {
         expect.any(Function),
         'Purchasely',
         'userLogout',
-        []
+        [true]
+      );
+    });
+
+    it('forwards an explicit clearUserAttributes value', () => {
+      Purchasely.userLogout(false);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'userLogout',
+        [false]
       );
     });
   });
@@ -515,7 +566,7 @@ describe('Purchasely', () => {
       );
     });
 
-    it('should default to fullScreen when no displayMode is provided (normalizeTransition default)', () => {
+    it('should send no transition when no displayMode is provided, so the backend default is honored (CDV-W-12)', () => {
       const success = jest.fn();
       const error = jest.fn();
 
@@ -526,7 +577,7 @@ describe('Purchasely', () => {
         error,
         'Purchasely',
         'presentPresentationForPlacement',
-        ['placement1', 'content1', { type: 'fullScreen' }]
+        ['placement1', 'content1', undefined]
       );
     });
   });
@@ -888,7 +939,7 @@ describe('Purchasely', () => {
   });
 
   describe('userSubscriptions', () => {
-    it('should call exec with correct parameters', () => {
+    it('defaults invalidateCache to false when omitted (PAR-29)', () => {
       const success = jest.fn();
       const error = jest.fn();
 
@@ -899,13 +950,28 @@ describe('Purchasely', () => {
         expect.any(Function),
         'Purchasely',
         'userSubscriptions',
-        []
+        [false]
+      );
+    });
+
+    it('forwards an explicit invalidateCache value', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.userSubscriptions(success, error, true);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        success,
+        expect.any(Function),
+        'Purchasely',
+        'userSubscriptions',
+        [true]
       );
     });
   });
 
   describe('userSubscriptionsHistory', () => {
-    it('should call exec with correct parameters', () => {
+    it('defaults invalidateCache to false when omitted (PAR-29)', () => {
       const success = jest.fn();
       const error = jest.fn();
 
@@ -916,7 +982,22 @@ describe('Purchasely', () => {
         expect.any(Function),
         'Purchasely',
         'userSubscriptionsHistory',
-        []
+        [false]
+      );
+    });
+
+    it('forwards an explicit invalidateCache value', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.userSubscriptionsHistory(success, error, true);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        success,
+        expect.any(Function),
+        'Purchasely',
+        'userSubscriptionsHistory',
+        [true]
       );
     });
   });
@@ -935,15 +1016,38 @@ describe('Purchasely', () => {
     });
   });
 
-  describe('closePresentation', () => {
+  describe('closeAllScreens', () => {
     it('should call exec with correct parameters', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.closeAllScreens(success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'closeAllScreens', []);
+    });
+
+    it('should default callbacks when none provided', () => {
+      Purchasely.closeAllScreens();
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'closeAllScreens',
+        []
+      );
+    });
+  });
+
+  describe('closePresentation (deprecated alias of closeAllScreens)', () => {
+    it('should delegate to closeAllScreens', () => {
       Purchasely.closePresentation();
 
       expect(mockExec).toHaveBeenCalledWith(
         expect.any(Function),
         expect.any(Function),
         'Purchasely',
-        'closePresentation',
+        'closeAllScreens',
         []
       );
     });
@@ -1142,6 +1246,79 @@ describe('Purchasely', () => {
         );
       });
     });
+
+    describe('getBuiltInAttributes (PAR-07)', () => {
+      it('should call exec with correct parameters', () => {
+        const success = jest.fn();
+        const error = jest.fn();
+
+        Purchasely.getBuiltInAttributes(success, error);
+
+        expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'getBuiltInAttributes', []);
+      });
+    });
+
+    describe('getBuiltInAttribute (PAR-07)', () => {
+      it('should call exec with correct parameters', () => {
+        const success = jest.fn();
+        const error = jest.fn();
+
+        Purchasely.getBuiltInAttribute('ply_session_count', success, error);
+
+        expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'getBuiltInAttribute', ['ply_session_count']);
+      });
+    });
+
+    describe('userAttributes (REC-12 / PAR-03)', () => {
+      it('should call exec with correct parameters', () => {
+        const success = jest.fn();
+        const error = jest.fn();
+
+        Purchasely.userAttributes(success, error);
+
+        expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'userAttributes', []);
+      });
+    });
+
+    describe('incrementUserAttribute (REC-12 / PAR-02)', () => {
+      it('should call exec with correct parameters', () => {
+        Purchasely.incrementUserAttribute('counter', 5);
+
+        expect(mockExec).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.any(Function),
+          'Purchasely',
+          'incrementUserAttribute',
+          ['counter', 5]
+        );
+      });
+
+      it('should forward an omitted value as-is (native defaults it to 1)', () => {
+        Purchasely.incrementUserAttribute('counter');
+
+        expect(mockExec).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.any(Function),
+          'Purchasely',
+          'incrementUserAttribute',
+          ['counter', undefined]
+        );
+      });
+    });
+
+    describe('decrementUserAttribute (REC-12 / PAR-02)', () => {
+      it('should call exec with correct parameters', () => {
+        Purchasely.decrementUserAttribute('counter', 3);
+
+        expect(mockExec).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.any(Function),
+          'Purchasely',
+          'decrementUserAttribute',
+          ['counter', 3]
+        );
+      });
+    });
   });
 
   describe('isEligibleForIntroOffer', () => {
@@ -1211,6 +1388,76 @@ describe('Purchasely', () => {
         'setDebugMode',
         [true]
       );
+    });
+  });
+
+  describe('Dynamic Offerings (PAR-05)', () => {
+    describe('setDynamicOffering', () => {
+      it('should call exec with correct parameters', () => {
+        const success = jest.fn();
+        const error = jest.fn();
+
+        Purchasely.setDynamicOffering('ref_1', 'plan_vendor_id', 'offer_vendor_id', success, error);
+
+        expect(mockExec).toHaveBeenCalledWith(
+          success,
+          error,
+          'Purchasely',
+          'setDynamicOffering',
+          ['ref_1', 'plan_vendor_id', 'offer_vendor_id']
+        );
+      });
+
+      it('should forward a null offerVendorId when none is given', () => {
+        Purchasely.setDynamicOffering('ref_1', 'plan_vendor_id', null, jest.fn(), jest.fn());
+
+        expect(mockExec).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.any(Function),
+          'Purchasely',
+          'setDynamicOffering',
+          ['ref_1', 'plan_vendor_id', null]
+        );
+      });
+    });
+
+    describe('getDynamicOfferings', () => {
+      it('should call exec with correct parameters', () => {
+        const success = jest.fn();
+        const error = jest.fn();
+
+        Purchasely.getDynamicOfferings(success, error);
+
+        expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'getDynamicOfferings', []);
+      });
+    });
+
+    describe('removeDynamicOffering', () => {
+      it('should call exec with correct parameters', () => {
+        Purchasely.removeDynamicOffering('ref_1');
+
+        expect(mockExec).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.any(Function),
+          'Purchasely',
+          'removeDynamicOffering',
+          ['ref_1']
+        );
+      });
+    });
+
+    describe('clearDynamicOfferings', () => {
+      it('should call exec with correct parameters', () => {
+        Purchasely.clearDynamicOfferings();
+
+        expect(mockExec).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.any(Function),
+          'Purchasely',
+          'clearDynamicOfferings',
+          []
+        );
+      });
     });
   });
 

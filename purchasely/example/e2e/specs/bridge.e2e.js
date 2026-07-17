@@ -57,13 +57,13 @@ describe('Purchasely bridge (WEBVIEW context)', () => {
     expect(res.value).toBe(7);
   });
 
-  // user-attribute round-trip, boolean variant (see CDV-W-09: Android returns 0/1,
-  // iOS returns a real boolean -- assert loosely on truthiness rather than strict type).
+  // user-attribute round-trip, boolean variant (CDV-W-09 fixed: both platforms now
+  // return a real JSON boolean, so this asserts strict equality, not just truthiness).
   it('setUserAttributeWithBoolean then userAttribute round-trips', async () => {
     await callBridge('setUserAttributeWithBoolean', ['e2e_key_bool', true, 'ESSENTIAL']);
     const res = await callBridge('userAttribute', ['e2e_key_bool']);
     expect(res.ok).toBe(true);
-    expect(res.value).toBeTruthy();
+    expect(res.value).toBe(true);
   });
 
   // userSubscriptions on a fresh anonymous user: no purchases exist, so this must

@@ -8,13 +8,16 @@ var defaultError = (e) => { console.log(e); }
 //   - a full transition object { type, dismissible?, width?, height?, backgroundColor? }
 //     where width/height are { type: 'pixel'|'percentage', value: Number } (width is
 //     popin-only, height drives drawer+popin) and backgroundColor is a hex string.
-// Always returns a transition object for the native bridge.
+// CDV-W-12: when no displayMode is given, sends undefined (not a forced fullScreen
+// default) so both natives' nil/null handling honors the backend-configured transition
+// for that placement/screen, as documented in their own displayModeFromTransition /
+// transitionFromMap helpers.
 function normalizeTransition(mode) {
     if (mode === true) return { type: 'fullScreen' };
     if (mode === false) return { type: 'modal' };
     if (typeof mode === 'string') return { type: mode };
     if (mode && typeof mode === 'object' && mode.type) return mode;
-    return { type: 'fullScreen' };
+    return undefined;
 }
 
 // Wire a present* command's callback stream. Purchasely 6.0 emits presentation
@@ -62,6 +65,14 @@ exports.start = function (options, success, error) {
     exec(success, error, 'Purchasely', 'start', [opts]);
 };
 
+// REC-18 / PAR-18: addEventListener is the canonical name (matches RN's naming).
+// addEventsListener (plural "Events", the original Cordova-only spelling) is kept as a
+// deprecated alias.
+exports.addEventListener = function (success, error) {
+    exec(success, error, 'Purchasely', 'addEventsListener', []);
+};
+
+// @deprecated use addEventListener instead.
 exports.addEventsListener = function (success, error) {
     exec(success, error, 'Purchasely', 'addEventsListener', []);
 };
@@ -74,6 +85,12 @@ exports.removeUserAttributeListener = function () {
     exec(() => {}, defaultError, 'Purchasely', 'removeUserAttributeListener', []);
 };
 
+// REC-18 / PAR-18: canonical name, paired with addEventListener.
+exports.removeEventListener = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'removeEventsListener', []);
+};
+
+// @deprecated use removeEventListener instead.
 exports.removeEventsListener = function () {
     exec(() => {}, defaultError, 'Purchasely', 'removeEventsListener', []);
 };
@@ -86,8 +103,11 @@ exports.userLogin = function (userId, success) {
     exec(success, defaultError, 'Purchasely', 'userLogin', [userId]);
 };
 
-exports.userLogout = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'userLogout', []);
+// PAR-30: clearUserAttributes controls whether logout also clears locally cached user
+// attributes (native default true on both platforms).
+exports.userLogout = function (clearUserAttributes) {
+    var clear = clearUserAttributes === undefined ? true : clearUserAttributes;
+    exec(() => {}, defaultError, 'Purchasely', 'userLogout', [clear]);
 };
 
 exports.setLogLevel = function (logLevel) {
@@ -244,21 +264,30 @@ exports.userDidConsumeSubscriptionContent = function () {
     exec(() => {}, defaultError, 'Purchasely', 'userDidConsumeSubscriptionContent', []);
 };
 
-exports.userSubscriptions = function (success, error) {
-    exec(success, defaultError, 'Purchasely', 'userSubscriptions', []);
+// PAR-29: invalidateCache forces a fresh fetch instead of returning the cached list
+// (native default false on both platforms).
+exports.userSubscriptions = function (success, error, invalidateCache) {
+    exec(success, defaultError, 'Purchasely', 'userSubscriptions', [!!invalidateCache]);
 };
 
-exports.userSubscriptionsHistory = function (success, error) {
-    exec(success, defaultError, 'Purchasely', 'userSubscriptionsHistory', []);
+exports.userSubscriptionsHistory = function (success, error, invalidateCache) {
+    exec(success, defaultError, 'Purchasely', 'userSubscriptionsHistory', [!!invalidateCache]);
 };
 
 exports.setLanguage = function (language) {
     exec(() => {}, defaultError, 'Purchasely', 'setLanguage', [language]);
 };
 
-// Purchasely 6.0: close the displayed presentation.
-exports.closePresentation = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'closePresentation', []);
+// PAR-19: closeAllScreens is the canonical name (matches the iOS/Android Purchasely-level
+// API). success/error are optional.
+exports.closeAllScreens = function (success, error) {
+    exec(success || (() => {}), error || defaultError, 'Purchasely', 'closeAllScreens', []);
+};
+
+// @deprecated use closeAllScreens instead; kept as an alias (same native action both
+// platforms already call: Purchasely.closeAllScreens()).
+exports.closePresentation = function (success, error) {
+    exports.closeAllScreens(success, error);
 };
 
 // Purchasely 6.0: navigate back within the displayed presentation.
@@ -306,6 +335,22 @@ exports.userAttribute = function (key, success, error) {
     exec(success, error, 'Purchasely', 'userAttribute', [key]);
 };
 
+// REC-12 / PAR-03: bulk read of every user attribute currently stored, with the same
+// per-value type conversions as the single-key userAttribute(key) read.
+exports.userAttributes = function (success, error) {
+    exec(success, error || defaultError, 'Purchasely', 'userAttributes', []);
+};
+
+// REC-12 / PAR-02: increment/decrement a numerical user attribute. value defaults to 1
+// natively when omitted.
+exports.incrementUserAttribute = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'incrementUserAttribute', [key, value]);
+};
+
+exports.decrementUserAttribute = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'decrementUserAttribute', [key, value]);
+};
+
 exports.clearUserAttribute = function (key) {
     exec(() => {}, defaultError, 'Purchasely', 'clearUserAttribute', [key]);
 };
@@ -318,10 +363,45 @@ exports.clearBuiltInAttributes = function () {
     exec(() => {}, defaultError, 'Purchasely', 'clearBuiltInAttributes', []);
 }
 
+// PAR-07: read-only accessors for the built-in (SDK-collected) attributes.
+exports.getBuiltInAttributes = function (success, error) {
+    exec(success, error || defaultError, 'Purchasely', 'getBuiltInAttributes', []);
+};
+
+exports.getBuiltInAttribute = function (key, success, error) {
+    exec(success, error || defaultError, 'Purchasely', 'getBuiltInAttribute', [key]);
+};
+
+// REC-12 / PAR-04: whether the current user is anonymous (no userLogin call yet).
+exports.isAnonymous = function (success, error) {
+    exec(success, error || defaultError, 'Purchasely', 'isAnonymous', []);
+};
+
+// PAR-05: Dynamic Offerings -- force a specific plan (and optionally offer) to be shown
+// in a specific context, keyed by an app-chosen reference.
+exports.setDynamicOffering = function (reference, planVendorId, offerVendorId, success, error) {
+    exec(success || (() => {}), error || defaultError, 'Purchasely', 'setDynamicOffering', [reference, planVendorId, offerVendorId]);
+};
+
+// Returns a list of { reference, planVendorId, offerVendorId }.
+exports.getDynamicOfferings = function (success, error) {
+    exec(success, error || defaultError, 'Purchasely', 'getDynamicOfferings', []);
+};
+
+exports.removeDynamicOffering = function (reference) {
+    exec(() => {}, defaultError, 'Purchasely', 'removeDynamicOffering', [reference]);
+};
+
+exports.clearDynamicOfferings = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'clearDynamicOfferings', []);
+};
+
 exports.isEligibleForIntroOffer = function (planId, success, error) {
     exec(success, error, 'Purchasely', 'isEligibleForIntroOffer', [planId]);
 };
 
+// REC-04: iOS-only (StoreKit promotional offer signing). On Android this is a no-op that
+// resolves success (no signing is required there); no error is raised.
 exports.signPromotionalOffer = function (storeProductId, storeOfferId, success, error) {
     exec(success, error, 'Purchasely', 'signPromotionalOffer', [storeProductId, storeOfferId]);
 };
@@ -367,6 +447,10 @@ exports.Attribute = {
   MOENGAGE_UNIQUE_ID: 18,
   ONESIGNAL_EXTERNAL_ID: 19,
   BATCH_CUSTOM_USER_ID: 20,
+  // ENM-02 / REC-11: keep this list, iOS's CordovaPLYAttribute, and Android's
+  // CordovaPLYAttribute enum class in strictly identical declaration order -- the bridge
+  // matches by ordinal/symbol position, not by real native raw value.
+  ONESIGNAL_USER_ID: 21,
 }
 
 exports.DataProcessingLegalBasis = {
