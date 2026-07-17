@@ -118,9 +118,9 @@ const presentation = await request.preload();   // screenId is authoritative
 const outcome = await request.display();
 ```
 
-> Android limitation, unchanged from the previous bridge: `onPresented` /
-> `onCloseRequested` do not fire on the `preload()` → `display()` re-display path (iOS
-> fires them on both paths). The final outcome always resolves on both platforms.
+> `onPresented` / `onCloseRequested` fire on the `preload()` → `display()` re-display
+> path on both platforms (matching the direct `display()` path). The final outcome always
+> resolves on both platforms.
 
 ### Display transitions
 
@@ -174,9 +174,8 @@ const request = Purchasely.presentation.placement('ONBOARDING')
 await request.display();
 ```
 
-> `onPresented` / `onCloseRequested` fire for the direct `display()` path on both
-> platforms; on Android they do not fire for the `preload()` → `display()` re-display path
-> (iOS fires them on both paths).
+> `onPresented` / `onCloseRequested` fire on both the direct `display()` path and the
+> `preload()` → `display()` re-display path, on both platforms.
 
 ### Close / back
 
