@@ -72,8 +72,10 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
 
     // Presentation currently displayed (used for back()/close()).
     private var displayedPresentation: PLYPresentationBase.Loaded? = null
-    // Presentations preloaded by fetchPresentation, keyed by a synthetic handle
-    // (the "id" we send back to JS) so presentPresentation can re-display them.
+    // Presentations preloaded by fetchPresentation, keyed by a synthetic handle sent back to
+    // JS under the private `fetchId` key (NOT `id` -- `screenId` is the authoritative public
+    // presentation identifier; `fetchId` is an internal re-display lookup key, never documented
+    // as public API) so presentPresentation can re-display them.
     private val loadedPresentations = ConcurrentHashMap<String, PLYPresentationBase.Loaded>()
 
     override fun onDestroy() {
@@ -619,10 +621,12 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 }
                 val loaded = builder.build().preload()
                 // Synthetic handle so presentPresentation can re-display this preloaded presentation.
+                // Private re-display key: `fetchId`, NOT `id` -- `screenId` (already set by
+                // presentationToMap) is the sole authoritative public identifier.
                 val handle = "ply_fetch_${System.nanoTime()}"
                 loadedPresentations[handle] = loaded
                 val map = presentationToMap(loaded).toMutableMap()
-                map["id"] = handle
+                map["fetchId"] = handle
                 callbackContext.success(JSONObject(map))
             } catch (t: Throwable) {
                 callbackContext.error(t.message ?: "Unable to fetch presentation")
@@ -639,7 +643,13 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
             return
         }
 
-        val handle = if (presentationMap.has("id")) presentationMap.optString("id") else null
+        // Private re-display key: `fetchId` (see fetchPresentation above). `id` is tolerated
+        // as an internal belt-and-braces fallback only -- never a documented public key.
+        val handle = when {
+            presentationMap.has("fetchId") -> presentationMap.optString("fetchId")
+            presentationMap.has("id") -> presentationMap.optString("id")
+            else -> null
+        }
         val loaded = handle?.let { loadedPresentations[it] }
         if (loaded == null) {
             callbackContext.error("presentation cannot be found")

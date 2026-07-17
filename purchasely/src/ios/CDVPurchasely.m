@@ -1409,10 +1409,13 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
     if (presentation != nil) {
 
         if (presentation.screenId != nil) {
-            // CDV-W-03: `id` is kept for compatibility (and because findPresentationLoadedFor:/
-            // findIndexPresentationLoadedFor: key their re-display lookup on it); `screenId` is
-            // added to match Android's presentationToMap() key so shared JS can read either
-            // platform consistently.
+            // `screenId` is the sole authoritative, public presentation identifier (matches
+            // Android's presentationToMap() key, so shared JS reads either platform the same
+            // way). `id` is kept ONLY as a private/internal re-display lookup key --
+            // findPresentationLoadedFor:/findIndexPresentationLoadedFor: key off it, and on
+            // this platform it always equals screenId (iOS has no separate synthetic fetch
+            // handle, unlike Android's `fetchId`) -- it is NOT a documented public field; the
+            // JS bridge normalizes with `screenId ?? id` tolerance and never surfaces `id`.
             [presentationResult setObject:presentation.screenId forKey:@"id"];
             [presentationResult setObject:presentation.screenId forKey:@"screenId"];
         }
