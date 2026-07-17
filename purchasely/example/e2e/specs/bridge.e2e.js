@@ -1,7 +1,7 @@
 // Deterministic Dart<->native bridge assertions (no native taps). HARD gate — these
 // must pass. Mirrors the Flutter E2E_TEST_INDEX suite T1/T3/T5/T6 adapted to the
 // Cordova imperative API.
-const { waitForPurchaselyReady, callBridge } = require('../helpers/driver');
+const { waitForPurchaselyReady, callBridge, callPresentation } = require('../helpers/driver');
 
 const PLACEMENT = process.env.PURCHASELY_E2E_PLACEMENT || 'ONBOARDING';
 
@@ -25,13 +25,17 @@ describe('Purchasely bridge (WEBVIEW context)', () => {
     expect(Array.isArray(res.value)).toBe(true);
   });
 
-  // T3 — preload a presentation for a placement
-  it('fetchPresentationForPlacement returns a presentation object', async () => {
-    const res = await callBridge('fetchPresentationForPlacement', [PLACEMENT, null]);
+  // T3 — preload a presentation for a placement (was fetchPresentationForPlacement;
+  // now Purchasely.presentation.placement(id).build().preload())
+  it('presentation.placement(...).build().preload() returns a presentation object', async () => {
+    const res = await callPresentation('placement', PLACEMENT, 'preload');
     expect(res.ok).toBe(true);
     expect(res.value).toBeDefined();
-    // v6 presentation carries an id/type so it can later be displayed.
+    // v6 presentation normalizes screenId as the authoritative identifier.
     expect(res.value === null || typeof res.value === 'object').toBe(true);
+    if (res.value) {
+      expect(typeof res.value.screenId).toBe('string');
+    }
   });
 
   // T6 — synchronize now reports completion (v6 change). On a bare emulator/simulator
