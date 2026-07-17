@@ -143,39 +143,191 @@ exports.synchronize = function (success, error) {
     exec(success || (() => {}), error || defaultError, 'Purchasely', 'synchronize', []);
 };
 
-// present* methods: `displayMode` accepts a mode string, a legacy boolean, or a
-// full transition object (see normalizeTransition). `callbacks` is optional and
-// may carry { onPresented(presentation, error), onCloseRequested() }; `success`
-// still receives the final dismiss outcome.
-exports.presentPresentationWithIdentifier = function (presentationId, contentId, displayMode, success, error, callbacks) {
-    exec(presentationDispatcher(success, callbacks), error, 'Purchasely', 'presentPresentationWithIdentifier', [presentationId, contentId, normalizeTransition(displayMode)]);
+// Purchasely 6.0: the v5 presentation surface (fetchPresentation*, present-
+// Presentation*, presentPresentation, backPresentation) is REMOVED, not
+// deprecated -- replaced by the v6 builder below (parity with the React
+// Native/Flutter SDKs; see MIGRATION-v6.md). It re-wraps the very same native
+// exec actions used by v5 (fetchPresentation, presentPresentation,
+// presentPresentationWithIdentifier/ForPlacement/ForDefault, backPresentation,
+// closeAllScreens): no new native action is introduced.
+//
+//   Purchasely.presentation.placement(id) | .screen(id) | .defaultSource()  // alias: .default()
+//     .contentId(id)
+//     .onPresented(cb) / .onCloseRequested(cb) / .onDismissed(cb)
+//     .build()
+//       .preload()             -> Promise<presentation>            (screenId is authoritative)
+//       .display(transition?)  -> Promise<outcome>                 ({ presentation, purchaseResult, plan, closeReason, error })
+//       .close()               -> closeAllScreens()
+//       .back()                -> navigate back within the displayed presentation
+//
+// screenId is authoritative: normalizePresentation always resolves it (tolerating
+// a raw `id` fallback) and only exposes the documented presentation fields. Any
+// native re-display handle (Android's synthetic fetchId; iOS's internal `id`,
+// which already equals screenId there) never leaves the private `_raw` field
+// kept on the request -- it is not part of the presentation object handed back
+// to callers.
+
+function normalizeError(error) {
+    if (error === undefined || error === null) return null;
+    if (typeof error === 'object' && error.message) return error;
+    return { message: String(error) };
+}
+
+function normalizePresentation(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    var screenId = raw.screenId != null ? raw.screenId : raw.id;
+    if (screenId == null) return null;
+    return {
+        screenId: screenId,
+        placementId: raw.placementId != null ? raw.placementId : null,
+        contentId: raw.contentId != null ? raw.contentId : null,
+        audienceId: raw.audienceId != null ? raw.audienceId : null,
+        abTestId: raw.abTestId != null ? raw.abTestId : null,
+        abTestVariantId: raw.abTestVariantId != null ? raw.abTestVariantId : null,
+        campaignId: raw.campaignId != null ? raw.campaignId : null,
+        flowId: raw.flowId != null ? raw.flowId : null,
+        language: raw.language != null ? raw.language : null,
+        type: raw.type != null ? raw.type : null,
+        plans: raw.plans != null ? raw.plans : null,
+        metadata: raw.metadata != null ? raw.metadata : null,
+        height: raw.height != null ? raw.height : null
+    };
+}
+
+function normalizeOutcome(raw) {
+    raw = raw || {};
+    return {
+        presentation: normalizePresentation(raw.presentation),
+        purchaseResult: raw.purchaseResult != null ? raw.purchaseResult : null,
+        plan: raw.plan != null ? raw.plan : null,
+        closeReason: raw.closeReason != null ? raw.closeReason : null,
+        error: raw.error != null ? raw.error : null
+    };
+}
+
+// A single presentation request: preload it (fetch without display), display it
+// (resolves at dismiss with a 5-field outcome), close it, or navigate back. Calling
+// `display()` after `preload()` re-displays the exact presentation that was fetched
+// (via the native presentPresentation action, carrying its private re-display
+// handle); `display()` alone (no prior preload) fetches and displays directly
+// through the present* action matching this request's source.
+function PLYPresentationRequest(config) {
+    this._config = config; // { placementId?, screenId?, contentId?, callbacks }
+    this._raw = null; // private: native fetch payload (carries the re-display handle)
+}
+
+PLYPresentationRequest.prototype.preload = function () {
+    var self = this;
+    return new Promise(function (resolve, reject) {
+        exec(function (raw) {
+            self._raw = raw;
+            resolve(normalizePresentation(raw));
+        }, function (error) {
+            reject(normalizeError(error));
+        }, 'Purchasely', 'fetchPresentation', [
+            self._config.placementId || null,
+            self._config.screenId || null,
+            self._config.contentId || null
+        ]);
+    });
 };
 
-exports.presentPresentationForPlacement = function (placementId, contentId, displayMode, success, error, callbacks) {
-    exec(presentationDispatcher(success, callbacks), error, 'Purchasely', 'presentPresentationForPlacement', [placementId, contentId, normalizeTransition(displayMode)]);
+PLYPresentationRequest.prototype.display = function (transition) {
+    var self = this;
+    var callbacks = this._config.callbacks;
+    var normalizedTransition = normalizeTransition(transition);
+
+    return new Promise(function (resolve) {
+        function settle(rawOutcome) {
+            var outcome = normalizeOutcome(rawOutcome);
+            if (callbacks.onDismissed) callbacks.onDismissed(outcome);
+            resolve(outcome);
+        }
+        var dispatch = presentationDispatcher(settle, {
+            onPresented: callbacks.onPresented,
+            onCloseRequested: callbacks.onCloseRequested
+        });
+        function onNativeError(error) {
+            var normalized = normalizeError(error);
+            settle({ error: normalized ? normalized.message : 'Unable to display presentation' });
+        }
+
+        if (self._raw) {
+            // Re-display the presentation preloaded by preload() -- same native
+            // 'presentPresentation' action v5 used, carrying its private handle.
+            exec(dispatch, onNativeError, 'Purchasely', 'presentPresentation', [self._raw, normalizedTransition, null]);
+        } else if (self._config.screenId) {
+            exec(dispatch, onNativeError, 'Purchasely', 'presentPresentationWithIdentifier',
+                [self._config.screenId, self._config.contentId || null, normalizedTransition]);
+        } else if (self._config.placementId) {
+            exec(dispatch, onNativeError, 'Purchasely', 'presentPresentationForPlacement',
+                [self._config.placementId, self._config.contentId || null, normalizedTransition]);
+        } else {
+            exec(dispatch, onNativeError, 'Purchasely', 'presentPresentationForDefault',
+                [self._config.contentId || null, normalizedTransition]);
+        }
+    });
 };
 
-// Purchasely 6.0: present the default (audience-targeted) presentation, with no
-// placement or presentation id (mirrors the native default presentation source).
-exports.presentPresentationForDefault = function (contentId, displayMode, success, error, callbacks) {
-    exec(presentationDispatcher(success, callbacks), error, 'Purchasely', 'presentPresentationForDefault', [contentId, normalizeTransition(displayMode)]);
+// Purchasely 6.0: dismisses via the same native action as the top-level
+// Purchasely.closeAllScreens() / closePresentation() (current bridge semantics:
+// closes every displayed screen, not just this request's).
+PLYPresentationRequest.prototype.close = function () {
+    exports.closeAllScreens();
 };
 
-exports.fetchPresentation = function (presentationId, contentId, success, error) {
-    exec(success, error, 'Purchasely', 'fetchPresentation', [null, presentationId, contentId]);
+// Purchasely 6.0: navigate back within the displayed presentation (was the
+// standalone Purchasely.backPresentation(), now request-scoped).
+PLYPresentationRequest.prototype.back = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'backPresentation', []);
 };
 
-exports.fetchPresentationForPlacement = function (placementId, contentId, success, error) {
-    exec(success, error, 'Purchasely', 'fetchPresentation', [placementId, null, contentId]);
+function PLYPresentationBuilder(config) {
+    this._config = config; // { placementId?, screenId?, contentId?, callbacks }
+}
+
+PLYPresentationBuilder.prototype.contentId = function (id) {
+    this._config.contentId = id;
+    return this;
 };
 
-// Purchasely 6.0: fetch the default (audience-targeted) presentation.
-exports.fetchPresentationForDefault = function (contentId, success, error) {
-    exec(success, error, 'Purchasely', 'fetchPresentation', [null, null, contentId]);
+PLYPresentationBuilder.prototype.onPresented = function (handler) {
+    this._config.callbacks.onPresented = handler;
+    return this;
 };
 
-exports.presentPresentation = function (presentation, displayMode, backgroundColor, success, error, callbacks) {
-    exec(presentationDispatcher(success, callbacks), error, 'Purchasely', 'presentPresentation', [presentation, normalizeTransition(displayMode), backgroundColor]);
+PLYPresentationBuilder.prototype.onCloseRequested = function (handler) {
+    this._config.callbacks.onCloseRequested = handler;
+    return this;
+};
+
+PLYPresentationBuilder.prototype.onDismissed = function (handler) {
+    this._config.callbacks.onDismissed = handler;
+    return this;
+};
+
+PLYPresentationBuilder.prototype.build = function () {
+    return new PLYPresentationRequest(this._config);
+};
+
+// Purchasely 6.0: the v6 presentation builder (parity with the React Native /
+// Flutter Purchasely.presentation). Pick exactly one source, chain
+// .contentId() / .onPresented() / .onCloseRequested() / .onDismissed(), then
+// .build().
+exports.presentation = {
+    placement: function (placementId) {
+        return new PLYPresentationBuilder({ placementId: placementId, callbacks: {} });
+    },
+    screen: function (screenId) {
+        return new PLYPresentationBuilder({ screenId: screenId, callbacks: {} });
+    },
+    defaultSource: function () {
+        return new PLYPresentationBuilder({ callbacks: {} });
+    },
+    // Alias of defaultSource(), kept for parity with the iOS native API name.
+    default: function () {
+        return exports.presentation.defaultSource();
+    }
 };
 
 exports.purchaseWithPlanVendorId = function (planId, offerId, contentId, success, error) {
@@ -288,11 +440,6 @@ exports.closeAllScreens = function (success, error) {
 // platforms already call: Purchasely.closeAllScreens()).
 exports.closePresentation = function (success, error) {
     exports.closeAllScreens(success, error);
-};
-
-// Purchasely 6.0: navigate back within the displayed presentation.
-exports.backPresentation = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'backPresentation', []);
 };
 
 exports.setUserAttributeWithString = function (key, value, processLegalBasis) {
