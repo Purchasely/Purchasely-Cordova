@@ -672,7 +672,8 @@ describe('Purchasely', () => {
 
         const outcome = await outcomePromise;
 
-        expect(onPresented).toHaveBeenCalledWith({ screenId: 's' }, null);
+        // The 'presented' envelope's presentation is screenId-normalized like everywhere else.
+        expect(onPresented).toHaveBeenCalledWith(fullPresentation({ screenId: 's' }), null);
         expect(onCloseRequested).toHaveBeenCalledTimes(1);
         expect(onDismissed).toHaveBeenCalledWith(outcome);
         expect(outcome).toEqual({
@@ -785,6 +786,53 @@ describe('Purchasely', () => {
         fetchCall[1]('Screen not found');
 
         await expect(preloadPromise).rejects.toEqual({ message: 'Screen not found' });
+      });
+
+      // Android asymmetry regression (v6 audit): onPresented/onCloseRequested previously only
+      // fired on the direct present* path. The re-display action (presentPresentation, reached
+      // via preload() -> display()) must route the very same keep-alive envelopes to the
+      // builder's callbacks, resolving the display() Promise only once the final (non-kept)
+      // outcome envelope arrives -- envelopes strictly before resolution.
+      it('routes presented/closeRequested envelopes on the preload() -> display() path too, resolving only at the final outcome', async () => {
+        const onPresented = jest.fn();
+        const onCloseRequested = jest.fn();
+        const order = [];
+        onPresented.mockImplementation(() => order.push('presented'));
+        onCloseRequested.mockImplementation(() => order.push('closeRequested'));
+
+        const request = Purchasely.presentation
+          .screen('screen1')
+          .onPresented(onPresented)
+          .onCloseRequested(onCloseRequested)
+          .build();
+
+        const preloadPromise = request.preload();
+        const rawFetched = { screenId: 'screen1', fetchId: 'ply_fetch_789' };
+        execCallFor('fetchPresentation')[0](rawFetched);
+        await preloadPromise;
+
+        const outcomePromise = request.display();
+        const displayCall = execCallFor('presentPresentation');
+        const dispatch = displayCall[0];
+
+        dispatch({ event: 'presented', presentation: { screenId: 'screen1' } });
+        dispatch({ event: 'closeRequested' });
+        expect(order).toEqual(['presented', 'closeRequested']);
+        // Neither envelope resolves the Promise -- only the final outcome does.
+        let settled = false;
+        outcomePromise.then(() => { settled = true; });
+        await Promise.resolve();
+        expect(settled).toBe(false);
+        order.push('outcome-dispatched');
+
+        dispatch({ closeReason: 'button', presentation: { screenId: 'screen1' } });
+        const outcome = await outcomePromise;
+
+        // Envelopes fired strictly before the Promise resolved.
+        expect(order).toEqual(['presented', 'closeRequested', 'outcome-dispatched']);
+        expect(onPresented).toHaveBeenCalledWith(fullPresentation({ screenId: 'screen1' }), null);
+        expect(onCloseRequested).toHaveBeenCalledTimes(1);
+        expect(outcome.closeReason).toBe('button');
       });
     });
 

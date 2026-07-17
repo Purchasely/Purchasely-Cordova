@@ -20,16 +20,20 @@ function normalizeTransition(mode) {
     return undefined;
 }
 
-// Wire a present* command's callback stream. Purchasely 6.0 emits presentation
-// lifecycle events during display: the native side sends keep-alive envelopes
-// { event: 'presented', presentation } and { event: 'closeRequested' }, then the
+// Wire a present* command's callback stream -- used identically for the direct present*
+// actions and for the preload() -> display() re-display path (native `presentPresentation`),
+// so both surface the same lifecycle regardless of how display() was reached. Purchasely 6.0
+// emits presentation lifecycle events during display: the native side sends keep-alive
+// envelopes { event: 'presented', presentation } and { event: 'closeRequested' }, then the
 // dismiss OUTCOME (which has no `event` key) as the final, non-kept callback.
-// `callbacks` may carry onPresented(presentation, error) and onCloseRequested().
+// `callbacks` may carry onPresented(presentation, error) and onCloseRequested(). The
+// 'presented' envelope's presentation is screenId-normalized like everywhere else (preload(),
+// outcome.presentation) -- never the raw native payload.
 function presentationDispatcher(success, callbacks) {
     callbacks = callbacks || {};
     return function (payload) {
         if (payload && payload.event === 'presented') {
-            if (callbacks.onPresented) callbacks.onPresented(payload.presentation || null, payload.error || null);
+            if (callbacks.onPresented) callbacks.onPresented(normalizePresentation(payload.presentation), payload.error || null);
             return;
         }
         if (payload && payload.event === 'closeRequested') {
