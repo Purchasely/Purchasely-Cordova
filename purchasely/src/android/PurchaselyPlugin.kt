@@ -95,8 +95,9 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 "removeUserAttributeListener" -> removeUserAttributesListener()
                 "removeEventsListener" -> removeEventsListener()
                 "getAnonymousUserId" -> getAnonymousUserId(callbackContext)
+                "isAnonymous" -> isAnonymous(callbackContext)
                 "userLogin" -> userLogin(getStringFromJson(args.getString(0)), callbackContext)
-                "userLogout" -> userLogout()
+                "userLogout" -> userLogout(args.optBoolean(0, true))
                 "setLanguage" -> setLanguage(getStringFromJson(args.getString(0)))
                 "setLogLevel" -> setLogLevel(args.getInt(0))
                 "setThemeMode" -> setThemeMode(args.getInt(0))
@@ -144,8 +145,8 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 )
                 "restoreAllProducts" -> restoreAllProducts(callbackContext)
                 "silentRestoreAllProducts" -> restoreAllProducts(callbackContext)
-                "userSubscriptions" -> userSubscriptions(callbackContext)
-                "userSubscriptionsHistory" -> userSubscriptionsHistory(callbackContext)
+                "userSubscriptions" -> userSubscriptions(args.optBoolean(0, false), callbackContext)
+                "userSubscriptionsHistory" -> userSubscriptionsHistory(args.optBoolean(0, false), callbackContext)
                 "handleDeeplink" -> handleDeeplink(
                     getStringFromJson(args.getString(0)),
                     callbackContext
@@ -172,6 +173,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 "unregisterActionInterceptor" -> unregisterActionInterceptor(getStringFromJson(args.getString(0)))
                 "completeActionInterceptor" -> completeActionInterceptor(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)))
                 "closePresentation" -> closePresentation(callbackContext)
+                "closeAllScreens" -> closePresentation(callbackContext)
                 "backPresentation" -> backPresentation(callbackContext)
                 "userDidConsumeSubscriptionContent" -> userDidConsumeSubscriptionContent()
                 "setUserAttributeWithString" -> setUserAttributeWithString(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), getStringFromJson(args.optString(2)))
@@ -184,13 +186,27 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 "setUserAttributeWithDoubleArray" -> setUserAttributeWithDoubleArray(getStringFromJson(args.getString(0)), args.getJSONArray(1), getStringFromJson(args.optString(2)))
                 "setUserAttributeWithBooleanArray" -> setUserAttributeWithBooleanArray(getStringFromJson(args.getString(0)), args.getJSONArray(1), getStringFromJson(args.optString(2)))
                 "userAttribute" -> userAttribute(getStringFromJson(args.getString(0)), callbackContext)
+                "userAttributes" -> userAttributes(callbackContext)
+                "incrementUserAttribute" -> incrementUserAttribute(getStringFromJson(args.getString(0)), args.optInt(1, 1))
+                "decrementUserAttribute" -> decrementUserAttribute(getStringFromJson(args.getString(0)), args.optInt(1, 1))
                 "clearUserAttribute" -> clearUserAttribute(getStringFromJson(args.getString(0)))
                 "clearUserAttributes" -> clearUserAttributes()
                 "clearBuiltInAttributes" -> clearBuiltInAttributes()
+                "getBuiltInAttributes" -> getBuiltInAttributes(callbackContext)
+                "getBuiltInAttribute" -> getBuiltInAttribute(getStringFromJson(args.getString(0)), callbackContext)
                 "isEligibleForIntroOffer" -> isEligibleForIntroOffer(getStringFromJson(args.getString(0)), callbackContext)
                 "signPromotionalOffer" -> signPromotionalOffer(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), callbackContext)
                 "revokeDataProcessingConsent" -> revokeDataProcessingConsent(args.getJSONArray(0))
                 "setDebugMode" -> setDebugMode(args.getBoolean(0))
+                "setDynamicOffering" -> setDynamicOffering(
+                    getStringFromJson(args.getString(0)),
+                    getStringFromJson(args.getString(1)),
+                    getStringFromJson(args.optString(2)),
+                    callbackContext
+                )
+                "getDynamicOfferings" -> getDynamicOfferings(callbackContext)
+                "removeDynamicOffering" -> removeDynamicOffering(getStringFromJson(args.getString(0)))
+                "clearDynamicOfferings" -> clearDynamicOfferings()
                 else -> return false
             }
         } catch (e: JSONException) {
@@ -371,6 +387,11 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         callbackContext.success(Purchasely.anonymousUserId)
     }
 
+    // REC-12 / PAR-04
+    private fun isAnonymous(callbackContext: CallbackContext) {
+        callbackContext.sendPluginResult(PluginResult(PluginResult.Status.OK, Purchasely.isAnonymous()))
+    }
+
     private fun userLogin(userId: String?, callbackContext: CallbackContext) {
         if(userId == null) {
             callbackContext.sendPluginResult(PluginResult(PluginResult.Status.OK, false))
@@ -382,8 +403,9 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         }
     }
 
-    private fun userLogout() {
-        Purchasely.userLogout(true)
+    // PAR-30: clearUserAttributes defaults to true (matches the JS-side default).
+    private fun userLogout(clearUserAttributes: Boolean) {
+        Purchasely.userLogout(clearUserAttributes)
     }
 
     private fun setLogLevel(logLevel: Int) {
@@ -438,6 +460,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
             CordovaPLYAttribute.moengageUniqueId.ordinal -> Attribute.MOENGAGE_UNIQUE_ID
             CordovaPLYAttribute.oneSignalExternalId.ordinal -> Attribute.ONESIGNAL_EXTERNAL_ID
             CordovaPLYAttribute.batchCustomUserId.ordinal -> Attribute.BATCH_CUSTOM_USER_ID
+            CordovaPLYAttribute.oneSignalUserId.ordinal -> Attribute.ONESIGNAL_USER_ID
             else -> null
         }
 
@@ -494,7 +517,6 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         transition: JSONObject?,
         callbackContext: CallbackContext
     ) {
-        purchaseCallback = callbackContext
         displayPresentation(
             screenId = presentationVendorId,
             placementId = null,
@@ -510,7 +532,6 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         transition: JSONObject?,
         callbackContext: CallbackContext
     ) {
-        purchaseCallback = callbackContext
         displayPresentation(
             screenId = null,
             placementId = placementVendorId,
@@ -526,7 +547,6 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         transition: JSONObject?,
         callbackContext: CallbackContext
     ) {
-        purchaseCallback = callbackContext
         displayPresentation(
             screenId = null,
             placementId = null,
@@ -554,7 +574,9 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                     contentId(contentId)
                     // v6: stream the presentation lifecycle to the JS callback via keep-alive
                     // envelopes; the dismiss outcome is delivered as the final (non-kept)
-                    // result by sendPurchaseResult.
+                    // result, resolved directly against this invocation's own callbackContext
+                    // (CDV-W-07: no shared/global callback slot, so overlapping present* calls
+                    // can never cross-wire, matching iOS's per-invocation closure capture).
                     onPresented { presentation, error ->
                         val env = mutableMapOf<String, Any?>("event" to "presented")
                         presentation?.let { env["presentation"] = presentationToMap(it) }
@@ -572,10 +594,9 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 val loaded = builder.build().preload()
                 displayedPresentation = loaded
                 loaded.display(cordova.activity, transitionFromMap(transition)) { outcome ->
-                    sendPurchaseResult(outcome)
+                    callbackContext.success(JSONObject(outcomeToMap(outcome)))
                 }
             } catch (t: Throwable) {
-                if (purchaseCallback === callbackContext) purchaseCallback = null
                 callbackContext.error(t.message ?: "Unable to present presentation")
             }
         }
@@ -625,16 +646,24 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
             return
         }
 
-        purchaseCallback = callbackContext
         displayedPresentation = loaded
 
         // TODO(v6-verify): loadingBackgroundColor cannot be applied to an already-preloaded
         // presentation in v6 (colors are builder options set before preload). The re-display
         // path delivers the dismiss outcome only; onPresented/onCloseRequested are wired on the
         // direct present* methods (builder-seeded before preload).
-        cordova.activity?.runOnUiThread {
-            loaded.display(cordova.activity, transitionFromMap(transition)) { outcome ->
-                sendPurchaseResult(outcome)
+        //
+        // CDV-W-07: resolve directly against this invocation's own callbackContext (no shared
+        // slot), and fail cleanly instead of silently no-op-ing when there's no activity to
+        // post to (the callback would otherwise never resolve).
+        val activity = cordova.activity
+        if (activity == null) {
+            callbackContext.error("No activity available to display presentation")
+            return
+        }
+        activity.runOnUiThread {
+            loaded.display(activity, transitionFromMap(transition)) { outcome ->
+                callbackContext.success(JSONObject(outcomeToMap(outcome)))
             }
         }
     }
@@ -701,10 +730,11 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         )
     }
 
-    private fun userSubscriptions(callbackContext: CallbackContext) {
+    // PAR-29: invalidateCache defaults to false (exposed from JS; was hardcoded true).
+    private fun userSubscriptions(invalidateCache: Boolean, callbackContext: CallbackContext) {
         launch {
             try {
-                val list = Purchasely.userSubscriptions(true)
+                val list = Purchasely.userSubscriptions(invalidateCache)
                 callbackContext.success(transformSubscriptionsToJson(list))
             } catch (e: Exception) {
                 callbackContext.error(e.message)
@@ -712,15 +742,37 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         }
     }
 
-    private fun userSubscriptionsHistory(callbackContext: CallbackContext) {
+    private fun userSubscriptionsHistory(invalidateCache: Boolean, callbackContext: CallbackContext) {
         launch {
             try {
-                val list = Purchasely.userSubscriptionsHistory(true)
+                val list = Purchasely.userSubscriptionsHistory(invalidateCache)
                 callbackContext.success(transformSubscriptionsToJson(list))
             } catch (e: Exception) {
                 callbackContext.error(e.message)
             }
         }
+    }
+
+    // Hardening for the upcoming rc.4 native release: PLYPlan.toMap()'s raw "type" entry is
+    // moving from an ordinal (Int) to the DistributionType name (String). transformPlanToMap
+    // already overwrites "type" explicitly wherever it's used, but allProducts/
+    // productWithIdentifier/the subscription's nested "product" field pass product.toMap()
+    // straight through -- normalize those raw plan entries so the JS PlanType contract
+    // (an ordinal) stays stable across both native formats. Both formats resolve to the same
+    // ordinal since DistributionType's declared order already matches Purchasely.PlanType.
+    private fun normalizePlanTypeOrdinal(raw: Any?): Int? = when (raw) {
+        is Number -> raw.toInt()
+        is String -> runCatching { DistributionType.valueOf(raw).ordinal }.getOrNull()
+        else -> null
+    }
+
+    private fun normalizeProductPlans(map: Map<String, Any?>): Map<String, Any?> {
+        val plans = map["plans"] as? List<*> ?: return map
+        val normalized = plans.map { plan ->
+            val planMap = plan as? Map<*, *> ?: return@map plan
+            HashMap(planMap).apply { this["type"] = normalizePlanTypeOrdinal(this["type"]) }
+        }
+        return HashMap(map).apply { this["plans"] = normalized }
     }
 
     private fun transformSubscriptionsToJson(list: List<PLYSubscriptionData>): JSONArray {
@@ -728,7 +780,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         for (data in list) {
             val map = HashMap(data.data.toMap())
             map["plan"] = transformPlanToMap(data.plan)
-            map["product"] = data.product.toMap()
+            map["product"] = normalizeProductPlans(data.product.toMap())
             map["subscriptionSource"] = when (data.data.storeType) {
                 StoreType.GOOGLE_PLAY_STORE -> StoreType.GOOGLE_PLAY_STORE.ordinal
                 StoreType.AMAZON_APP_STORE -> StoreType.AMAZON_APP_STORE.ordinal
@@ -764,7 +816,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 val list = Purchasely.allProducts()
                 val result = JSONArray()
                 for (product in list) {
-                    result.put(JSONObject(product.toMap()))
+                    result.put(JSONObject(normalizeProductPlans(product.toMap())))
                 }
                 callbackContext.success(result)
             } catch (e: Exception) {
@@ -782,7 +834,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
             try {
                 val product: PLYProduct? = Purchasely.product(vendorId)
                 if (product != null) {
-                    callbackContext.success(JSONObject(product.toMap()))
+                    callbackContext.success(JSONObject(normalizeProductPlans(product.toMap())))
                 } else {
                     callbackContext.error("No product found with $vendorId")
                 }
@@ -1090,6 +1142,26 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         }
     }
 
+    // REC-12 / PAR-03: bulk read, same per-value conversion as the single-key read above.
+    private fun userAttributes(callbackContext: CallbackContext) {
+        val result = JSONObject()
+        Purchasely.userAttributes().forEach { (key, value) ->
+            result.put(key, getUserAttributeValueForCordova(value))
+        }
+        callbackContext.success(result)
+    }
+
+    // REC-12 / PAR-02
+    private fun incrementUserAttribute(key: String?, value: Int) {
+        if (key == null) return
+        Purchasely.incrementUserAttribute(key, value)
+    }
+
+    private fun decrementUserAttribute(key: String?, value: Int) {
+        if (key == null) return
+        Purchasely.decrementUserAttribute(key, value)
+    }
+
     private fun getUserAttributeValueForCordova(value: Any?): Any? {
         return when (value) {
             is Date -> {
@@ -1134,6 +1206,33 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         Purchasely.clearBuiltInAttributes()
     }
 
+    // PAR-07
+    private fun getBuiltInAttributes(callbackContext: CallbackContext) {
+        val result = JSONObject()
+        Purchasely.getBuiltInAttributes().forEach { (key, value) ->
+            result.put(key, getUserAttributeValueForCordova(value))
+        }
+        callbackContext.success(result)
+    }
+
+    private fun getBuiltInAttribute(key: String?, callbackContext: CallbackContext) {
+        if (key == null) {
+            callbackContext.success()
+            return
+        }
+        val value = getUserAttributeValueForCordova(Purchasely.getBuiltInAttribute(key))
+        when (value) {
+            is JSONArray -> callbackContext.success(value)
+            is String -> callbackContext.success(value)
+            is Int -> callbackContext.success(value)
+            is Double -> callbackContext.sendPluginResult(PluginResult(PluginResult.Status.OK, value.toFloat()))
+            is Boolean -> callbackContext.sendPluginResult(PluginResult(PluginResult.Status.OK, value))
+            // No attribute for this key: resolve success with no value (undefined in JS),
+            // matching iOS's nullable id? return.
+            else -> callbackContext.success()
+        }
+    }
+
     private fun isEligibleForIntroOffer(planId: String?, callbackContext: CallbackContext) {
         launch {
             try {
@@ -1151,6 +1250,42 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
     // calling it unconditionally on both platforms doesn't have to special-case Android.
     private fun signPromotionalOffer(storeProductId: String?, storeOfferId: String?, callbackContext: CallbackContext) {
         callbackContext.success()
+    }
+
+    // PAR-05: Dynamic Offerings. Payload keys (reference/planVendorId/offerVendorId) match
+    // the Cordova JS↔native contract (not the native SDK's own reference/planId/offerId
+    // property names on PLYDynamicOffering).
+    private fun setDynamicOffering(reference: String?, planVendorId: String?, offerVendorId: String?, callbackContext: CallbackContext) {
+        if (reference == null || planVendorId == null) {
+            callbackContext.error("reference and planVendorId are required")
+            return
+        }
+        Purchasely.setDynamicOffering(reference, planVendorId, offerVendorId) { success ->
+            callbackContext.sendPluginResult(PluginResult(PluginResult.Status.OK, success))
+        }
+    }
+
+    private fun getDynamicOfferings(callbackContext: CallbackContext) {
+        Purchasely.getDynamicOfferings { offerings ->
+            val result = JSONArray()
+            offerings.forEach { offering ->
+                result.put(JSONObject(mapOf(
+                    "reference" to offering.reference,
+                    "planVendorId" to offering.planId,
+                    "offerVendorId" to offering.offerId
+                )))
+            }
+            callbackContext.success(result)
+        }
+    }
+
+    private fun removeDynamicOffering(reference: String?) {
+        if (reference == null) return
+        Purchasely.removeDynamicOffering(reference)
+    }
+
+    private fun clearDynamicOfferings() {
+        Purchasely.clearDynamicOfferings()
     }
 
     private fun revokeDataProcessingConsent(purposes: JSONArray?) {
@@ -1182,26 +1317,8 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
 
     companion object {
         var defaultCallback: CallbackContext? = null
-        var purchaseCallback: CallbackContext? = null
         var eventsCallback: CallbackContext? = null
         var attributesCallback: CallbackContext? = null
-
-        // Resolves a present*/presentPresentation call at dismissal. One-shot for the
-        // purchase callback; falls back to the (repeatable) default dismiss handler.
-        fun sendPurchaseResult(outcome: PLYPresentationOutcome) {
-            val json = JSONObject(outcomeToMap(outcome))
-            val oneShot = purchaseCallback
-            if (oneShot != null) {
-                oneShot.success(json)
-                purchaseCallback = null
-                return
-            }
-            defaultCallback?.let {
-                val pluginResult = PluginResult(PluginResult.Status.OK, json)
-                pluginResult.keepCallback = true
-                it.sendPluginResult(pluginResult)
-            }
-        }
 
         // Serializes a v6 PLYPresentationOutcome to the wire contract. `result` is kept as an
         // int (PurchaseResult 0/1/2) for back-compat with the pre-6.0 JS layer.
@@ -1270,7 +1387,8 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         }
     }
 
-    // WARNING: This enum must be strictly identical to the one in the JS side (Purchasely.js).
+    // WARNING: This enum must be strictly identical (same declaration order) to the one in
+    // the JS side (Purchasely.js) and iOS's CordovaPLYAttribute typedef.
     enum class CordovaPLYAttribute {
         firebase_app_instance_id,
         airship_channel_id,
@@ -1293,6 +1411,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         moengageUniqueId,
         oneSignalExternalId,
         batchCustomUserId,
+        oneSignalUserId,
 
         /*
             FIREBASE_APP_INSTANCE_ID: 0,
