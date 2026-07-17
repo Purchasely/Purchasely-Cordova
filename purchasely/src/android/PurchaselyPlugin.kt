@@ -90,7 +90,6 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
             when (action) {
                 "start" -> start(args.getJSONObject(0), callbackContext)
 
-                "close" -> close()
                 "addEventsListener" -> addEventsListener(callbackContext)
                 "addUserAttributeListener" -> addUserAttributesListener(callbackContext)
                 "removeUserAttributeListener" -> removeUserAttributesListener()
@@ -310,17 +309,6 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         return result
     }
 
-    private fun close() {
-        defaultCallback = null
-        purchaseCallback = null
-        actionInterceptorCallbacks.clear()
-        pendingInterceptCompletions.clear()
-        displayedPresentation = null
-        // TODO(v6-verify): the global Purchasely.close() teardown was removed/lumped with
-        // presentation close in v6 (Flutter never calls it). Not invoked here to avoid a
-        // reference to a symbol that may no longer exist.
-    }
-
     private fun addUserAttributesListener(callbackContext: CallbackContext) {
         attributesCallback = callbackContext
         Purchasely.userAttributeListener = object: UserAttributeListener {
@@ -399,7 +387,10 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
     }
 
     private fun setLogLevel(logLevel: Int) {
-        Purchasely.logLevel = LogLevel.values()[logLevel]
+        // CDV-W-13: values()[logLevel] throws ArrayIndexOutOfBoundsException for an
+        // out-of-range value, uncaught by execute()'s JSONException-only catch. Reuse the
+        // already-bounded helper start() relies on.
+        Purchasely.logLevel = logLevelFrom(logLevel)
     }
 
     private fun setLanguage(language: String?) {
@@ -743,6 +734,9 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 StoreType.AMAZON_APP_STORE -> StoreType.AMAZON_APP_STORE.ordinal
                 StoreType.HUAWEI_APP_GALLERY -> StoreType.HUAWEI_APP_GALLERY.ordinal
                 StoreType.APPLE_APP_STORE -> StoreType.APPLE_APP_STORE.ordinal
+                // CDV-W-15: NONE/WEB_CHECKOUT_STRIPE have no JS SubscriptionSource case of
+                // their own; both map to `none` (4), matching iOS's PLYSubscriptionSource.None.
+                StoreType.NONE, StoreType.WEB_CHECKOUT_STRIPE -> 4
                 else -> null
             }
             result.put(JSONObject(map))
@@ -1086,7 +1080,12 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
             is JSONArray -> callbackContext.success(result)
             is String -> callbackContext.success(result)
             is Int -> callbackContext.success(result)
-            is Boolean -> callbackContext.success(if (result) 1 else 0)
+            // CDV-W-06: getUserAttributeValueForCordova converts a Float attribute to a Double
+            // (to preserve precision); this branch was missing, so reading back any
+            // setUserAttributeWithDouble value always fell through to the error case below.
+            is Double -> callbackContext.sendPluginResult(PluginResult(PluginResult.Status.OK, result.toFloat()))
+            // CDV-W-09: send a real JSON boolean (matches iOS) instead of 0/1.
+            is Boolean -> callbackContext.sendPluginResult(PluginResult(PluginResult.Status.OK, result))
             else -> callbackContext.error("No user attribute found with $key")
         }
     }
@@ -1147,8 +1146,11 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         }
     }
 
+    // REC-04: iOS-only feature (StoreKit promotional offer signing). No error on Android by
+    // design (Kevin's call) -- signPromotionalOffer resolves as a no-op success so shared JS
+    // calling it unconditionally on both platforms doesn't have to special-case Android.
     private fun signPromotionalOffer(storeProductId: String?, storeOfferId: String?, callbackContext: CallbackContext) {
-        callbackContext.error("No signing required on Android")
+        callbackContext.success()
     }
 
     private fun revokeDataProcessingConsent(purposes: JSONArray?) {
@@ -1215,7 +1217,11 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
             // v6: also expose the string purchaseResult ('purchased'|'cancelled'|'restored'|null)
             // alongside the legacy int `result`, matching the Flutter outcome contract.
             map["purchaseResult"] = outcome.purchaseResult?.name?.lowercase(Locale.US)
-            map["plan"] = transformPlanToMap(outcome.plan)
+            // CDV-W-05: transformPlanToMap(null) returns {} (not null), so setting the key
+            // unconditionally made a naive `if (outcome.plan)` truthy check on Android but
+            // falsy (key omitted) on iOS for the same no-purchase dismissal. Omit the key
+            // entirely when there is no plan, matching iOS.
+            outcome.plan?.let { map["plan"] = transformPlanToMap(it) }
             map["closeReason"] = outcome.closeReason?.value
             map["error"] = outcome.error?.message
             map["presentation"] = outcome.presentation?.let { presentationToMap(it) }
