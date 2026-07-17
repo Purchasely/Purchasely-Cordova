@@ -144,6 +144,21 @@ await Purchasely.presentation.placement('ONBOARDING').build().display({
 > `backgroundColor`) is applied to drawer/popin — pixel sizing and popin `width` are not
 > exposed to the bridge by the native iOS SDK. **Android** honors the full set.
 
+### Presentation modifiers
+
+`.backgroundColor(hex)` sets the loading/background color:
+
+```js
+await Purchasely.presentation.placement('ONBOARDING').backgroundColor('#101010').build().display();
+```
+
+> It is the only style modifier wired through the Cordova bridge, and it takes effect on
+> **iOS** (passed to `presentPresentation`'s native background argument on the
+> `preload()` → `display()` path, and via the transition on the direct path). On **Android**
+> a background color only applies through a drawer/popin transition (native limitation). The
+> RN/Flutter builder's `progressColor`, `displayCloseButton` and `displayBackButton` are
+> **not** available on Cordova — no native present action accepts them.
+
 ### Lifecycle callbacks
 
 `onPresented` / `onCloseRequested` / `onDismissed` are chained on the builder, before

@@ -610,6 +610,46 @@ describe('Purchasely', () => {
       });
     });
 
+    describe('backgroundColor', () => {
+      it('merges into the transition object on the direct present* path (no forced type)', async () => {
+        const outcomePromise = Purchasely.presentation
+          .placement('placement1')
+          .backgroundColor('#101010')
+          .build()
+          .display();
+
+        const call = execCallFor('presentPresentationForPlacement');
+        // No display-mode given: only backgroundColor, no `type`, so the backend
+        // transition default is still honored (CDV-W-12).
+        expect(call[4][2]).toEqual({ backgroundColor: '#101010' });
+        call[0]({ closeReason: 'button' });
+        await outcomePromise;
+      });
+
+      it('is forwarded as presentPresentation\'s native backgroundColor arg on the re-display path', async () => {
+        const request = Purchasely.presentation.screen('screen1').backgroundColor('#202020').build();
+
+        const preloadPromise = request.preload();
+        const rawFetched = { screenId: 'screen1', fetchId: 'ply_fetch_789' };
+        execCallFor('fetchPresentation')[0](rawFetched);
+        await preloadPromise;
+
+        const outcomePromise = request.display();
+        const displayCall = execCallFor('presentPresentation');
+        expect(displayCall[4][0]).toBe(rawFetched);
+        expect(displayCall[4][2]).toBe('#202020');
+        displayCall[0]({ closeReason: 'programmatic' });
+        await outcomePromise;
+      });
+
+      it('does not expose progressColor / displayCloseButton / displayBackButton (no Cordova native support)', () => {
+        const builder = Purchasely.presentation.placement('placement1');
+        expect(builder.progressColor).toBeUndefined();
+        expect(builder.displayCloseButton).toBeUndefined();
+        expect(builder.displayBackButton).toBeUndefined();
+      });
+    });
+
     describe('lifecycle callbacks', () => {
       it('routes presented/closeRequested envelopes to the builder callbacks, and the final outcome to onDismissed + the resolved promise', async () => {
         const onPresented = jest.fn();
@@ -695,9 +735,11 @@ describe('Purchasely', () => {
         fetchCall[0](rawFetched);
 
         const presentation = await preloadPromise;
-        expect(presentation).toEqual(fullPresentation({ screenId: 'onboarding-screen', placementId: 'placement1' }));
-        // The native re-display handle (fetchId) is never exposed on the returned object.
+        // The screenId-normalized data is present (methods are added on top, below).
+        expect(presentation).toMatchObject(fullPresentation({ screenId: 'onboarding-screen', placementId: 'placement1' }));
+        // The native re-display handle is never exposed on the returned object.
         expect(presentation.fetchId).toBeUndefined();
+        expect(presentation.id).toBeUndefined();
 
         const outcomePromise = request.display();
         const displayCall = execCallFor('presentPresentation');
@@ -707,6 +749,32 @@ describe('Purchasely', () => {
 
         const outcome = await outcomePromise;
         expect(outcome.closeReason).toBe('programmatic');
+      });
+
+      it('the loaded presentation exposes display()/close()/back() delegating to its request', async () => {
+        const request = Purchasely.presentation.screen('screen1').build();
+
+        const preloadPromise = request.preload();
+        const rawFetched = { screenId: 'screen1', fetchId: 'ply_fetch_456' };
+        execCallFor('fetchPresentation')[0](rawFetched);
+
+        const loaded = await preloadPromise;
+        expect(typeof loaded.display).toBe('function');
+        expect(typeof loaded.close).toBe('function');
+        expect(typeof loaded.back).toBe('function');
+
+        // display() on the loaded object re-displays via the same request/handle.
+        const outcomePromise = loaded.display();
+        const displayCall = execCallFor('presentPresentation');
+        expect(displayCall[4][0]).toBe(rawFetched);
+        displayCall[0]({ closeReason: 'programmatic' });
+        await outcomePromise;
+
+        // close() / back() delegate to the request's native actions.
+        loaded.close();
+        expect(execCallFor('closeAllScreens')).toBeDefined();
+        loaded.back();
+        expect(execCallFor('backPresentation')).toBeDefined();
       });
 
       it('rejects preload() on native failure', async () => {

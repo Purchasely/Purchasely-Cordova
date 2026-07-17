@@ -153,9 +153,11 @@ exports.synchronize = function (success, error) {
 //
 //   Purchasely.presentation.placement(id) | .screen(id) | .defaultSource()  // alias: .default()
 //     .contentId(id)
+//     .backgroundColor(hex)
 //     .onPresented(cb) / .onCloseRequested(cb) / .onDismissed(cb)
 //     .build()
-//       .preload()             -> Promise<presentation>            (screenId is authoritative)
+//       .preload()             -> Promise<loadedPresentation>      (screenId is authoritative;
+//                                  the resolved object also exposes display()/close()/back())
 //       .display(transition?)  -> Promise<outcome>                 ({ presentation, purchaseResult, plan, closeReason, error })
 //       .close()               -> closeAllScreens()
 //       .back()                -> navigate back within the displayed presentation
@@ -166,6 +168,16 @@ exports.synchronize = function (success, error) {
 // which already equals screenId there) never leaves the private `_raw` field
 // kept on the request -- it is not part of the presentation object handed back
 // to callers.
+//
+// Modifier parity note: .backgroundColor(hex) is the ONLY presentation-style
+// modifier the Cordova native layer actually supports -- it is wired to
+// presentPresentation's native backgroundColor argument (preload -> display
+// re-display path) and merged into the transition object for the direct present*
+// paths (iOS reads transition.backgroundColor). It sets the loading/background
+// color and takes effect on iOS; on Android it only applies through drawer/popin
+// transitions (native limitation). The RN/Flutter builder's progressColor,
+// displayCloseButton and displayBackButton are intentionally NOT exposed here: no
+// Cordova native present action accepts them.
 
 function normalizeError(error) {
     if (error === undefined || error === null) return null;
@@ -221,7 +233,14 @@ PLYPresentationRequest.prototype.preload = function () {
     return new Promise(function (resolve, reject) {
         exec(function (raw) {
             self._raw = raw;
-            resolve(normalizePresentation(raw));
+            // Resolve a "loaded presentation": the screenId-normalized data plus
+            // display()/close()/back() delegating to this request (parity with RN's
+            // PLYLoadedPresentation and the native preload()->display() flow).
+            resolve(Object.assign({}, normalizePresentation(raw), {
+                display: function (transition) { return self.display(transition); },
+                close: function () { return self.close(); },
+                back: function () { return self.back(); }
+            }));
         }, function (error) {
             reject(normalizeError(error));
         }, 'Purchasely', 'fetchPresentation', [
@@ -236,6 +255,14 @@ PLYPresentationRequest.prototype.display = function (transition) {
     var self = this;
     var callbacks = this._config.callbacks;
     var normalizedTransition = normalizeTransition(transition);
+    // .backgroundColor() sugar: merge into the transition object so the direct
+    // present* paths (iOS reads transition.backgroundColor) pick it up. The
+    // transition's own backgroundColor, if any, still wins. Keeping no `type`
+    // when none was given preserves CDV-W-12 (backend default honored).
+    if (self._config.backgroundColor != null) {
+        normalizedTransition = Object.assign({ backgroundColor: self._config.backgroundColor }, normalizedTransition || {});
+    }
+    var backgroundColor = self._config.backgroundColor != null ? self._config.backgroundColor : null;
 
     return new Promise(function (resolve) {
         function settle(rawOutcome) {
@@ -255,7 +282,7 @@ PLYPresentationRequest.prototype.display = function (transition) {
         if (self._raw) {
             // Re-display the presentation preloaded by preload() -- same native
             // 'presentPresentation' action v5 used, carrying its private handle.
-            exec(dispatch, onNativeError, 'Purchasely', 'presentPresentation', [self._raw, normalizedTransition, null]);
+            exec(dispatch, onNativeError, 'Purchasely', 'presentPresentation', [self._raw, normalizedTransition, backgroundColor]);
         } else if (self._config.screenId) {
             exec(dispatch, onNativeError, 'Purchasely', 'presentPresentationWithIdentifier',
                 [self._config.screenId, self._config.contentId || null, normalizedTransition]);
@@ -288,6 +315,14 @@ function PLYPresentationBuilder(config) {
 
 PLYPresentationBuilder.prototype.contentId = function (id) {
     this._config.contentId = id;
+    return this;
+};
+
+// Loading/background color (hex). See the modifier parity note above: this is the
+// only style modifier the Cordova native layer supports; progressColor /
+// displayCloseButton / displayBackButton are intentionally not exposed.
+PLYPresentationBuilder.prototype.backgroundColor = function (hex) {
+    this._config.backgroundColor = hex;
     return this;
 };
 
