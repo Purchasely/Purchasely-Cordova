@@ -110,6 +110,12 @@
 
 - (void)userLogin:(CDVInvokedUrlCommand*)command {
     NSString *userId = [command argumentAtIndex:0];
+    // CDV-W-08: userLoginWith:appUserId: is _Nonnull; align with Android's guard instead of
+    // forwarding nil into the native call.
+    if (![userId isKindOfClass:[NSString class]]) {
+        [self successFor:command resultBool:NO];
+        return;
+    }
     [Purchasely userLoginWith:userId shouldRefresh:^(BOOL refresh) {
         [self successFor:command resultBool:refresh];
     }];
@@ -408,6 +414,11 @@
 
 - (void)purchasedSubscription:(CDVInvokedUrlCommand*)command {
     self.purchasedCommand = command;
+    // CDV-W-14: a repeat JS call (re-subscribe/hot reload) must not stack observers, or a
+    // single purchase/restoration fires reloadContent: once per accumulated registration.
+    [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                     name: @"ply_purchasedSubscription"
+                                                   object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(reloadContent:)
                                                  name: @"ply_purchasedSubscription"
@@ -530,7 +541,10 @@
         if (@available(iOS 12.2, *)) {
             [Purchasely signPromotionalOfferWithStoreProductId:storeProductId storeOfferId:storeOfferId success:^(PLYOfferSignature * _Nonnull signature) {
                 NSDictionary* result = [self resultSignatureForSignPromoOffer:signature];
-                [self successFor:command resultBool:result];
+                // CDV-W-02: was resultBool: (an NSDictionary implicitly truncated to a bare
+                // BOOL), discarding the whole signature payload. resultDict: is the matching
+                // overload (declared below) for this NSDictionary result.
+                [self successFor:command resultDict:result];
             } failure:^(NSError * _Nullable error) {
                 [self failureFor:command resultString:error.localizedDescription];
             }];
@@ -1270,7 +1284,12 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
     if (presentation != nil) {
 
         if (presentation.screenId != nil) {
+            // CDV-W-03: `id` is kept for compatibility (and because findPresentationLoadedFor:/
+            // findIndexPresentationLoadedFor: key their re-display lookup on it); `screenId` is
+            // added to match Android's presentationToMap() key so shared JS can read either
+            // platform consistently.
             [presentationResult setObject:presentation.screenId forKey:@"id"];
+            [presentationResult setObject:presentation.screenId forKey:@"screenId"];
         }
 
         if (presentation.placementId != nil) {
