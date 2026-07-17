@@ -77,6 +77,13 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
     // presentation identifier; `fetchId` is an internal re-display lookup key, never documented
     // as public API) so presentPresentation can re-display them.
     private val loadedPresentations = ConcurrentHashMap<String, PLYPresentationBase.Loaded>()
+    // v6: the native SDK fixes onPresented/onCloseRequested at builder.build() time (before
+    // preload()) -- there is no display invocation, hence no CallbackContext, yet at fetch
+    // time. Seeded closures in fetchPresentation() capture the handle and resolve the live
+    // CallbackContext from here lazily, at fire time; presentPresentation() registers the
+    // invocation that's actually re-displaying under the same handle just before calling
+    // display(). Keyed identically to loadedPresentations.
+    private val lifecycleCallbacks = ConcurrentHashMap<String, CallbackContext>()
 
     override fun onDestroy() {
         job.cancel()
@@ -611,6 +618,13 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         callbackContext: CallbackContext) {
         launch {
             try {
+                // Synthetic handle so presentPresentation can re-display this preloaded
+                // presentation. Private re-display key: `fetchId`, NOT `id` -- `screenId`
+                // (already set by presentationToMap) is the sole authoritative public
+                // identifier. Generated up front so the onPresented/onCloseRequested closures
+                // below can capture it -- the native SDK fixes those on the builder, before
+                // preload(), so they must be seeded here rather than at re-display time.
+                val handle = "ply_fetch_${System.nanoTime()}"
                 val builder = PLYPresentationBase.builder().apply {
                     when {
                         placementId != null -> this.placementId(placementId)
@@ -618,12 +632,29 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                         // else: neither id → the default (audience-targeted) presentation
                     }
                     contentId(contentId)
+                    // v6: these fire on whichever invocation ends up re-displaying this
+                    // presentation (via presentPresentation), not this fetch call -- resolve the
+                    // live CallbackContext from lifecycleCallbacks lazily, at fire time, instead
+                    // of capturing this fetch's own (long-finished) callbackContext. If nothing
+                    // is registered yet (fired before any display), it's a silent no-op: there is
+                    // no invocation to observe it.
+                    onPresented { presentation, error ->
+                        val cb = lifecycleCallbacks[handle] ?: return@onPresented
+                        val env = mutableMapOf<String, Any?>("event" to "presented")
+                        presentation?.let { env["presentation"] = presentationToMap(it) }
+                        error?.let { env["error"] = it.message }
+                        val r = PluginResult(PluginResult.Status.OK, JSONObject(env))
+                        r.keepCallback = true
+                        cb.sendPluginResult(r)
+                    }
+                    onCloseRequested {
+                        val cb = lifecycleCallbacks[handle] ?: return@onCloseRequested
+                        val r = PluginResult(PluginResult.Status.OK, JSONObject(mapOf("event" to "closeRequested")))
+                        r.keepCallback = true
+                        cb.sendPluginResult(r)
+                    }
                 }
                 val loaded = builder.build().preload()
-                // Synthetic handle so presentPresentation can re-display this preloaded presentation.
-                // Private re-display key: `fetchId`, NOT `id` -- `screenId` (already set by
-                // presentationToMap) is the sole authoritative public identifier.
-                val handle = "ply_fetch_${System.nanoTime()}"
                 loadedPresentations[handle] = loaded
                 val map = presentationToMap(loaded).toMutableMap()
                 map["fetchId"] = handle
@@ -651,7 +682,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
             else -> null
         }
         val loaded = handle?.let { loadedPresentations[it] }
-        if (loaded == null) {
+        if (loaded == null || handle == null) {
             callbackContext.error("presentation cannot be found")
             return
         }
@@ -659,20 +690,34 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         displayedPresentation = loaded
 
         // TODO(v6-verify): loadingBackgroundColor cannot be applied to an already-preloaded
-        // presentation in v6 (colors are builder options set before preload). The re-display
-        // path delivers the dismiss outcome only; onPresented/onCloseRequested are wired on the
-        // direct present* methods (builder-seeded before preload).
+        // presentation in v6 (colors are builder options set before preload).
+        //
+        // v6: onPresented/onCloseRequested were seeded on the builder back in
+        // fetchPresentation() (fixed at build time, before preload -- the native SDK doesn't
+        // allow setting them later) and resolve their live CallbackContext from
+        // lifecycleCallbacks lazily, at fire time. Register THIS invocation's callbackContext
+        // under `handle` before triggering display() so those events reach it, matching the
+        // direct present* path's envelopes exactly (same event/presentation/error keys,
+        // keepCallback=true). Confirmed against the native SDK sources: display(callback) only
+        // replaces onDismissed, never onPresented/onCloseRequested (PLYPresentationBase.
+        // dispatchDisplay).
         //
         // CDV-W-07: resolve directly against this invocation's own callbackContext (no shared
-        // slot), and fail cleanly instead of silently no-op-ing when there's no activity to
-        // post to (the callback would otherwise never resolve).
+        // slot). Remove the registration as soon as this invocation's dismiss outcome is
+        // delivered, or immediately on any early-return error below -- otherwise a failed
+        // display leaves a stale entry routing future lifecycle events to a callback that will
+        // never fire again.
+        lifecycleCallbacks[handle] = callbackContext
+
         val activity = cordova.activity
         if (activity == null) {
+            lifecycleCallbacks.remove(handle)
             callbackContext.error("No activity available to display presentation")
             return
         }
         activity.runOnUiThread {
             loaded.display(activity, transitionFromMap(transition)) { outcome ->
+                lifecycleCallbacks.remove(handle)
                 callbackContext.success(JSONObject(outcomeToMap(outcome)))
             }
         }
