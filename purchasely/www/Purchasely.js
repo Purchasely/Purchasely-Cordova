@@ -425,6 +425,11 @@ exports.LogLevel = {
 	ERROR: 3,
 }
 
+// WARNING: this list, iOS's CordovaPLYAttribute typedef, and Android's CordovaPLYAttribute
+// enum class must be kept in strictly identical declaration order across all 3. The bridge
+// matches an attribute by ordinal/symbol POSITION (not by the real native SDK's raw value,
+// which does churn -- see the native PLYAttribute/Attribute enums), so appending a new
+// attribute here always requires the matching append, in the same position, on both natives.
 exports.Attribute = {
   FIREBASE_APP_INSTANCE_ID: 0,
   AIRSHIP_CHANNEL_ID: 1,
@@ -447,10 +452,7 @@ exports.Attribute = {
   MOENGAGE_UNIQUE_ID: 18,
   ONESIGNAL_EXTERNAL_ID: 19,
   BATCH_CUSTOM_USER_ID: 20,
-  // ENM-02 / REC-11: keep this list, iOS's CordovaPLYAttribute, and Android's
-  // CordovaPLYAttribute enum class in strictly identical declaration order -- the bridge
-  // matches by ordinal/symbol position, not by real native raw value.
-  ONESIGNAL_USER_ID: 21,
+  ONESIGNAL_USER_ID: 21, // ENM-02 / REC-11
 }
 
 exports.DataProcessingLegalBasis = {
