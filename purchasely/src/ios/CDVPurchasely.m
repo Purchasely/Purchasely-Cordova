@@ -593,11 +593,14 @@
     if (![offerVendorId isKindOfClass:[NSString class]]) {
         offerVendorId = nil;
     }
+    // iOS 26.4+ Apple commitment billing plan type (0 unspecified / 1 upFront / 2 monthly);
+    // JS defaults it to unspecified when omitted (see Purchasely.BillingPlanType).
+    PLYBillingPlanType billingPlanType = [[command argumentAtIndex:3 withDefault:@(PLYBillingPlanTypeUnspecified)] integerValue];
 
     [Purchasely setDynamicOfferingWithReference:reference
                                     planVendorId:planVendorId
                                    offerVendorId:offerVendorId
-                                 billingPlanType:PLYBillingPlanTypeUnspecified
+                                 billingPlanType:billingPlanType
                                       completion:^(BOOL success) {
         [self successFor:command resultBool:success];
     }];
