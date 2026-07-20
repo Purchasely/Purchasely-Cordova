@@ -281,7 +281,44 @@ callback) exposes:
 ## 8. New exported constants
 
 `InterceptResult`, `PresentationType`, `CloseReason`, `TransitionType`, `DimensionType`,
-`Store`, `StorekitVersion`, `PresentationAction`.
+`Store`, `StorekitVersion`, `PresentationAction`, `BillingPlanType`.
+
+## 9. Apple commitment info (iOS 26.4+, Apple only)
+
+Apple's "monthly subscription with 12-month commitment" is now surfaced through the bridge.
+These fields are **iOS-only** — they are absent on Android and on plans/subscriptions without
+a commitment, so read them defensively.
+
+- **`Purchasely.BillingPlanType`** — `{ unspecified: 0, upFront: 1, monthly: 2 }`. Pass it as
+  the new 4th argument of `setDynamicOffering(reference, planVendorId, offerVendorId,
+  billingPlanType, success, error)` (defaults to `unspecified` when omitted).
+
+- **`plan.commitmentInfo`** — an array present on plans returned by `allProducts()` /
+  `planWithIdentifier()`, on a presentation outcome's `plan`, and on the
+  `interceptAction('purchase')` payload's `parameters.plan`. Each entry:
+
+  ```js
+  {
+    billingPlanType, // Number — see Purchasely.BillingPlanType
+    billingPrice,    // Number — per-cycle price
+    billingPeriod,   // String — ISO 8601 duration, e.g. "P1M"
+    totalPrice,      // Number — total over the full commitment
+    totalPeriod,     // String — ISO 8601 duration, e.g. "P1Y"
+    totalDuration    // Number — number of billing cycles (e.g. 12)
+  }
+  ```
+
+- **`subscription.commitmentProgress`** — present on subscriptions returned by
+  `userSubscriptions()` / `userSubscriptionsHistory()`:
+
+  ```js
+  {
+    billingPeriodNumber,   // Number — current billing period (1-based)
+    totalBillingPeriods,   // Number — total periods in the commitment
+    commitmentExpiresDate, // String — ISO 8601 date
+    commitmentPrice        // Number — price for this period
+  }
+  ```
 
 ---
 
