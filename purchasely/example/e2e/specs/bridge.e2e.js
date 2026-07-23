@@ -82,4 +82,61 @@ describe('Purchasely bridge (WEBVIEW context)', () => {
     expect(res.ok).toBe(true);
     expect(Array.isArray(res.value)).toBe(true);
   });
+
+  // T2 — login/logout cycle: isAnonymous flips true -> false -> true. userLogin/userLogout
+  // are fire-and-forget on the Cordova bridge, so drive them via fireBridge + verify via
+  // the callback-based isAnonymous getter.
+  it('isAnonymous flips around userLogin / userLogout', async () => {
+    let res = await callBridge('isAnonymous');
+    expect(res.ok).toBe(true);
+    expect(res.value).toBe(true);
+
+    await fireBridge('userLogin', ['cordova_e2e_user']);
+    await browser.pause(500);
+    res = await callBridge('isAnonymous');
+    expect(res.value).toBe(false);
+
+    await fireBridge('userLogout', []);
+    await browser.pause(500);
+    res = await callBridge('isAnonymous');
+    expect(res.value).toBe(true);
+  });
+
+  // T4 — dynamic offerings list (may be empty on a bare emulator)
+  it('getDynamicOfferings returns a list', async () => {
+    const res = await callBridge('getDynamicOfferings');
+    expect(res.ok).toBe(true);
+    expect(Array.isArray(res.value)).toBe(true);
+  });
+
+  // T18 — dynamic offerings set / get / remove / clear round-trip (list stays an array,
+  // no throw). The mutators are fire-and-forget; getDynamicOfferings reads back.
+  it('dynamic offerings set / remove / clear round-trip', async () => {
+    await fireBridge('setDynamicOffering', ['e2e_ref', 'e2e_plan', null, 0]);
+    await browser.pause(300);
+    let res = await callBridge('getDynamicOfferings');
+    expect(Array.isArray(res.value)).toBe(true);
+
+    await fireBridge('removeDynamicOffering', ['e2e_ref']);
+    await fireBridge('clearDynamicOfferings', []);
+    await browser.pause(300);
+    res = await callBridge('getDynamicOfferings');
+    expect(res.ok).toBe(true);
+    expect(Array.isArray(res.value)).toBe(true);
+  });
+
+  // T16 — increment / decrement a numeric user attribute
+  it('increment / decrement a numeric user attribute', async () => {
+    await fireBridge('setUserAttributeWithInt', ['e2e_counter', 5, 'ESSENTIAL']);
+    await browser.pause(300);
+    await fireBridge('incrementUserAttribute', ['e2e_counter', 3]);
+    await browser.pause(300);
+    let res = await callBridge('userAttribute', ['e2e_counter']);
+    expect(res.value).toBe(8);
+
+    await fireBridge('decrementUserAttribute', ['e2e_counter', 2]);
+    await browser.pause(300);
+    res = await callBridge('userAttribute', ['e2e_counter']);
+    expect(res.value).toBe(6);
+  });
 });
