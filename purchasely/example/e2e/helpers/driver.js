@@ -32,46 +32,53 @@ async function waitForPurchaselyReady() {
   );
 }
 
-// Invoke a Purchasely method that takes trailing (success, error) callbacks and resolve
-// with { ok, value } on success or { ok:false, error } on error. `args` are the leading
-// positional arguments before the callbacks.
-async function callBridge(method, args = [], timeoutMs = 30000) {
+// Poll a window global until a native callback has populated it, then return it.
+// Resolves { ok:false, error:'timeout' } if nothing arrives in time. We poll a SYNC
+// execute rather than use executeAsync because the iOS WKWebView aborts async-script
+// results almost immediately ("Timed out waiting for asynchronous script result"),
+// which would fail every bridge call on iOS.
+async function pollGlobal(name, timeoutMs) {
+  let value;
   try {
-    return await browser.executeAsync(
-      function (method, args, timeoutMs, done) {
-        var settled = false;
-        var finish = function (payload) {
-          if (settled) return;
-          settled = true;
-          done(payload);
-        };
-        setTimeout(function () { finish({ ok: false, error: 'timeout' }); }, timeoutMs);
-        try {
-          var fn = window.Purchasely[method];
-          if (typeof fn !== 'function') {
-            return finish({ ok: false, error: 'no such method: ' + method });
-          }
-          fn.apply(
-            window.Purchasely,
-            args.concat([
-              function (value) { finish({ ok: true, value: value }); },
-              function (error) { finish({ ok: false, error: String(error) }); },
-            ])
-          );
-        } catch (e) {
-          finish({ ok: false, error: String(e) });
-        }
+    await browser.waitUntil(
+      async () => {
+        value = await browser.execute(function (n) { return window[n]; }, name);
+        return value !== undefined && value !== null;
       },
-      method,
-      args,
-      timeoutMs
+      { timeout: timeoutMs, interval: 250, timeoutMsg: name + ' never settled' }
     );
   } catch (e) {
-    // A webview-level failure (async-script timeout, a native error surfaced by
-    // chromedriver, a detached context) is reported as a settled { ok:false }
-    // rather than thrown, so one flaky call can't abort the whole spec.
-    return { ok: false, error: String((e && e.message) || e) };
+    return { ok: false, error: 'timeout' };
   }
+  return value;
+}
+
+// Invoke a Purchasely method that takes trailing (success, error) callbacks and resolve
+// with { ok, value } on success or { ok:false, error } on error. `args` are the leading
+// positional arguments before the callbacks. Fires via a sync execute that stashes the
+// settled result on window.__plyResult, then polls for it (see pollGlobal).
+async function callBridge(method, args = [], timeoutMs = 30000) {
+  await browser.execute(
+    function (method, args) {
+      window.__plyResult = undefined;
+      var settled = false;
+      var finish = function (payload) { if (!settled) { settled = true; window.__plyResult = payload; } };
+      try {
+        var fn = window.Purchasely[method];
+        if (typeof fn !== 'function') { finish({ ok: false, error: 'no such method: ' + method }); return; }
+        fn.apply(
+          window.Purchasely,
+          args.concat([
+            function (value) { finish({ ok: true, value: value }); },
+            function (error) { finish({ ok: false, error: String(error) }); },
+          ])
+        );
+      } catch (e) { finish({ ok: false, error: String(e) }); }
+    },
+    method,
+    args
+  );
+  return pollGlobal('__plyResult', timeoutMs);
 }
 
 // Fire a void Purchasely method that takes NO success callback — the
@@ -100,15 +107,11 @@ async function fireBridge(method, args = []) {
 // call in the same test can drive it (mirrors closePresentation()/backPresentation() acting
 // on the natively-tracked current presentation pre-builder).
 async function callPresentation(source, sourceId, action, transition, timeoutMs = 90000) {
-  return browser.executeAsync(
-    function (source, sourceId, action, transition, timeoutMs, done) {
+  await browser.execute(
+    function (source, sourceId, action, transition) {
+      window.__plyResult = undefined;
       var settled = false;
-      var finish = function (payload) {
-        if (settled) return;
-        settled = true;
-        done(payload);
-      };
-      setTimeout(function () { finish({ ok: false, error: 'timeout' }); }, timeoutMs);
+      var finish = function (payload) { if (!settled) { settled = true; window.__plyResult = payload; } };
       try {
         var builder = sourceId
           ? window.Purchasely.presentation[source](sourceId)
@@ -120,16 +123,14 @@ async function callPresentation(source, sourceId, action, transition, timeoutMs 
           function (value) { finish({ ok: true, value: value }); },
           function (error) { finish({ ok: false, error: String(error) }); }
         );
-      } catch (e) {
-        finish({ ok: false, error: String(e) });
-      }
+      } catch (e) { finish({ ok: false, error: String(e) }); }
     },
     source,
     sourceId,
     action,
-    transition,
-    timeoutMs
+    transition
   );
+  return pollGlobal('__plyResult', timeoutMs);
 }
 
 // Display a presentation and stash its dismiss outcome on a window global, WITHOUT
@@ -162,19 +163,7 @@ async function displayPresentation(source, sourceId, transition) {
 // { ok:false, error } once display()'s promise settles (i.e. after close()), or
 // { ok:false, error:'timeout' } if no outcome arrives in time.
 async function awaitDismissOutcome(timeoutMs = 30000) {
-  let outcome;
-  try {
-    await browser.waitUntil(
-      async () => {
-        outcome = await browser.execute(function () { return window.__plyOutcome; });
-        return outcome !== undefined && outcome !== null;
-      },
-      { timeout: timeoutMs, interval: 500, timeoutMsg: 'dismiss outcome never delivered' }
-    );
-  } catch (e) {
-    return { ok: false, error: 'timeout' };
-  }
-  return outcome;
+  return pollGlobal('__plyOutcome', timeoutMs);
 }
 
 // Close the presentation driven by the last callPresentation()/displayPresentation()
