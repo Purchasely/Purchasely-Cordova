@@ -67,4 +67,61 @@ async function callBridge(method, args = [], timeoutMs = 30000) {
   );
 }
 
-module.exports = { switchToWebview, switchToNative, waitForPurchaselyReady, callBridge };
+// Drive the v6 presentation builder (Purchasely.presentation) from WEBVIEW context and
+// resolve with { ok, value } / { ok:false, error } -- same contract as callBridge, since
+// fetchPresentation*/presentPresentation* (and their (args..., success, error) shape that
+// callBridge drives) were removed in favor of the promise-based builder.
+// `source` is 'placement' | 'screen' | 'defaultSource'; `sourceId` is the placement/screen
+// id (omit for 'defaultSource'); `action` is 'preload' or 'display'; `transition` is passed
+// to display() when action is 'display'. Stashes the built request on
+// `window.__plyLastRequest` so a follow-up closeCurrentPresentation()/backCurrentPresentation()
+// call in the same test can drive it (mirrors closePresentation()/backPresentation() acting
+// on the natively-tracked current presentation pre-builder).
+async function callPresentation(source, sourceId, action, transition, timeoutMs = 90000) {
+  return browser.executeAsync(
+    function (source, sourceId, action, transition, timeoutMs, done) {
+      var settled = false;
+      var finish = function (payload) {
+        if (settled) return;
+        settled = true;
+        done(payload);
+      };
+      setTimeout(function () { finish({ ok: false, error: 'timeout' }); }, timeoutMs);
+      try {
+        var builder = sourceId
+          ? window.Purchasely.presentation[source](sourceId)
+          : window.Purchasely.presentation[source]();
+        var request = builder.build();
+        window.__plyLastRequest = request;
+        var promise = action === 'preload' ? request.preload() : request.display(transition);
+        promise.then(
+          function (value) { finish({ ok: true, value: value }); },
+          function (error) { finish({ ok: false, error: String(error) }); }
+        );
+      } catch (e) {
+        finish({ ok: false, error: String(e) });
+      }
+    },
+    source,
+    sourceId,
+    action,
+    transition,
+    timeoutMs
+  );
+}
+
+// Close the presentation driven by the last callPresentation() request (WEBVIEW context).
+async function closeCurrentPresentation() {
+  return browser.execute(function () {
+    if (window.__plyLastRequest) window.__plyLastRequest.close();
+  });
+}
+
+module.exports = {
+  switchToWebview,
+  switchToNative,
+  waitForPurchaselyReady,
+  callBridge,
+  callPresentation,
+  closeCurrentPresentation,
+};

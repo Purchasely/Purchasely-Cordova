@@ -110,13 +110,22 @@
 
 - (void)userLogin:(CDVInvokedUrlCommand*)command {
     NSString *userId = [command argumentAtIndex:0];
+    // CDV-W-08: userLoginWith:appUserId: is _Nonnull; align with Android's guard instead of
+    // forwarding nil into the native call.
+    if (![userId isKindOfClass:[NSString class]]) {
+        [self successFor:command resultBool:NO];
+        return;
+    }
     [Purchasely userLoginWith:userId shouldRefresh:^(BOOL refresh) {
         [self successFor:command resultBool:refresh];
     }];
 }
 
 - (void)userLogout:(CDVInvokedUrlCommand*)command {
-    [Purchasely userLogout:YES];
+    // PAR-30: clearUserAttributes defaults to true (matches the JS-side default).
+    NSNumber *clearUserAttributes = [command argumentAtIndex:0];
+    BOOL clear = [clearUserAttributes isKindOfClass:[NSNumber class]] ? clearUserAttributes.boolValue : YES;
+    [Purchasely userLogout:clear];
 }
 
 - (void)setThemeMode:(CDVInvokedUrlCommand *)command {
@@ -201,6 +210,9 @@
         case CordovaPLYAttributeBatchCustomUserId:
             attribute = PLYAttributeBatchCustomUserId;
             break;
+        case CordovaPLYAttributeOneSignalUserId:
+            attribute = PLYAttributeOneSignalUserId;
+            break;
         default:
             attributeFound = NO;
             break;
@@ -217,6 +229,11 @@
 - (void)getAnonymousUserId:(CDVInvokedUrlCommand*)command {
     NSString *anonymousId = [Purchasely anonymousUserId];
     [self successFor:command resultString:anonymousId];
+}
+
+// REC-12 / PAR-04
+- (void)isAnonymous:(CDVInvokedUrlCommand*)command {
+    [self successFor:command resultBool:[Purchasely isAnonymous]];
 }
 
 - (void)allowDeeplink:(CDVInvokedUrlCommand*)command {
@@ -408,6 +425,11 @@
 
 - (void)purchasedSubscription:(CDVInvokedUrlCommand*)command {
     self.purchasedCommand = command;
+    // CDV-W-14: a repeat JS call (re-subscribe/hot reload) must not stack observers, or a
+    // single purchase/restoration fires reloadContent: once per accumulated registration.
+    [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                     name: @"ply_purchasedSubscription"
+                                                   object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(reloadContent:)
                                                  name: @"ply_purchasedSubscription"
@@ -455,7 +477,10 @@
 }
 
 - (void)userSubscriptions:(CDVInvokedUrlCommand*)command {
-    [Purchasely userSubscriptions:false
+    // PAR-29: invalidateCache defaults to false.
+    NSNumber *invalidateCache = [command argumentAtIndex:0];
+    BOOL invalidate = [invalidateCache isKindOfClass:[NSNumber class]] ? invalidateCache.boolValue : NO;
+    [Purchasely userSubscriptions:invalidate
                           success:^(NSArray<PLYSubscription *> * _Nullable subscriptions) {
         NSMutableArray *result = [NSMutableArray new];
         for (PLYSubscription *subscription in subscriptions) {
@@ -469,7 +494,10 @@
 }
 
 - (void)userSubscriptionsHistory:(CDVInvokedUrlCommand*)command {
-    [Purchasely userSubscriptionsHistory:false
+    // PAR-29: invalidateCache defaults to false.
+    NSNumber *invalidateCache = [command argumentAtIndex:0];
+    BOOL invalidate = [invalidateCache isKindOfClass:[NSNumber class]] ? invalidateCache.boolValue : NO;
+    [Purchasely userSubscriptionsHistory:invalidate
                           success:^(NSArray<PLYSubscription *> * _Nullable subscriptions) {
         NSMutableArray *result = [NSMutableArray new];
         for (PLYSubscription *subscription in subscriptions) {
@@ -530,7 +558,10 @@
         if (@available(iOS 12.2, *)) {
             [Purchasely signPromotionalOfferWithStoreProductId:storeProductId storeOfferId:storeOfferId success:^(PLYOfferSignature * _Nonnull signature) {
                 NSDictionary* result = [self resultSignatureForSignPromoOffer:signature];
-                [self successFor:command resultBool:result];
+                // CDV-W-02: was resultBool: (an NSDictionary implicitly truncated to a bare
+                // BOOL), discarding the whole signature payload. resultDict: is the matching
+                // overload (declared below) for this NSDictionary result.
+                [self successFor:command resultDict:result];
             } failure:^(NSError * _Nullable error) {
                 [self failureFor:command resultString:error.localizedDescription];
             }];
@@ -551,6 +582,53 @@
     } failure:^(NSError * _Nullable error) {
         [self failureFor:command resultString:error.localizedDescription];
     }];
+}
+
+// PAR-05: Dynamic Offerings. Payload keys (reference/planVendorId/offerVendorId) match the
+// Cordova JS↔native contract (not the native SDK's own planId/offerId property names).
+- (void)setDynamicOffering:(CDVInvokedUrlCommand*)command {
+    NSString *reference = [command argumentAtIndex:0];
+    NSString *planVendorId = [command argumentAtIndex:1];
+    NSString *offerVendorId = [command argumentAtIndex:2];
+    if (![offerVendorId isKindOfClass:[NSString class]]) {
+        offerVendorId = nil;
+    }
+    // iOS 26.4+ Apple commitment billing plan type (0 unspecified / 1 upFront / 2 monthly);
+    // JS defaults it to unspecified when omitted (see Purchasely.BillingPlanType).
+    PLYBillingPlanType billingPlanType = [[command argumentAtIndex:3 withDefault:@(PLYBillingPlanTypeUnspecified)] integerValue];
+
+    [Purchasely setDynamicOfferingWithReference:reference
+                                    planVendorId:planVendorId
+                                   offerVendorId:offerVendorId
+                                 billingPlanType:billingPlanType
+                                      completion:^(BOOL success) {
+        [self successFor:command resultBool:success];
+    }];
+}
+
+- (void)getDynamicOfferings:(CDVInvokedUrlCommand*)command {
+    [Purchasely getDynamicOfferingsWithCompletion:^(NSArray<PLYOffering *> * _Nonnull offerings) {
+        NSMutableArray *result = [NSMutableArray new];
+        for (PLYOffering *offering in offerings) {
+            NSMutableDictionary<NSString *, id> *dict = [NSMutableDictionary new];
+            dict[@"reference"] = offering.reference;
+            dict[@"planVendorId"] = offering.planId;
+            dict[@"offerVendorId"] = offering.offerId ?: [NSNull null];
+            [result addObject:dict];
+        }
+        [self successFor:command resultArray:result];
+    }];
+}
+
+- (void)removeDynamicOffering:(CDVInvokedUrlCommand*)command {
+    NSString *reference = [command argumentAtIndex:0];
+    if ([reference isKindOfClass:[NSString class]]) {
+        [Purchasely removeDynamicOfferingWithReference:reference];
+    }
+}
+
+- (void)clearDynamicOfferings:(CDVInvokedUrlCommand*)command {
+    [Purchasely clearDynamicOfferings];
 }
 
 // Helpers
@@ -890,10 +968,21 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
     completion(result);
 }
 
+// PAR-19: closeAllScreens is the canonical native action; closePresentation is kept as a
+// separate (deprecated, fire-and-forget) action since existing native `close` behavior is
+// preserved as-is, while closeAllScreens additionally reports success/error to JS.
 - (void)closePresentation:(CDVInvokedUrlCommand*)command {
     dispatch_async(dispatch_get_main_queue(), ^{
         [Purchasely closeAllScreens];
         self.currentPresentation = nil;
+    });
+}
+
+- (void)closeAllScreens:(CDVInvokedUrlCommand*)command {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [Purchasely closeAllScreens];
+        self.currentPresentation = nil;
+        [self successFor:command];
     });
 }
 
@@ -1070,6 +1159,34 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
     }
 }
 
+// REC-12 / PAR-03: bulk read, same per-value conversion as the single-key read above.
+- (void)userAttributes:(CDVInvokedUrlCommand*)command {
+    NSMutableDictionary<NSString *, id> *result = [NSMutableDictionary new];
+    NSDictionary<NSString *, id> *attributes = [Purchasely userAttributes];
+    for (NSString *key in attributes) {
+        id value = [self getUserAttributeValueForCordova:attributes[key]];
+        if (value != nil) {
+            result[key] = value;
+        }
+    }
+    [self successFor:command resultDict:result];
+}
+
+// REC-12 / PAR-02
+- (void)incrementUserAttribute:(CDVInvokedUrlCommand*)command {
+    NSString *key = [command argumentAtIndex:0];
+    NSNumber *valueNumber = [command argumentAtIndex:1];
+    NSInteger value = [valueNumber isKindOfClass:[NSNumber class]] ? valueNumber.integerValue : 1;
+    [Purchasely incrementUserAttributeWithKey:key value:value];
+}
+
+- (void)decrementUserAttribute:(CDVInvokedUrlCommand*)command {
+    NSString *key = [command argumentAtIndex:0];
+    NSNumber *valueNumber = [command argumentAtIndex:1];
+    NSInteger value = [valueNumber isKindOfClass:[NSNumber class]] ? valueNumber.integerValue : 1;
+    [Purchasely decrementUserAttributeWithKey:key value:value];
+}
+
 - (id _Nullable) getUserAttributeValueForCordova:(id _Nullable) value {
     if ([value isKindOfClass:[NSDate class]]) {
         NSDateFormatter * dateFormatter = [NSDateFormatter new];
@@ -1093,6 +1210,31 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
 
 - (void)clearBuiltInAttributes:(CDVInvokedUrlCommand*)command {
     [Purchasely clearBuiltInAttributes];
+}
+
+// PAR-07
+- (void)getBuiltInAttributes:(CDVInvokedUrlCommand*)command {
+    NSMutableDictionary<NSString *, id> *result = [NSMutableDictionary new];
+    NSDictionary<NSString *, id> *attributes = [Purchasely getBuiltInAttributes];
+    for (NSString *key in attributes) {
+        id value = [self getUserAttributeValueForCordova:attributes[key]];
+        if (value != nil) {
+            result[key] = value;
+        }
+    }
+    [self successFor:command resultDict:result];
+}
+
+- (void)getBuiltInAttribute:(CDVInvokedUrlCommand*)command {
+    NSString *key = [command argumentAtIndex:0];
+    id _Nullable result = [self getUserAttributeValueForCordova:[Purchasely getBuiltInAttributeWith:key]];
+    if (result != nil) {
+        [self successFor:command resultDict:result];
+    } else {
+        // No attribute for this key: resolve success with no value (undefined in JS),
+        // matching Android's nullable Any? return.
+        [self successFor:command];
+    }
 }
 
 - (void)fetchPresentation:(CDVInvokedUrlCommand*)command {
@@ -1270,7 +1412,15 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
     if (presentation != nil) {
 
         if (presentation.screenId != nil) {
+            // `screenId` is the sole authoritative, public presentation identifier (matches
+            // Android's presentationToMap() key, so shared JS reads either platform the same
+            // way). `id` is kept ONLY as a private/internal re-display lookup key --
+            // findPresentationLoadedFor:/findIndexPresentationLoadedFor: key off it, and on
+            // this platform it always equals screenId (iOS has no separate synthetic fetch
+            // handle, unlike Android's `fetchId`) -- it is NOT a documented public field; the
+            // JS bridge normalizes with `screenId ?? id` tolerance and never surfaces `id`.
             [presentationResult setObject:presentation.screenId forKey:@"id"];
+            [presentationResult setObject:presentation.screenId forKey:@"screenId"];
         }
 
         if (presentation.placementId != nil) {
@@ -1411,7 +1561,8 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
 }
 
 
-// WARNING: This enum must be strictly identical to the one in the JS side (Purchasely.js).
+// WARNING: This enum must be strictly identical (same declaration order) to the one in
+// the JS side (Purchasely.js) and Android's CordovaPLYAttribute enum class.
 typedef NS_ENUM(NSInteger, CordovaPLYAttribute) {
     CordovaPLYAttributeFirebaseAppInstanceId,
     CordovaPLYAttributeAirshipChannelId,
@@ -1433,7 +1584,8 @@ typedef NS_ENUM(NSInteger, CordovaPLYAttribute) {
     CordovaPLYAttributeAmplitudeDeviceId,
     CordovaPLYAttributeMoengageUniqueId,
     CordovaPLYAttributeOneSignalExternalId,
-    CordovaPLYAttributeBatchCustomUserId
+    CordovaPLYAttributeBatchCustomUserId,
+    CordovaPLYAttributeOneSignalUserId
 };
 
 @end

@@ -295,72 +295,76 @@ function onPurchaselySdkReady() {
 	Purchasely.clearBuiltInAttributes();
 }
 
+// Purchasely 6.0: `back()`/`close()` live on the request, not as bare top-level calls
+// (backPresentation() was removed). The example keeps a reference to the last request
+// it built/displayed so the "Back presentation" button below has something to drive.
+var currentPresentationRequest = null;
+
 function openPresentation() {
-	Purchasely.presentPresentationForPlacement(
-		'ONBOARDING', //placementId
-		null, //contentId
-		Purchasely.TransitionType.fullScreen, //display mode (string) — or a transition object, see below
-		(callback) => {
-			console.log('[openPresentation] onDismissed — purchaseResult=' + callback.purchaseResult + ' — outcome: ' + safeStringify(callback));
-			if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
-				console.log("User cancelled purchased - close reason " + callback.closeReason);
+	// Purchasely 6.0: the v6 builder — pick a source (.placement/.screen/.defaultSource),
+	// chain lifecycle callbacks, .build(), then .display(transition?). display() resolves
+	// at dismiss with a 5-field outcome: { presentation, purchaseResult, plan, closeReason, error }.
+	currentPresentationRequest = Purchasely.presentation
+		.placement('ONBOARDING')
+		.onPresented((presentation, error) => {
+			console.log('[openPresentation] onPresented — ' + (presentation ? presentation.screenId : '') + (error ? ' error=' + error : ''));
+		})
+		.onCloseRequested(() => {
+			console.log('[openPresentation] onCloseRequested');
+		})
+		.build();
+
+	currentPresentationRequest
+		.display(Purchasely.TransitionType.fullScreen) //display mode (string) — or a transition object, see below
+		.then((outcome) => {
+			console.log('[openPresentation] onDismissed — purchaseResult=' + outcome.purchaseResult + ' — outcome: ' + safeStringify(outcome));
+			if (outcome.error) {
+				console.log("[openPresentation] error: " + outcome.error);
+			} else if (outcome.purchaseResult === 'purchased' || outcome.purchaseResult === 'restored') {
+				console.log("User purchased " + (outcome.plan ? outcome.plan.name : ''));
 			} else {
-				console.log("User purchased " + (callback.plan ? callback.plan.name : ''));
+				console.log("User cancelled purchased - close reason " + outcome.closeReason);
 			}
-		},
-		(error) => {
-			console.log("[openPresentation] error: " + error);
-		},
-		// Purchasely 6.0: optional per-request lifecycle callbacks.
-		{
-			onPresented: (presentation, error) => {
-				console.log('[openPresentation] onPresented — ' + (presentation ? presentation.screenId : '') + (error ? ' error=' + error : ''));
-			},
-			onCloseRequested: () => {
-				console.log('[openPresentation] onCloseRequested');
-			}
-		}
-	);
+		});
 
 	// Purchasely 6.0 also supports:
 	//  - a rich transition object for drawer/popin sizing (see fetchPresentation below):
 	//      { type: Purchasely.TransitionType.drawer, dismissible: true,
 	//        height: { type: Purchasely.DimensionType.percentage, value: 0.8 }, backgroundColor: '#000000' }
-	//  - the default (audience-targeted) presentation:
-	//      Purchasely.presentPresentationForDefault(null, Purchasely.TransitionType.fullScreen, ok, err);
-	//      Purchasely.fetchPresentationForDefault(null, onLoaded, err);
+	//  - the default (audience-targeted) presentation, targeted with .defaultSource() (or its
+	//    iOS-style alias .default()):
+	//      Purchasely.presentation.defaultSource().build().display(Purchasely.TransitionType.fullScreen);
 	//  - stopping campaign/deeplink dismiss outcomes:
 	//      Purchasely.removeDefaultPresentationDismissHandler();
 }
 
 function fetchPresentation() {
-	Purchasely.fetchPresentationForPlacement(
-		'flow_demo', //placementId
-		null, //contentId
-		(presentation) => {
-			console.log('[fetchPresentation] onFetched — presentation: ' + safeStringify(presentation));
-			// Rich transition object: drawer at 80% height, dismissible. (iOS applies the
-			// percentage height + dismissible; Android also supports pixel + popin width.)
-			Purchasely.presentPresentation(presentation, {
-				type: Purchasely.TransitionType.drawer,
-				dismissible: true,
-				height: { type: Purchasely.DimensionType.percentage, value: 0.8 }
-			}, null,
-				(callback) => {
-					console.log('[fetchPresentation → presentPresentation] onDismissed — purchaseResult=' + callback.purchaseResult + ' — outcome: ' + safeStringify(callback));
-					if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
-						console.log("User cancelled purchased - close reason " + callback.closeReason);
-					} else {
-						console.log("User purchased " + (callback.plan ? callback.plan.name : ''));
-					}
-				}, (error) => {
-					console.log("[fetchPresentation → presentPresentation] error: " + error);
-				});
-		},
-		(error) => {
-			console.log("[fetchPresentation] error: " + error);
-		}
-	);
+	// Purchasely 6.0: preload() fetches without displaying; the resolved presentation
+	// exposes screenId (the authoritative identifier). Calling display() on the SAME
+	// request re-displays exactly what was preloaded.
+	const request = Purchasely.presentation.placement('flow_demo').build();
+	currentPresentationRequest = request;
+	request.preload().then((presentation) => {
+		console.log('[fetchPresentation] onFetched — presentation: ' + safeStringify(presentation));
+		// Rich transition object: drawer at 80% height, dismissible. (iOS applies the
+		// percentage height + dismissible; Android also supports pixel + popin width.)
+		request.display({
+			type: Purchasely.TransitionType.drawer,
+			dismissible: true,
+			height: { type: Purchasely.DimensionType.percentage, value: 0.8 }
+		}).then((outcome) => {
+			console.log('[fetchPresentation → display] onDismissed — purchaseResult=' + outcome.purchaseResult + ' — outcome: ' + safeStringify(outcome));
+			if (outcome.error) {
+				console.log("[fetchPresentation → display] error: " + outcome.error);
+			} else if (outcome.purchaseResult === 'purchased' || outcome.purchaseResult === 'restored') {
+				console.log("User purchased " + (outcome.plan ? outcome.plan.name : ''));
+			} else {
+				console.log("User cancelled purchased - close reason " + outcome.closeReason);
+			}
+		});
+	}, (error) => {
+		console.log("[fetchPresentation] error: " + safeStringify(error));
+	});
 }
 
 function purchaseWithPlanVendorId() {
@@ -378,7 +382,7 @@ function processToPayment() {
 }
 
 function backPresentation() {
-	Purchasely.backPresentation();
+	if (currentPresentationRequest) currentPresentationRequest.back();
 }
 
 function closePresentation() {

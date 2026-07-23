@@ -47,6 +47,14 @@ Purchasely.presentPresentationWithIdentifier(
 );
 ```
 
+## Limitations
+
+- **No inline/embedded paywall view.** iOS, Android, Flutter and React Native all support
+  embedding a paywall directly inside a screen (`PLYPresentationView` / `buildView` /
+  `getFragment`). This is not available on Cordova: the plugin only supports modal/fullscreen
+  presentation via `presentPresentation*`. Embedding a native view inside the WebView isn't
+  supported by this bridge architecture; this is an accepted platform limitation, not a bug.
+
 ## 🏁 Documentation
 
 A complete documentation is available on our website [https://docs.purchasely.com](https://docs.purchasely.com/quick-start/sdk-installation/cordova)

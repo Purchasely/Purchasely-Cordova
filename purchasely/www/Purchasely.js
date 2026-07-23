@@ -8,25 +8,32 @@ var defaultError = (e) => { console.log(e); }
 //   - a full transition object { type, dismissible?, width?, height?, backgroundColor? }
 //     where width/height are { type: 'pixel'|'percentage', value: Number } (width is
 //     popin-only, height drives drawer+popin) and backgroundColor is a hex string.
-// Always returns a transition object for the native bridge.
+// CDV-W-12: when no displayMode is given, sends undefined (not a forced fullScreen
+// default) so both natives' nil/null handling honors the backend-configured transition
+// for that placement/screen, as documented in their own displayModeFromTransition /
+// transitionFromMap helpers.
 function normalizeTransition(mode) {
     if (mode === true) return { type: 'fullScreen' };
     if (mode === false) return { type: 'modal' };
     if (typeof mode === 'string') return { type: mode };
     if (mode && typeof mode === 'object' && mode.type) return mode;
-    return { type: 'fullScreen' };
+    return undefined;
 }
 
-// Wire a present* command's callback stream. Purchasely 6.0 emits presentation
-// lifecycle events during display: the native side sends keep-alive envelopes
-// { event: 'presented', presentation } and { event: 'closeRequested' }, then the
+// Wire a present* command's callback stream -- used identically for the direct present*
+// actions and for the preload() -> display() re-display path (native `presentPresentation`),
+// so both surface the same lifecycle regardless of how display() was reached. Purchasely 6.0
+// emits presentation lifecycle events during display: the native side sends keep-alive
+// envelopes { event: 'presented', presentation } and { event: 'closeRequested' }, then the
 // dismiss OUTCOME (which has no `event` key) as the final, non-kept callback.
-// `callbacks` may carry onPresented(presentation, error) and onCloseRequested().
+// `callbacks` may carry onPresented(presentation, error) and onCloseRequested(). The
+// 'presented' envelope's presentation is screenId-normalized like everywhere else (preload(),
+// outcome.presentation) -- never the raw native payload.
 function presentationDispatcher(success, callbacks) {
     callbacks = callbacks || {};
     return function (payload) {
         if (payload && payload.event === 'presented') {
-            if (callbacks.onPresented) callbacks.onPresented(payload.presentation || null, payload.error || null);
+            if (callbacks.onPresented) callbacks.onPresented(normalizePresentation(payload.presentation), payload.error || null);
             return;
         }
         if (payload && payload.event === 'closeRequested') {
@@ -62,6 +69,14 @@ exports.start = function (options, success, error) {
     exec(success, error, 'Purchasely', 'start', [opts]);
 };
 
+// REC-18 / PAR-18: addEventListener is the canonical name (matches RN's naming).
+// addEventsListener (plural "Events", the original Cordova-only spelling) is kept as a
+// deprecated alias.
+exports.addEventListener = function (success, error) {
+    exec(success, error, 'Purchasely', 'addEventsListener', []);
+};
+
+// @deprecated use addEventListener instead.
 exports.addEventsListener = function (success, error) {
     exec(success, error, 'Purchasely', 'addEventsListener', []);
 };
@@ -74,6 +89,12 @@ exports.removeUserAttributeListener = function () {
     exec(() => {}, defaultError, 'Purchasely', 'removeUserAttributeListener', []);
 };
 
+// REC-18 / PAR-18: canonical name, paired with addEventListener.
+exports.removeEventListener = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'removeEventsListener', []);
+};
+
+// @deprecated use removeEventListener instead.
 exports.removeEventsListener = function () {
     exec(() => {}, defaultError, 'Purchasely', 'removeEventsListener', []);
 };
@@ -86,8 +107,11 @@ exports.userLogin = function (userId, success) {
     exec(success, defaultError, 'Purchasely', 'userLogin', [userId]);
 };
 
-exports.userLogout = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'userLogout', []);
+// PAR-30: clearUserAttributes controls whether logout also clears locally cached user
+// attributes (native default true on both platforms).
+exports.userLogout = function (clearUserAttributes) {
+    var clear = clearUserAttributes === undefined ? true : clearUserAttributes;
+    exec(() => {}, defaultError, 'Purchasely', 'userLogout', [clear]);
 };
 
 exports.setLogLevel = function (logLevel) {
@@ -123,39 +147,226 @@ exports.synchronize = function (success, error) {
     exec(success || (() => {}), error || defaultError, 'Purchasely', 'synchronize', []);
 };
 
-// present* methods: `displayMode` accepts a mode string, a legacy boolean, or a
-// full transition object (see normalizeTransition). `callbacks` is optional and
-// may carry { onPresented(presentation, error), onCloseRequested() }; `success`
-// still receives the final dismiss outcome.
-exports.presentPresentationWithIdentifier = function (presentationId, contentId, displayMode, success, error, callbacks) {
-    exec(presentationDispatcher(success, callbacks), error, 'Purchasely', 'presentPresentationWithIdentifier', [presentationId, contentId, normalizeTransition(displayMode)]);
+// Purchasely 6.0: the v5 presentation surface (fetchPresentation*, present-
+// Presentation*, presentPresentation, backPresentation) is REMOVED, not
+// deprecated -- replaced by the v6 builder below (parity with the React
+// Native/Flutter SDKs; see MIGRATION-v6.md). It re-wraps the very same native
+// exec actions used by v5 (fetchPresentation, presentPresentation,
+// presentPresentationWithIdentifier/ForPlacement/ForDefault, backPresentation,
+// closeAllScreens): no new native action is introduced.
+//
+//   Purchasely.presentation.placement(id) | .screen(id) | .defaultSource()  // alias: .default()
+//     .contentId(id)
+//     .backgroundColor(hex)
+//     .onPresented(cb) / .onCloseRequested(cb) / .onDismissed(cb)
+//     .build()
+//       .preload()             -> Promise<loadedPresentation>      (screenId is authoritative;
+//                                  the resolved object also exposes display()/close()/back())
+//       .display(transition?)  -> Promise<outcome>                 ({ presentation, purchaseResult, plan, closeReason, error })
+//       .close()               -> closeAllScreens()
+//       .back()                -> navigate back within the displayed presentation
+//
+// screenId is authoritative: normalizePresentation always resolves it (tolerating
+// a raw `id` fallback) and only exposes the documented presentation fields. Any
+// native re-display handle (Android's synthetic fetchId; iOS's internal `id`,
+// which already equals screenId there) never leaves the private `_raw` field
+// kept on the request -- it is not part of the presentation object handed back
+// to callers.
+//
+// Modifier parity note: .backgroundColor(hex) is the ONLY presentation-style
+// modifier the Cordova native layer actually supports -- it is wired to
+// presentPresentation's native backgroundColor argument (preload -> display
+// re-display path) and merged into the transition object for the direct present*
+// paths (iOS reads transition.backgroundColor). It sets the loading/background
+// color and takes effect on iOS; on Android it only applies through drawer/popin
+// transitions (native limitation). The RN/Flutter builder's progressColor,
+// displayCloseButton and displayBackButton are intentionally NOT exposed here: no
+// Cordova native present action accepts them.
+
+function normalizeError(error) {
+    if (error === undefined || error === null) return null;
+    if (typeof error === 'object' && error.message) return error;
+    return { message: String(error) };
+}
+
+function normalizePresentation(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    var screenId = raw.screenId != null ? raw.screenId : raw.id;
+    if (screenId == null) return null;
+    return {
+        screenId: screenId,
+        placementId: raw.placementId != null ? raw.placementId : null,
+        contentId: raw.contentId != null ? raw.contentId : null,
+        audienceId: raw.audienceId != null ? raw.audienceId : null,
+        abTestId: raw.abTestId != null ? raw.abTestId : null,
+        abTestVariantId: raw.abTestVariantId != null ? raw.abTestVariantId : null,
+        campaignId: raw.campaignId != null ? raw.campaignId : null,
+        flowId: raw.flowId != null ? raw.flowId : null,
+        language: raw.language != null ? raw.language : null,
+        type: raw.type != null ? raw.type : null,
+        plans: raw.plans != null ? raw.plans : null,
+        metadata: raw.metadata != null ? raw.metadata : null,
+        height: raw.height != null ? raw.height : null
+    };
+}
+
+function normalizeOutcome(raw) {
+    raw = raw || {};
+    return {
+        presentation: normalizePresentation(raw.presentation),
+        purchaseResult: raw.purchaseResult != null ? raw.purchaseResult : null,
+        plan: raw.plan != null ? raw.plan : null,
+        closeReason: raw.closeReason != null ? raw.closeReason : null,
+        error: raw.error != null ? raw.error : null
+    };
+}
+
+// A single presentation request: preload it (fetch without display), display it
+// (resolves at dismiss with a 5-field outcome), close it, or navigate back. Calling
+// `display()` after `preload()` re-displays the exact presentation that was fetched
+// (via the native presentPresentation action, carrying its private re-display
+// handle); `display()` alone (no prior preload) fetches and displays directly
+// through the present* action matching this request's source.
+function PLYPresentationRequest(config) {
+    this._config = config; // { placementId?, screenId?, contentId?, callbacks }
+    this._raw = null; // private: native fetch payload (carries the re-display handle)
+}
+
+PLYPresentationRequest.prototype.preload = function () {
+    var self = this;
+    return new Promise(function (resolve, reject) {
+        exec(function (raw) {
+            self._raw = raw;
+            // Resolve a "loaded presentation": the screenId-normalized data plus
+            // display()/close()/back() delegating to this request (parity with RN's
+            // PLYLoadedPresentation and the native preload()->display() flow).
+            resolve(Object.assign({}, normalizePresentation(raw), {
+                display: function (transition) { return self.display(transition); },
+                close: function () { return self.close(); },
+                back: function () { return self.back(); }
+            }));
+        }, function (error) {
+            reject(normalizeError(error));
+        }, 'Purchasely', 'fetchPresentation', [
+            self._config.placementId || null,
+            self._config.screenId || null,
+            self._config.contentId || null
+        ]);
+    });
 };
 
-exports.presentPresentationForPlacement = function (placementId, contentId, displayMode, success, error, callbacks) {
-    exec(presentationDispatcher(success, callbacks), error, 'Purchasely', 'presentPresentationForPlacement', [placementId, contentId, normalizeTransition(displayMode)]);
+PLYPresentationRequest.prototype.display = function (transition) {
+    var self = this;
+    var callbacks = this._config.callbacks;
+    var normalizedTransition = normalizeTransition(transition);
+    // .backgroundColor() sugar: merge into the transition object so the direct
+    // present* paths (iOS reads transition.backgroundColor) pick it up. The
+    // transition's own backgroundColor, if any, still wins. Keeping no `type`
+    // when none was given preserves CDV-W-12 (backend default honored).
+    if (self._config.backgroundColor != null) {
+        normalizedTransition = Object.assign({ backgroundColor: self._config.backgroundColor }, normalizedTransition || {});
+    }
+    var backgroundColor = self._config.backgroundColor != null ? self._config.backgroundColor : null;
+
+    return new Promise(function (resolve) {
+        function settle(rawOutcome) {
+            var outcome = normalizeOutcome(rawOutcome);
+            if (callbacks.onDismissed) callbacks.onDismissed(outcome);
+            resolve(outcome);
+        }
+        var dispatch = presentationDispatcher(settle, {
+            onPresented: callbacks.onPresented,
+            onCloseRequested: callbacks.onCloseRequested
+        });
+        function onNativeError(error) {
+            var normalized = normalizeError(error);
+            settle({ error: normalized ? normalized.message : 'Unable to display presentation' });
+        }
+
+        if (self._raw) {
+            // Re-display the presentation preloaded by preload() -- same native
+            // 'presentPresentation' action v5 used, carrying its private handle.
+            exec(dispatch, onNativeError, 'Purchasely', 'presentPresentation', [self._raw, normalizedTransition, backgroundColor]);
+        } else if (self._config.screenId) {
+            exec(dispatch, onNativeError, 'Purchasely', 'presentPresentationWithIdentifier',
+                [self._config.screenId, self._config.contentId || null, normalizedTransition]);
+        } else if (self._config.placementId) {
+            exec(dispatch, onNativeError, 'Purchasely', 'presentPresentationForPlacement',
+                [self._config.placementId, self._config.contentId || null, normalizedTransition]);
+        } else {
+            exec(dispatch, onNativeError, 'Purchasely', 'presentPresentationForDefault',
+                [self._config.contentId || null, normalizedTransition]);
+        }
+    });
 };
 
-// Purchasely 6.0: present the default (audience-targeted) presentation, with no
-// placement or presentation id (mirrors the native default presentation source).
-exports.presentPresentationForDefault = function (contentId, displayMode, success, error, callbacks) {
-    exec(presentationDispatcher(success, callbacks), error, 'Purchasely', 'presentPresentationForDefault', [contentId, normalizeTransition(displayMode)]);
+// Purchasely 6.0: dismisses via the same native action as the top-level
+// Purchasely.closeAllScreens() / closePresentation() (current bridge semantics:
+// closes every displayed screen, not just this request's).
+PLYPresentationRequest.prototype.close = function () {
+    exports.closeAllScreens();
 };
 
-exports.fetchPresentation = function (presentationId, contentId, success, error) {
-    exec(success, error, 'Purchasely', 'fetchPresentation', [null, presentationId, contentId]);
+// Purchasely 6.0: navigate back within the displayed presentation (was the
+// standalone Purchasely.backPresentation(), now request-scoped).
+PLYPresentationRequest.prototype.back = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'backPresentation', []);
 };
 
-exports.fetchPresentationForPlacement = function (placementId, contentId, success, error) {
-    exec(success, error, 'Purchasely', 'fetchPresentation', [placementId, null, contentId]);
+function PLYPresentationBuilder(config) {
+    this._config = config; // { placementId?, screenId?, contentId?, callbacks }
+}
+
+PLYPresentationBuilder.prototype.contentId = function (id) {
+    this._config.contentId = id;
+    return this;
 };
 
-// Purchasely 6.0: fetch the default (audience-targeted) presentation.
-exports.fetchPresentationForDefault = function (contentId, success, error) {
-    exec(success, error, 'Purchasely', 'fetchPresentation', [null, null, contentId]);
+// Loading/background color (hex). See the modifier parity note above: this is the
+// only style modifier the Cordova native layer supports; progressColor /
+// displayCloseButton / displayBackButton are intentionally not exposed.
+PLYPresentationBuilder.prototype.backgroundColor = function (hex) {
+    this._config.backgroundColor = hex;
+    return this;
 };
 
-exports.presentPresentation = function (presentation, displayMode, backgroundColor, success, error, callbacks) {
-    exec(presentationDispatcher(success, callbacks), error, 'Purchasely', 'presentPresentation', [presentation, normalizeTransition(displayMode), backgroundColor]);
+PLYPresentationBuilder.prototype.onPresented = function (handler) {
+    this._config.callbacks.onPresented = handler;
+    return this;
+};
+
+PLYPresentationBuilder.prototype.onCloseRequested = function (handler) {
+    this._config.callbacks.onCloseRequested = handler;
+    return this;
+};
+
+PLYPresentationBuilder.prototype.onDismissed = function (handler) {
+    this._config.callbacks.onDismissed = handler;
+    return this;
+};
+
+PLYPresentationBuilder.prototype.build = function () {
+    return new PLYPresentationRequest(this._config);
+};
+
+// Purchasely 6.0: the v6 presentation builder (parity with the React Native /
+// Flutter Purchasely.presentation). Pick exactly one source, chain
+// .contentId() / .onPresented() / .onCloseRequested() / .onDismissed(), then
+// .build().
+exports.presentation = {
+    placement: function (placementId) {
+        return new PLYPresentationBuilder({ placementId: placementId, callbacks: {} });
+    },
+    screen: function (screenId) {
+        return new PLYPresentationBuilder({ screenId: screenId, callbacks: {} });
+    },
+    defaultSource: function () {
+        return new PLYPresentationBuilder({ callbacks: {} });
+    },
+    // Alias of defaultSource(), kept for parity with the iOS native API name.
+    default: function () {
+        return exports.presentation.defaultSource();
+    }
 };
 
 exports.purchaseWithPlanVendorId = function (planId, offerId, contentId, success, error) {
@@ -244,26 +455,30 @@ exports.userDidConsumeSubscriptionContent = function () {
     exec(() => {}, defaultError, 'Purchasely', 'userDidConsumeSubscriptionContent', []);
 };
 
-exports.userSubscriptions = function (success, error) {
-    exec(success, defaultError, 'Purchasely', 'userSubscriptions', []);
+// PAR-29: invalidateCache forces a fresh fetch instead of returning the cached list
+// (native default false on both platforms).
+exports.userSubscriptions = function (success, error, invalidateCache) {
+    exec(success, defaultError, 'Purchasely', 'userSubscriptions', [!!invalidateCache]);
 };
 
-exports.userSubscriptionsHistory = function (success, error) {
-    exec(success, defaultError, 'Purchasely', 'userSubscriptionsHistory', []);
+exports.userSubscriptionsHistory = function (success, error, invalidateCache) {
+    exec(success, defaultError, 'Purchasely', 'userSubscriptionsHistory', [!!invalidateCache]);
 };
 
 exports.setLanguage = function (language) {
     exec(() => {}, defaultError, 'Purchasely', 'setLanguage', [language]);
 };
 
-// Purchasely 6.0: close the displayed presentation.
-exports.closePresentation = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'closePresentation', []);
+// PAR-19: closeAllScreens is the canonical name (matches the iOS/Android Purchasely-level
+// API). success/error are optional.
+exports.closeAllScreens = function (success, error) {
+    exec(success || (() => {}), error || defaultError, 'Purchasely', 'closeAllScreens', []);
 };
 
-// Purchasely 6.0: navigate back within the displayed presentation.
-exports.backPresentation = function () {
-    exec(() => {}, defaultError, 'Purchasely', 'backPresentation', []);
+// @deprecated use closeAllScreens instead; kept as an alias (same native action both
+// platforms already call: Purchasely.closeAllScreens()).
+exports.closePresentation = function (success, error) {
+    exports.closeAllScreens(success, error);
 };
 
 exports.setUserAttributeWithString = function (key, value, processLegalBasis) {
@@ -306,6 +521,22 @@ exports.userAttribute = function (key, success, error) {
     exec(success, error, 'Purchasely', 'userAttribute', [key]);
 };
 
+// REC-12 / PAR-03: bulk read of every user attribute currently stored, with the same
+// per-value type conversions as the single-key userAttribute(key) read.
+exports.userAttributes = function (success, error) {
+    exec(success, error || defaultError, 'Purchasely', 'userAttributes', []);
+};
+
+// REC-12 / PAR-02: increment/decrement a numerical user attribute. value defaults to 1
+// natively when omitted.
+exports.incrementUserAttribute = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'incrementUserAttribute', [key, value]);
+};
+
+exports.decrementUserAttribute = function (key, value) {
+    exec(() => {}, defaultError, 'Purchasely', 'decrementUserAttribute', [key, value]);
+};
+
 exports.clearUserAttribute = function (key) {
     exec(() => {}, defaultError, 'Purchasely', 'clearUserAttribute', [key]);
 };
@@ -318,10 +549,64 @@ exports.clearBuiltInAttributes = function () {
     exec(() => {}, defaultError, 'Purchasely', 'clearBuiltInAttributes', []);
 }
 
+// PAR-07: read-only accessors for the built-in (SDK-collected) attributes.
+exports.getBuiltInAttributes = function (success, error) {
+    exec(success, error || defaultError, 'Purchasely', 'getBuiltInAttributes', []);
+};
+
+exports.getBuiltInAttribute = function (key, success, error) {
+    exec(success, error || defaultError, 'Purchasely', 'getBuiltInAttribute', [key]);
+};
+
+// REC-12 / PAR-04: whether the current user is anonymous (no userLogin call yet).
+exports.isAnonymous = function (success, error) {
+    exec(success, error || defaultError, 'Purchasely', 'isAnonymous', []);
+};
+
+// PAR-05: Dynamic Offerings -- force a specific plan (and optionally offer) to be shown
+// in a specific context, keyed by an app-chosen reference.
+// Purchasely 6.0 (iOS 26.4+, Apple only): billing plan type of a subscription with a
+// multi-period commitment (e.g. "monthly subscription with 12-month commitment"). Passed to
+// setDynamicOffering and surfaced on the commitment fields below. Android always reports
+// `unspecified`.
+exports.BillingPlanType = { unspecified: 0, upFront: 1, monthly: 2 };
+
+// Purchasely 6.0 commitment fields (iOS 26.4+ only; absent on Android and on plans without a
+// commitment):
+//  - A plan object (from allProducts()/planWithIdentifier(), a presentation outcome's `plan`,
+//    and the interceptAction('purchase') `parameters.plan`) may carry `commitmentInfo`: an
+//    array of { billingPlanType (Number, see Purchasely.BillingPlanType), billingPrice
+//    (Number), billingPeriod (ISO 8601 duration string, e.g. "P1M"), totalPrice (Number),
+//    totalPeriod (ISO 8601 duration string, e.g. "P1Y"), totalDuration (Number of billing
+//    cycles) }.
+//  - A subscription object (from userSubscriptions()/userSubscriptionsHistory()) may carry
+//    `commitmentProgress`: { billingPeriodNumber (Number), totalBillingPeriods (Number),
+//    commitmentExpiresDate (ISO 8601 date string), commitmentPrice (Number) }.
+exports.setDynamicOffering = function (reference, planVendorId, offerVendorId, billingPlanType, success, error) {
+    exec(success || (() => {}), error || defaultError, 'Purchasely', 'setDynamicOffering',
+        [reference, planVendorId, offerVendorId != null ? offerVendorId : null,
+         billingPlanType != null ? billingPlanType : 0]);
+};
+
+// Returns a list of { reference, planVendorId, offerVendorId }.
+exports.getDynamicOfferings = function (success, error) {
+    exec(success, error || defaultError, 'Purchasely', 'getDynamicOfferings', []);
+};
+
+exports.removeDynamicOffering = function (reference) {
+    exec(() => {}, defaultError, 'Purchasely', 'removeDynamicOffering', [reference]);
+};
+
+exports.clearDynamicOfferings = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'clearDynamicOfferings', []);
+};
+
 exports.isEligibleForIntroOffer = function (planId, success, error) {
     exec(success, error, 'Purchasely', 'isEligibleForIntroOffer', [planId]);
 };
 
+// REC-04: iOS-only (StoreKit promotional offer signing). On Android this is a no-op that
+// resolves success (no signing is required there); no error is raised.
 exports.signPromotionalOffer = function (storeProductId, storeOfferId, success, error) {
     exec(success, error, 'Purchasely', 'signPromotionalOffer', [storeProductId, storeOfferId]);
 };
@@ -345,6 +630,11 @@ exports.LogLevel = {
 	ERROR: 3,
 }
 
+// WARNING: this list, iOS's CordovaPLYAttribute typedef, and Android's CordovaPLYAttribute
+// enum class must be kept in strictly identical declaration order across all 3. The bridge
+// matches an attribute by ordinal/symbol POSITION (not by the real native SDK's raw value,
+// which does churn -- see the native PLYAttribute/Attribute enums), so appending a new
+// attribute here always requires the matching append, in the same position, on both natives.
 exports.Attribute = {
   FIREBASE_APP_INSTANCE_ID: 0,
   AIRSHIP_CHANNEL_ID: 1,
@@ -367,6 +657,7 @@ exports.Attribute = {
   MOENGAGE_UNIQUE_ID: 18,
   ONESIGNAL_EXTERNAL_ID: 19,
   BATCH_CUSTOM_USER_ID: 20,
+  ONESIGNAL_USER_ID: 21, // ENM-02 / REC-11
 }
 
 exports.DataProcessingLegalBasis = {

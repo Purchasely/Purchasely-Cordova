@@ -18,7 +18,8 @@ cordova plugin add @purchasely/cordova-plugin-purchasely-google
 More details in our [documentation](https://docs.purchasely.com/quick-start/sdk-implementation).
 
 > **Upgrading from 5.x?** See [MIGRATION-v6.md](MIGRATION-v6.md) — `start()` now takes an
-> options object, `RunningMode` defaults to `observer`, and a few methods were renamed.
+> options object, `RunningMode` defaults to `observer`, the presentation API is now a
+> builder (`Purchasely.presentation`), and a few methods were renamed.
 
 ```js
 Purchasely.start(
@@ -40,23 +41,24 @@ Purchasely.start(
     }
 );
 
-// display a paywall from a placement
-Purchasely.presentPresentationForPlacement(
-    'placementId',
-    'my_content_id', // may be null
-    Purchasely.TransitionType.fullScreen, // display mode
-    (callback) => {
-        console.log(callback);
-        if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
-            console.log("User cancelled purchased");
+// display a paywall from a placement — Purchasely.presentation is the v6 builder:
+// pick a source (.placement/.screen/.defaultSource), .build(), then .display(transition?).
+// display() resolves at dismiss with a 5-field outcome.
+Purchasely.presentation
+    .placement('placementId')
+    .contentId('my_content_id') // optional, may be omitted
+    .build()
+    .display(Purchasely.TransitionType.fullScreen) // display mode
+    .then((outcome) => {
+        console.log(outcome);
+        if (outcome.error) {
+            console.log("Error with purchase : " + outcome.error);
+        } else if (outcome.purchaseResult === 'purchased' || outcome.purchaseResult === 'restored') {
+            console.log("User purchased " + outcome.plan.name);
         } else {
-            console.log("User purchased " + callback.plan.name);
+            console.log("User cancelled purchased");
         }
-    },
-    (error) => {
-        console.log("Error with purchase : " + error);
-    }
-);
+    });
 ```
 
 ## 🏁 Documentation

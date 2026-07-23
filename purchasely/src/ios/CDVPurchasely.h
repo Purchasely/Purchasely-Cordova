@@ -38,6 +38,7 @@
 - (void)userLogout:(CDVInvokedUrlCommand*)command;
 - (void)setAttribute:(CDVInvokedUrlCommand*)command;
 - (void)getAnonymousUserId:(CDVInvokedUrlCommand*)command;
+- (void)isAnonymous:(CDVInvokedUrlCommand*)command;
 - (void)allowDeeplink:(CDVInvokedUrlCommand*)command;
 - (void)allowCampaigns:(CDVInvokedUrlCommand*)command;
 - (void)handleDeeplink:(CDVInvokedUrlCommand*)command;
@@ -60,6 +61,7 @@
 - (void)unregisterActionInterceptor:(CDVInvokedUrlCommand*)command;
 - (void)completeActionInterceptor:(CDVInvokedUrlCommand*)command;
 - (void)closePresentation:(CDVInvokedUrlCommand*)command;
+- (void)closeAllScreens:(CDVInvokedUrlCommand*)command;
 - (void)backPresentation:(CDVInvokedUrlCommand*)command;
 - (void)userDidConsumeSubscriptionContent:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithStringArray:(CDVInvokedUrlCommand*)command;
@@ -72,14 +74,23 @@
 - (void)setUserAttributeWithDouble:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithDate:(CDVInvokedUrlCommand*)command;
 - (void)userAttribute:(CDVInvokedUrlCommand*)command;
+- (void)userAttributes:(CDVInvokedUrlCommand*)command;
+- (void)incrementUserAttribute:(CDVInvokedUrlCommand*)command;
+- (void)decrementUserAttribute:(CDVInvokedUrlCommand*)command;
 - (void)clearUserAttribute:(CDVInvokedUrlCommand*)command;
 - (void)clearUserAttributes:(CDVInvokedUrlCommand*)command;
 - (void)clearBuiltInAttributes:(CDVInvokedUrlCommand*)command;
+- (void)getBuiltInAttributes:(CDVInvokedUrlCommand*)command;
+- (void)getBuiltInAttribute:(CDVInvokedUrlCommand*)command;
 - (void)fetchPresentation:(CDVInvokedUrlCommand*)command;
 - (void)presentPresentation:(CDVInvokedUrlCommand*)command;
 - (void)signPromotionalOffer:(CDVInvokedUrlCommand*)command;
 - (void)isEligibleForIntroOffer:(CDVInvokedUrlCommand*)command;
 - (void)setThemeMode:(CDVInvokedUrlCommand*)command;
 - (void)addUserAttributeListener:(CDVInvokedUrlCommand*)command;
+- (void)setDynamicOffering:(CDVInvokedUrlCommand*)command;
+- (void)getDynamicOfferings:(CDVInvokedUrlCommand*)command;
+- (void)removeDynamicOffering:(CDVInvokedUrlCommand*)command;
+- (void)clearDynamicOfferings:(CDVInvokedUrlCommand*)command;
 
 @end

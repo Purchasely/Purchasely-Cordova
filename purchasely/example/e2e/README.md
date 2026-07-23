@@ -16,8 +16,8 @@ Cordova imperative API. They are **not** part of the PR-gating `ci.yml`; they ru
 
 | Suite | File | Gate | Notes |
 |-------|------|------|-------|
-| bridge | `specs/bridge.e2e.js` | **hard** | anonymous id, allProducts, fetchPresentationForPlacement, synchronize completion, user-attribute round-trip |
-| dismiss | `specs/dismiss.e2e.js` | best-effort | present placement + programmatic close → dismiss outcome + `closeReason` (needs a paywall to render) |
+| bridge | `specs/bridge.e2e.js` | **hard** | anonymous id, allProducts, fetchPresentationForPlacement, synchronize completion, user-attribute round-trip (string/int/boolean), userSubscriptions |
+| dismiss | `specs/dismiss.e2e.js` | best-effort | present placement or default presentation + programmatic close → dismiss outcome + `closeReason` (needs a paywall to render) |
 
 Best-effort suites emit `::warning::` on failure and do not fail the job (native/paywall
 rendering is flaky in CI — same policy as the Flutter suite). Each suite retries up to 3×.

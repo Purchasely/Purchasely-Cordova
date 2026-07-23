@@ -3,8 +3,8 @@
 `@purchasely/cordova-plugin-purchasely@6.0.0-rc.3` wraps the Purchasely **6.0** native
 SDKs (iOS `Purchasely 6.0.0-rc.3`, Android `io.purchasely:core 6.0.0-rc.3`). This guide
 lists every change to the JavaScript API. Most of the SDK is source-compatible; the
-breaking surfaces are **SDK start**, **presentation display mode**, and the **action
-interceptor result**.
+breaking surfaces are **SDK start**, the **presentation API** (now a builder, parity
+with the React Native/Flutter SDKs), and the **action interceptor result**.
 
 > The 6.0 line is a release candidate. It is published to npm under the `next` dist-tag:
 > `cordova plugin add @purchasely/cordova-plugin-purchasely@next`.
@@ -82,23 +82,59 @@ Purchasely.synchronize(
 );
 ```
 
-## 4. Presentation display mode & transitions
+## 4. Presentation API is now the v6 builder (breaking)
 
-The `isFullscreen` boolean on the `present*` methods is replaced by a **display mode**.
-Pass either a `Purchasely.TransitionType` string or a full **transition object** (for
-drawer/popin sizing). Legacy booleans still work (`true` → `fullScreen`, `false` → `modal`).
+The imperative presentation surface (`presentPresentationForPlacement`,
+`presentPresentationWithIdentifier`, `presentPresentationForDefault`, `fetchPresentation`,
+`fetchPresentationForPlacement`, `fetchPresentationForDefault`, `presentPresentation`,
+`backPresentation`) is **REMOVED**, not deprecated — replaced by a chainable, promise-based
+builder that matches the React Native and Flutter SDKs. It wraps the exact same native
+actions those methods used; only the JavaScript surface changed.
 
 ```js
-// Simple: a display-mode string
-Purchasely.presentPresentationForPlacement('ONBOARDING', null, Purchasely.TransitionType.fullScreen, ok, err);
+// Present a placement full-screen (was presentPresentationForPlacement)
+const outcome = await Purchasely.presentation.placement('ONBOARDING').build().display();
 
-// Rich: a transition object (drawer/popin sizing, dismissible, background color)
-Purchasely.presentPresentationForPlacement('ONBOARDING', null, {
+// Present a specific screen (was presentPresentationWithIdentifier)
+await Purchasely.presentation.screen('SCREEN_ID').build().display();
+
+// Present the default (audience-targeted) presentation (was presentPresentationForDefault)
+await Purchasely.presentation.defaultSource().build().display(); // or .default(), iOS-style alias
+
+// Preselect a product/plan content id (was the contentId parameter)
+await Purchasely.presentation.placement('ONBOARDING').contentId('my_content_id').build().display();
+```
+
+`display()` resolves at **dismiss** with a 5-field outcome:
+`{ presentation, purchaseResult, plan, closeReason, error }` (`presentation.screenId` is
+the authoritative identifier — see below).
+
+### Preloading (was `fetchPresentation*` + `presentPresentation`)
+
+```js
+const request = Purchasely.presentation.placement('ONBOARDING').build();
+const presentation = await request.preload();   // screenId is authoritative
+// ...later, re-display the exact screen that was preloaded:
+const outcome = await request.display();
+```
+
+> `onPresented` / `onCloseRequested` fire on the `preload()` → `display()` re-display
+> path on both platforms (matching the direct `display()` path). The final outcome always
+> resolves on both platforms.
+
+### Display transitions
+
+`display(transition?)` takes the same transition object as before — a
+`Purchasely.TransitionType` string, a legacy boolean (`true` → `fullScreen`, `false` →
+`modal`), or a full transition object for drawer/popin sizing:
+
+```js
+await Purchasely.presentation.placement('ONBOARDING').build().display({
   type: Purchasely.TransitionType.drawer,
   dismissible: true,
   height: { type: Purchasely.DimensionType.percentage, value: 0.8 }, // 0.0–1.0
   backgroundColor: '#000000'
-}, ok, err);
+});
 ```
 
 `TransitionType`: `fullScreen`, `modal`, `drawer`, `popin`, `push`, `inlinePaywall`.
@@ -108,43 +144,71 @@ Purchasely.presentPresentationForPlacement('ONBOARDING', null, {
 > `backgroundColor`) is applied to drawer/popin — pixel sizing and popin `width` are not
 > exposed to the bridge by the native iOS SDK. **Android** honors the full set.
 
-### Presentation lifecycle callbacks
+### Presentation modifiers
 
-The `present*` methods accept an optional final `callbacks` object to observe the
-presentation lifecycle. The `success` callback still receives the final dismiss outcome.
-
-```js
-Purchasely.presentPresentationForPlacement('ONBOARDING', null, Purchasely.TransitionType.fullScreen,
-  (outcome) => console.log('dismissed', outcome.purchaseResult, outcome.closeReason),
-  (err) => console.error(err),
-  {
-    onPresented: (presentation, error) => console.log('presented', presentation && presentation.screenId),
-    onCloseRequested: () => console.log('user requested close'),
-  }
-);
-```
-
-> `onPresented` / `onCloseRequested` fire for the direct `present*` methods on both
-> platforms; on Android they do not fire for the `fetchPresentation` → `presentPresentation`
-> re-display path (iOS covers both).
-
-### Default (audience-targeted) presentation
-
-Present or fetch the default presentation — no placement or presentation id:
+`.backgroundColor(hex)` sets the loading/background color:
 
 ```js
-Purchasely.presentPresentationForDefault(null /* contentId */, Purchasely.TransitionType.fullScreen, ok, err);
-Purchasely.fetchPresentationForDefault(null /* contentId */, onLoaded, err);
+await Purchasely.presentation.placement('ONBOARDING').backgroundColor('#101010').build().display();
 ```
 
-### Removed presentation methods
+> It is the only style modifier wired through the Cordova bridge, and it takes effect on
+> **iOS** (passed to `presentPresentation`'s native background argument on the
+> `preload()` → `display()` path, and via the transition on the direct path). On **Android**
+> a background color only applies through a drawer/popin transition (native limitation). The
+> RN/Flutter builder's `progressColor`, `displayCloseButton` and `displayBackButton` are
+> **not** available on Cordova — no native present action accepts them.
+
+### Lifecycle callbacks
+
+`onPresented` / `onCloseRequested` / `onDismissed` are chained on the builder, before
+`.build()`:
+
+```js
+const request = Purchasely.presentation.placement('ONBOARDING')
+  .onPresented((presentation, error) => console.log('presented', presentation && presentation.screenId))
+  .onCloseRequested(() => console.log('user requested close'))
+  .onDismissed((outcome) => console.log('dismissed', outcome.purchaseResult, outcome.closeReason))
+  .build();
+
+await request.display();
+```
+
+> `onPresented` / `onCloseRequested` fire on both the direct `display()` path and the
+> `preload()` → `display()` re-display path, on both platforms.
+
+### Close / back
+
+```js
+request.close(); // closeAllScreens() under the hood — closes every displayed screen
+request.back();  // was the standalone backPresentation()
+```
+
+### screenId is authoritative
+
+Every presentation object returned by `preload()`, or carried in an outcome's
+`presentation` field, exposes `screenId` as the stable public identifier (the JS bridge
+tolerates a raw `id` fallback, `screenId ?? id`, for defensiveness). Any native re-display
+handle used internally to make `preload()` → `display()` work (e.g. Android's synthetic
+fetch handle) is a private implementation detail of the request and is never part of the
+returned presentation object.
+
+### Migration table
 
 | Removed | Replacement |
 |---|---|
+| `fetchPresentation(id, contentId, ok, err)` | `Purchasely.presentation.screen(id).contentId(contentId).build().preload()` |
+| `fetchPresentationForPlacement(id, contentId, ok, err)` | `Purchasely.presentation.placement(id).contentId(contentId).build().preload()` |
+| `fetchPresentationForDefault(contentId, ok, err)` | `Purchasely.presentation.defaultSource().contentId(contentId).build().preload()` |
+| `presentPresentationWithIdentifier(id, contentId, mode, ok, err, cb)` | `Purchasely.presentation.screen(id).contentId(contentId).onPresented(...).onCloseRequested(...).build().display(mode)` |
+| `presentPresentationForPlacement(id, contentId, mode, ok, err, cb)` | `Purchasely.presentation.placement(id).contentId(contentId)...build().display(mode)` |
+| `presentPresentationForDefault(contentId, mode, ok, err, cb)` | `Purchasely.presentation.defaultSource().contentId(contentId)...build().display(mode)` |
+| `presentPresentation(presentation, mode, bgColor, ok, err, cb)` | `request.preload()` then `request.display(mode)` on that same request |
+| `backPresentation()` | `request.back()` |
 | `presentSubscriptions()` | No native screen in 6.0. Build your own from `userSubscriptions()` / `userSubscriptionsHistory()`. |
-| `presentProductWithIdentifier()` | Use placement/screen-based presentation (`presentPresentationForPlacement` / `presentPresentationWithIdentifier`). |
-| `presentPlanWithIdentifier()` | Same as above. |
-| `showPresentation()` / `hidePresentation()` | No hide/show primitive in 6.0. Use `closePresentation()`; `backPresentation()` was added to navigate back. |
+| `presentProductWithIdentifier()` | `Purchasely.presentation.screen(id).contentId(contentId).build().display()` |
+| `presentPlanWithIdentifier()` | `Purchasely.presentation.screen(id).build().display()` |
+| `showPresentation()` / `hidePresentation()` | `request.display()` / `request.close()` |
 
 ## 5. Action interceptor
 
@@ -217,7 +281,44 @@ callback) exposes:
 ## 8. New exported constants
 
 `InterceptResult`, `PresentationType`, `CloseReason`, `TransitionType`, `DimensionType`,
-`Store`, `StorekitVersion`, `PresentationAction`.
+`Store`, `StorekitVersion`, `PresentationAction`, `BillingPlanType`.
+
+## 9. Apple commitment info (iOS 26.4+, Apple only)
+
+Apple's "monthly subscription with 12-month commitment" is now surfaced through the bridge.
+These fields are **iOS-only** — they are absent on Android and on plans/subscriptions without
+a commitment, so read them defensively.
+
+- **`Purchasely.BillingPlanType`** — `{ unspecified: 0, upFront: 1, monthly: 2 }`. Pass it as
+  the new 4th argument of `setDynamicOffering(reference, planVendorId, offerVendorId,
+  billingPlanType, success, error)` (defaults to `unspecified` when omitted).
+
+- **`plan.commitmentInfo`** — an array present on plans returned by `allProducts()` /
+  `planWithIdentifier()`, on a presentation outcome's `plan`, and on the
+  `interceptAction('purchase')` payload's `parameters.plan`. Each entry:
+
+  ```js
+  {
+    billingPlanType, // Number — see Purchasely.BillingPlanType
+    billingPrice,    // Number — per-cycle price
+    billingPeriod,   // String — ISO 8601 duration, e.g. "P1M"
+    totalPrice,      // Number — total over the full commitment
+    totalPeriod,     // String — ISO 8601 duration, e.g. "P1Y"
+    totalDuration    // Number — number of billing cycles (e.g. 12)
+  }
+  ```
+
+- **`subscription.commitmentProgress`** — present on subscriptions returned by
+  `userSubscriptions()` / `userSubscriptionsHistory()`:
+
+  ```js
+  {
+    billingPeriodNumber,   // Number — current billing period (1-based)
+    totalBillingPeriods,   // Number — total periods in the commitment
+    commitmentExpiresDate, // String — ISO 8601 date
+    commitmentPrice        // Number — price for this period
+  }
+  ```
 
 ---
 

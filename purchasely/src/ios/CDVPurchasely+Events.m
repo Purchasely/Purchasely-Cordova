@@ -13,7 +13,13 @@
 
 - (void)eventTriggered:(enum PLYEvent)event properties:(NSDictionary<NSString *, id> * _Nullable)properties {
 	if (self.eventCommand) {
-		NSDictionary<NSString *, id> *eventDict = @{@"name": [NSString fromPLYEvent:event], @"properties": properties};
+		// CDV-W-01: properties is _Nullable; inserting nil into an ObjC dictionary LITERAL
+		// throws NSInvalidArgumentException. Build it mutably and only set the key when non-nil.
+		NSMutableDictionary<NSString *, id> *eventDict = [NSMutableDictionary new];
+		[eventDict setObject:[NSString fromPLYEvent:event] forKey:@"name"];
+		if (properties != nil) {
+			[eventDict setObject:properties forKey:@"properties"];
+		}
 		CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:eventDict];
 
 		[pluginResult setKeepCallbackAsBool:YES];
