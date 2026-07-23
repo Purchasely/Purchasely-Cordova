@@ -132,7 +132,53 @@ async function callPresentation(source, sourceId, action, transition, timeoutMs 
   );
 }
 
-// Close the presentation driven by the last callPresentation() request (WEBVIEW context).
+// Display a presentation and stash its dismiss outcome on a window global, WITHOUT
+// blocking the WebDriver session. callPresentation() drives display() inside a single
+// executeAsync that only settles at dismiss — but the session is then busy, so the
+// follow-up close() command can never run (deadlock -> script timeout). Fire display()
+// fire-and-forget instead and poll the outcome via awaitDismissOutcome(); the session
+// stays free to send closeCurrentPresentation() in between.
+async function displayPresentation(source, sourceId, transition) {
+  await browser.execute(
+    function (source, sourceId, transition) {
+      window.__plyOutcome = undefined;
+      var builder = sourceId
+        ? window.Purchasely.presentation[source](sourceId)
+        : window.Purchasely.presentation[source]();
+      var request = builder.build();
+      window.__plyLastRequest = request;
+      request.display(transition).then(
+        function (v) { window.__plyOutcome = { ok: true, value: v }; },
+        function (e) { window.__plyOutcome = { ok: false, error: String(e) }; }
+      );
+    },
+    source,
+    sourceId,
+    transition
+  );
+}
+
+// Poll for the dismiss outcome stashed by displayPresentation(). Resolves { ok, value } /
+// { ok:false, error } once display()'s promise settles (i.e. after close()), or
+// { ok:false, error:'timeout' } if no outcome arrives in time.
+async function awaitDismissOutcome(timeoutMs = 30000) {
+  let outcome;
+  try {
+    await browser.waitUntil(
+      async () => {
+        outcome = await browser.execute(function () { return window.__plyOutcome; });
+        return outcome !== undefined && outcome !== null;
+      },
+      { timeout: timeoutMs, interval: 500, timeoutMsg: 'dismiss outcome never delivered' }
+    );
+  } catch (e) {
+    return { ok: false, error: 'timeout' };
+  }
+  return outcome;
+}
+
+// Close the presentation driven by the last callPresentation()/displayPresentation()
+// request (WEBVIEW context).
 async function closeCurrentPresentation() {
   return browser.execute(function () {
     if (window.__plyLastRequest) window.__plyLastRequest.close();
@@ -146,5 +192,7 @@ module.exports = {
   callBridge,
   fireBridge,
   callPresentation,
+  displayPresentation,
+  awaitDismissOutcome,
   closeCurrentPresentation,
 };
