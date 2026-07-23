@@ -6,3 +6,6 @@
 .idea/copilot.data.migration.*.xml
 .idea/markdown.xml
 .idea/inspectionProfiles/
+
+# git worktrees (local dev)
+.worktrees/

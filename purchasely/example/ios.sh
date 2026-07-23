@@ -1,9 +1,10 @@
 #!/bin/bash
 
-cordova plugin remove @purchasely/cordova-plugin-purchasely
-cordova platform remove ios
-cordova platform add ios@latest
-cordova plugin add ../ --link
+npm ci
+cordova plugin remove @purchasely/cordova-plugin-purchasely --nosave
+cordova platform remove ios --nosave
+cordova platform add ios@8.1.1 --nosave
+cordova plugin add ../ --link --nosave
 
 if [[ $1 = true ]]
 then
