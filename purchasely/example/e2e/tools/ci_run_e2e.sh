@@ -16,7 +16,12 @@ mkdir -p "$LOGDIR"
 export ANDROID_SERIAL="$SERIAL"
 
 echo "== Starting Appium =="
-npx appium --log "$LOGDIR/appium-android.log" --log-level info &
+# --allow-insecure=chromedriver_autodownload lets the uiautomator2 driver fetch the
+# Chromedriver matching the Cordova WebView's Chrome version on demand. Without it,
+# switching to the WEBVIEW context fails ("No Chromedriver found that can automate
+# Chrome 'X'"), which breaks every bridge test in its `before all` hook.
+npx appium --allow-insecure=uiautomator2:chromedriver_autodownload \
+  --log "$LOGDIR/appium-android.log" --log-level info &
 APPIUM_PID=$!
 trap 'kill $APPIUM_PID 2>/dev/null || true' EXIT
 # Wait for Appium to accept connections.

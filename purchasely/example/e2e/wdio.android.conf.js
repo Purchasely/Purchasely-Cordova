@@ -11,6 +11,9 @@ exports.config = Object.assign({}, config, {
     'appium:automationName': 'UiAutomator2',
     'appium:app': APK,
     'appium:appPackage': 'com.purchasely.demo',
+    // Pin the target device when several are attached (env override); CI has a
+    // single emulator so this is normally undefined.
+    'appium:udid': process.env.PURCHASELY_E2E_UDID || undefined,
     'appium:newCommandTimeout': 240,
     'appium:autoGrantPermissions': true,
     // The Cordova WebView is debuggable in the debug build, so Appium can attach

@@ -36,34 +36,56 @@ async function waitForPurchaselyReady() {
 // with { ok, value } on success or { ok:false, error } on error. `args` are the leading
 // positional arguments before the callbacks.
 async function callBridge(method, args = [], timeoutMs = 30000) {
-  return browser.executeAsync(
-    function (method, args, timeoutMs, done) {
-      var settled = false;
-      var finish = function (payload) {
-        if (settled) return;
-        settled = true;
-        done(payload);
-      };
-      setTimeout(function () { finish({ ok: false, error: 'timeout' }); }, timeoutMs);
-      try {
-        var fn = window.Purchasely[method];
-        if (typeof fn !== 'function') {
-          return finish({ ok: false, error: 'no such method: ' + method });
+  try {
+    return await browser.executeAsync(
+      function (method, args, timeoutMs, done) {
+        var settled = false;
+        var finish = function (payload) {
+          if (settled) return;
+          settled = true;
+          done(payload);
+        };
+        setTimeout(function () { finish({ ok: false, error: 'timeout' }); }, timeoutMs);
+        try {
+          var fn = window.Purchasely[method];
+          if (typeof fn !== 'function') {
+            return finish({ ok: false, error: 'no such method: ' + method });
+          }
+          fn.apply(
+            window.Purchasely,
+            args.concat([
+              function (value) { finish({ ok: true, value: value }); },
+              function (error) { finish({ ok: false, error: String(error) }); },
+            ])
+          );
+        } catch (e) {
+          finish({ ok: false, error: String(e) });
         }
-        fn.apply(
-          window.Purchasely,
-          args.concat([
-            function (value) { finish({ ok: true, value: value }); },
-            function (error) { finish({ ok: false, error: String(error) }); },
-          ])
-        );
-      } catch (e) {
-        finish({ ok: false, error: String(e) });
-      }
+      },
+      method,
+      args,
+      timeoutMs
+    );
+  } catch (e) {
+    // A webview-level failure (async-script timeout, a native error surfaced by
+    // chromedriver, a detached context) is reported as a settled { ok:false }
+    // rather than thrown, so one flaky call can't abort the whole spec.
+    return { ok: false, error: String((e && e.message) || e) };
+  }
+}
+
+// Fire a void Purchasely method that takes NO success callback — the
+// setUserAttributeWith* setters are fire-and-forget on the Cordova bridge
+// (exec(() => {}, defaultError, ...)). callBridge would hang waiting for a success
+// callback these never invoke, so dispatch the call and resolve immediately.
+async function fireBridge(method, args = []) {
+  await browser.execute(
+    function (method, args) {
+      var fn = window.Purchasely[method];
+      if (typeof fn === 'function') fn.apply(window.Purchasely, args);
     },
     method,
-    args,
-    timeoutMs
+    args
   );
 }
 
@@ -122,6 +144,7 @@ module.exports = {
   switchToNative,
   waitForPurchaselyReady,
   callBridge,
+  fireBridge,
   callPresentation,
   closeCurrentPresentation,
 };

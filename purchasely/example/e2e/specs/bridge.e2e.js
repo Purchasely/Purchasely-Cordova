@@ -1,7 +1,7 @@
 // Deterministic Dart<->native bridge assertions (no native taps). HARD gate — these
 // must pass. Mirrors the Flutter E2E_TEST_INDEX suite T1/T3/T5/T6 adapted to the
 // Cordova imperative API.
-const { waitForPurchaselyReady, callBridge, callPresentation } = require('../helpers/driver');
+const { waitForPurchaselyReady, callBridge, fireBridge, callPresentation } = require('../helpers/driver');
 
 const PLACEMENT = process.env.PURCHASELY_E2E_PLACEMENT || 'ONBOARDING';
 
@@ -45,9 +45,12 @@ describe('Purchasely bridge (WEBVIEW context)', () => {
     expect(typeof res.ok).toBe('boolean');
   });
 
-  // user-attribute round-trip (set then read back)
+  // user-attribute round-trip (set then read back). The setters are fire-and-forget on
+  // the Cordova bridge (no success callback), so fire them via fireBridge and read back
+  // with callBridge; the small pause lets the native set land before the read.
   it('setUserAttributeWithString then userAttribute round-trips', async () => {
-    await callBridge('setUserAttributeWithString', ['e2e_key', 'e2e_value', 'ESSENTIAL']);
+    await fireBridge('setUserAttributeWithString', ['e2e_key', 'e2e_value', 'ESSENTIAL']);
+    await browser.pause(300);
     const res = await callBridge('userAttribute', ['e2e_key']);
     expect(res.ok).toBe(true);
     expect(res.value).toBe('e2e_value');
@@ -55,7 +58,8 @@ describe('Purchasely bridge (WEBVIEW context)', () => {
 
   // user-attribute round-trip, int variant
   it('setUserAttributeWithInt then userAttribute round-trips', async () => {
-    await callBridge('setUserAttributeWithInt', ['e2e_key_int', 7, 'ESSENTIAL']);
+    await fireBridge('setUserAttributeWithInt', ['e2e_key_int', 7, 'ESSENTIAL']);
+    await browser.pause(300);
     const res = await callBridge('userAttribute', ['e2e_key_int']);
     expect(res.ok).toBe(true);
     expect(res.value).toBe(7);
@@ -64,7 +68,8 @@ describe('Purchasely bridge (WEBVIEW context)', () => {
   // user-attribute round-trip, boolean variant (CDV-W-09 fixed: both platforms now
   // return a real JSON boolean, so this asserts strict equality, not just truthiness).
   it('setUserAttributeWithBoolean then userAttribute round-trips', async () => {
-    await callBridge('setUserAttributeWithBoolean', ['e2e_key_bool', true, 'ESSENTIAL']);
+    await fireBridge('setUserAttributeWithBoolean', ['e2e_key_bool', true, 'ESSENTIAL']);
+    await browser.pause(300);
     const res = await callBridge('userAttribute', ['e2e_key_bool']);
     expect(res.ok).toBe(true);
     expect(res.value).toBe(true);
