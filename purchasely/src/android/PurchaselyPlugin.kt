@@ -1327,7 +1327,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 result.put(JSONObject(mapOf(
                     "reference" to offering.reference,
                     "planVendorId" to offering.planId,
-                    "offerVendorId" to offering.offerId
+                    "offerVendorId" to (offering.offerId ?: JSONObject.NULL)
                 )))
             }
             callbackContext.success(result)
