@@ -565,8 +565,27 @@ exports.isAnonymous = function (success, error) {
 
 // PAR-05: Dynamic Offerings -- force a specific plan (and optionally offer) to be shown
 // in a specific context, keyed by an app-chosen reference.
-exports.setDynamicOffering = function (reference, planVendorId, offerVendorId, success, error) {
-    exec(success || (() => {}), error || defaultError, 'Purchasely', 'setDynamicOffering', [reference, planVendorId, offerVendorId]);
+// Purchasely 6.0 (iOS 26.4+, Apple only): billing plan type of a subscription with a
+// multi-period commitment (e.g. "monthly subscription with 12-month commitment"). Passed to
+// setDynamicOffering and surfaced on the commitment fields below. Android always reports
+// `unspecified`.
+exports.BillingPlanType = { unspecified: 0, upFront: 1, monthly: 2 };
+
+// Purchasely 6.0 commitment fields (iOS 26.4+ only; absent on Android and on plans without a
+// commitment):
+//  - A plan object (from allProducts()/planWithIdentifier(), a presentation outcome's `plan`,
+//    and the interceptAction('purchase') `parameters.plan`) may carry `commitmentInfo`: an
+//    array of { billingPlanType (Number, see Purchasely.BillingPlanType), billingPrice
+//    (Number), billingPeriod (ISO 8601 duration string, e.g. "P1M"), totalPrice (Number),
+//    totalPeriod (ISO 8601 duration string, e.g. "P1Y"), totalDuration (Number of billing
+//    cycles) }.
+//  - A subscription object (from userSubscriptions()/userSubscriptionsHistory()) may carry
+//    `commitmentProgress`: { billingPeriodNumber (Number), totalBillingPeriods (Number),
+//    commitmentExpiresDate (ISO 8601 date string), commitmentPrice (Number) }.
+exports.setDynamicOffering = function (reference, planVendorId, offerVendorId, billingPlanType, success, error) {
+    exec(success || (() => {}), error || defaultError, 'Purchasely', 'setDynamicOffering',
+        [reference, planVendorId, offerVendorId != null ? offerVendorId : null,
+         billingPlanType != null ? billingPlanType : 0]);
 };
 
 // Returns a list of { reference, planVendorId, offerVendorId }.

@@ -99,6 +99,14 @@ describe('Purchasely', () => {
       });
     });
 
+    describe('BillingPlanType', () => {
+      it('should have correct billing plan type values (iOS 26.4+ commitment, Apple only)', () => {
+        expect(Purchasely.BillingPlanType.unspecified).toBe(0);
+        expect(Purchasely.BillingPlanType.upFront).toBe(1);
+        expect(Purchasely.BillingPlanType.monthly).toBe(2);
+      });
+    });
+
     describe('RunningMode', () => {
       it('should expose the Purchasely 6.0 running modes by name', () => {
         expect(Purchasely.RunningMode.observer).toBe('observer');
@@ -1064,6 +1072,37 @@ describe('Purchasely', () => {
       );
     });
 
+    // Commitment fields (iOS 26.4+, Apple only) ride on the plan carried by the purchase
+    // payload's `parameters.plan`. The JS layer forwards `parameters` verbatim, so a plan's
+    // `commitmentInfo` must survive untouched — this guards against a future param whitelist
+    // silently dropping it.
+    it('forwards a purchase payload plan carrying commitmentInfo to the handler', async () => {
+      const handler = jest.fn().mockReturnValue(Purchasely.InterceptResult.success);
+      Purchasely.interceptAction('purchase', handler);
+      const nativeSuccess = nativeInterceptorFor('purchase');
+
+      const parameters = {
+        plan: {
+          vendorId: 'plan_monthly_12m',
+          commitmentInfo: [
+            {
+              billingPlanType: Purchasely.BillingPlanType.monthly,
+              billingPrice: 9.99,
+              billingPeriod: 'P1M',
+              totalPrice: 119.88,
+              totalPeriod: 'P1Y',
+              totalDuration: 12,
+            },
+          ],
+        },
+      };
+      nativeSuccess({ action: 'purchase', callbackId: 'purchase#c', info: null, parameters });
+      await flush();
+
+      expect(handler).toHaveBeenCalledWith(null, parameters);
+      expect(handler.mock.calls[0][1].plan.commitmentInfo[0].billingPlanType).toBe(2);
+    });
+
     it('ignores events whose action does not match the registered kind', async () => {
       const handler = jest.fn();
       Purchasely.interceptAction('restore', handler);
@@ -1577,30 +1616,30 @@ describe('Purchasely', () => {
 
   describe('Dynamic Offerings (PAR-05)', () => {
     describe('setDynamicOffering', () => {
-      it('should call exec with correct parameters', () => {
+      it('should call exec with correct parameters, forwarding billingPlanType', () => {
         const success = jest.fn();
         const error = jest.fn();
 
-        Purchasely.setDynamicOffering('ref_1', 'plan_vendor_id', 'offer_vendor_id', success, error);
+        Purchasely.setDynamicOffering('ref_1', 'plan_vendor_id', 'offer_vendor_id', Purchasely.BillingPlanType.monthly, success, error);
 
         expect(mockExec).toHaveBeenCalledWith(
           success,
           error,
           'Purchasely',
           'setDynamicOffering',
-          ['ref_1', 'plan_vendor_id', 'offer_vendor_id']
+          ['ref_1', 'plan_vendor_id', 'offer_vendor_id', 2]
         );
       });
 
-      it('should forward a null offerVendorId when none is given', () => {
-        Purchasely.setDynamicOffering('ref_1', 'plan_vendor_id', null, jest.fn(), jest.fn());
+      it('should forward a null offerVendorId and default billingPlanType to unspecified when omitted', () => {
+        Purchasely.setDynamicOffering('ref_1', 'plan_vendor_id', null, undefined, jest.fn(), jest.fn());
 
         expect(mockExec).toHaveBeenCalledWith(
           expect.any(Function),
           expect.any(Function),
           'Purchasely',
           'setDynamicOffering',
-          ['ref_1', 'plan_vendor_id', null]
+          ['ref_1', 'plan_vendor_id', null, 0]
         );
       });
     });
