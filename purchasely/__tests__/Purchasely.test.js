@@ -281,6 +281,68 @@ describe('Purchasely', () => {
     });
   });
 
+  describe('builder(apiKey) (fluent alias of start)', () => {
+    it('accumulates chained options and delegates to exports.start with (success, error) callbacks', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.builder('API_KEY')
+        .appUserId('user123')
+        .runningMode(Purchasely.RunningMode.full)
+        .logLevel(Purchasely.LogLevel.INFO)
+        .allowDeeplink(true)
+        .allowCampaigns(false)
+        .stores([Purchasely.Store.google])
+        .storekitVersion(Purchasely.StorekitVersion.storeKit2)
+        .storeKit1(false)
+        .deeplink('myapp://deeplink')
+        .start(success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        success,
+        error,
+        'Purchasely',
+        'start',
+        [
+          {
+            apiKey: 'API_KEY',
+            appUserId: 'user123',
+            runningMode: 'full',
+            logLevel: 1,
+            allowDeeplink: true,
+            allowCampaigns: false,
+            stores: ['Google'],
+            storekitVersion: 'storeKit2',
+            storeKit1: false,
+            deeplink: 'myapp://deeplink',
+            sdkVersion: '5.6.2'
+          }
+        ]
+      );
+    });
+
+    it('start() with no callbacks returns a Promise resolving the isConfigured value', async () => {
+      const startPromise = Purchasely.builder('API_KEY').start();
+
+      const call = mockExec.mock.calls[mockExec.mock.calls.length - 1];
+      expect(call[2]).toBe('Purchasely');
+      expect(call[3]).toBe('start');
+      expect(call[4]).toEqual([{ apiKey: 'API_KEY', sdkVersion: '5.6.2' }]);
+      call[0](true); // native success callback -> isConfigured
+
+      await expect(startPromise).resolves.toBe(true);
+    });
+
+    it('rejects the Promise on native start failure', async () => {
+      const startPromise = Purchasely.builder('API_KEY').start();
+
+      const call = mockExec.mock.calls[mockExec.mock.calls.length - 1];
+      call[1]('Invalid API Key');
+
+      await expect(startPromise).rejects.toEqual({ message: 'Invalid API Key' });
+    });
+  });
+
   describe('addEventListener (canonical, REC-18/PAR-18)', () => {
     it('should call exec with correct parameters', () => {
       const success = jest.fn();

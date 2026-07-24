@@ -69,6 +69,43 @@ exports.start = function (options, success, error) {
     exec(success, error, 'Purchasely', 'start', [opts]);
 };
 
+// Purchasely 6.0: fluent alias of exports.start(options, ...) (parity with the
+// RN/Flutter Purchasely.builder(apiKey)). Accumulates options via the chain
+// below, then delegates to the very same exports.start -- no new native action.
+// .start(success, error) supports both idioms: pass callbacks for the Cordova
+// (success, error) style, or omit them for a Promise resolving the
+// isConfigured boolean (rejecting on native failure).
+function PLYStartBuilder(apiKey) {
+    this._options = { apiKey: apiKey };
+}
+
+PLYStartBuilder.prototype.appUserId = function (value) { this._options.appUserId = value; return this; };
+PLYStartBuilder.prototype.runningMode = function (value) { this._options.runningMode = value; return this; };
+PLYStartBuilder.prototype.logLevel = function (value) { this._options.logLevel = value; return this; };
+PLYStartBuilder.prototype.allowDeeplink = function (value) { this._options.allowDeeplink = value; return this; };
+PLYStartBuilder.prototype.allowCampaigns = function (value) { this._options.allowCampaigns = value; return this; };
+PLYStartBuilder.prototype.stores = function (value) { this._options.stores = value; return this; };
+PLYStartBuilder.prototype.storekitVersion = function (value) { this._options.storekitVersion = value; return this; };
+PLYStartBuilder.prototype.storeKit1 = function (value) { this._options.storeKit1 = value; return this; };
+PLYStartBuilder.prototype.deeplink = function (value) { this._options.deeplink = value; return this; };
+
+PLYStartBuilder.prototype.start = function (success, error) {
+    if (success) {
+        exports.start(this._options, success, error);
+        return undefined;
+    }
+    var options = this._options;
+    return new Promise(function (resolve, reject) {
+        exports.start(options, resolve, function (nativeError) {
+            reject(normalizeError(nativeError));
+        });
+    });
+};
+
+exports.builder = function (apiKey) {
+    return new PLYStartBuilder(apiKey);
+};
+
 // REC-18 / PAR-18: addEventListener is the canonical name (matches RN's naming).
 // addEventsListener (plural "Events", the original Cordova-only spelling) is kept as a
 // deprecated alias.
