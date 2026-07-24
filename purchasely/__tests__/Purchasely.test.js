@@ -253,7 +253,7 @@ describe('Purchasely', () => {
           expect.any(Function),
           'Purchasely',
           'start',
-          [{ apiKey: 'API_KEY', sdkVersion: '6.0.0-rc.3' }]
+          [{ apiKey: 'API_KEY', sdkVersion: '6.0.0' }]
         );
       } finally {
         metadata['cordova-plugin-purchasely'] = original;
