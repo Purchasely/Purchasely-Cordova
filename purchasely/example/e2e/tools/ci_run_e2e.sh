@@ -15,6 +15,12 @@ LOGDIR="$HERE/ci-logs"
 mkdir -p "$LOGDIR"
 export ANDROID_SERIAL="$SERIAL"
 
+# Appium 2 loads drivers from APPIUM_HOME (~/.appium), not node_modules, so a fresh CI
+# checkout has none installed even though appium-uiautomator2-driver is a devDependency.
+# Register it (idempotent; a no-op locally where it is already installed).
+echo "== Ensuring uiautomator2 driver is installed =="
+npx appium driver install uiautomator2 2>/dev/null || true
+
 echo "== Starting Appium =="
 # --allow-insecure=chromedriver_autodownload lets the uiautomator2 driver fetch the
 # Chromedriver matching the Cordova WebView's Chrome version on demand. Without it,

@@ -13,6 +13,11 @@ LOGDIR="$HERE/ci-logs"
 mkdir -p "$LOGDIR"
 export PURCHASELY_E2E_UDID="$UDID"
 
+# Appium 2 loads drivers from APPIUM_HOME (~/.appium), not node_modules, so make sure the
+# xcuitest driver is registered (idempotent; a no-op where it is already installed).
+echo "== Ensuring xcuitest driver is installed =="
+npx appium driver install xcuitest 2>/dev/null || true
+
 echo "== Starting Appium =="
 npx appium --log "$LOGDIR/appium-ios.log" --log-level info &
 APPIUM_PID=$!
