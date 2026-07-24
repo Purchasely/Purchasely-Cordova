@@ -24,10 +24,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
@@ -50,10 +50,22 @@ jobs:
 
           echo "✅ All versions match release tag: $TAG"
 
+      # Prerelease tags (e.g. 6.0.0-rc.1) publish under the `next` dist-tag so they
+      # do NOT become npm `latest`; stable tags publish under `latest`.
+      - name: Determine npm dist-tag
+        id: npmtag
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            echo "tag=next" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+          echo "npm dist-tag: $(grep -oP 'tag=\K.*' "$GITHUB_OUTPUT" | tail -1)"
+
       - name: Publish @purchasely/cordova-plugin-purchasely
         working-directory: purchasely
-        run: npm publish --access public --provenance
+        run: npm publish --access public --provenance --tag ${{ steps.npmtag.outputs.tag }}
 
       - name: Publish @purchasely/cordova-plugin-purchasely-google
         working-directory: purchasely-google
-        run: npm publish --access public --provenance
+        run: npm publish --access public --provenance --tag ${{ steps.npmtag.outputs.tag }}

@@ -41,12 +41,13 @@ function onDeviceReady() {
 	document.getElementById('deviceready').classList.add('ready');
 
 	Purchasely.start(
-		'fcb39be4-2ba4-4db7-bde3-2a5a1e20745d',
-		['Google'],
-		false,
-		null,
-		Purchasely.LogLevel.DEBUG,
-		Purchasely.RunningMode.full,
+		{
+			apiKey: 'fcb39be4-2ba4-4db7-bde3-2a5a1e20745d',
+			stores: [Purchasely.Store.google],
+			storeKit1: false,
+			logLevel: Purchasely.LogLevel.DEBUG,
+			runningMode: Purchasely.RunningMode.full
+		},
 		(isConfigured) => {
 			if(isConfigured) onPurchaselySdkReady();
 		},
@@ -60,14 +61,13 @@ function onDeviceReady() {
 
 	document.getElementById("openPresentation").addEventListener("click", openPresentation);
 	document.getElementById("fetchPresentation").addEventListener("click", fetchPresentation);
-	document.getElementById("presentSubscriptions").addEventListener("click", presentSubscriptions);
-	document.getElementById("showPresentation").addEventListener("click", showPresentation);
-	document.getElementById("hidePresentation").addEventListener("click", hidePresentation);
+	document.getElementById("backPresentation").addEventListener("click", backPresentation);
 	document.getElementById("closePresentation").addEventListener("click", closePresentation);
 	document.getElementById("purchaseWithPlanVendorId").addEventListener("click", purchaseWithPlanVendorId);
 	document.getElementById("restore").addEventListener("click", restore);
 	document.getElementById("silentRestore").addEventListener("click", silentRestore);
 	document.getElementById("processToPayment").addEventListener("click", processToPayment);
+	document.getElementById("openDeeplink").addEventListener("click", openDeeplink);
 
 }
 
@@ -139,7 +139,7 @@ function onPurchaselySdkReady() {
 	Purchasely.setAttribute(Purchasely.Attribute.BATCH_CUSTOM_USER_ID, "batch_custom_user_id");
 	Purchasely.setAttribute(Purchasely.Attribute.BATCH_INSTALLATION_ID, "testBatch1");
 
-	Purchasely.readyToOpenDeeplink(true);
+	Purchasely.allowDeeplink(true);
 
 	Purchasely.planWithIdentifier('PURCHASELY_PLUS_MONTHLY', (plan) => {
 		console.log(' ==> Plan');
@@ -157,16 +157,16 @@ function onPurchaselySdkReady() {
 		console.log(error);
 	});
 
-	Purchasely.setDefaultPresentationResultHandler(callback => {
-		console.log(callback);
+	Purchasely.setDefaultPresentationDismissHandler(callback => {
+		console.log('[setDefaultPresentationDismissHandler] onDismissed — purchaseResult=' + callback.purchaseResult + ' closeReason=' + callback.closeReason + ' — outcome: ' + safeStringify(callback));
 		if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
-			console.log("User cancelled purchased");
-		} else {
+			console.log("User cancelled purchase - close reason " + callback.closeReason);
+		} else if (callback.plan) {
 			console.log("User purchased " + callback.plan.vendorId);
 		}
 	},
 		(error) => {
-		console.log("Error with purchase : " + error);
+		console.log("[setDefaultPresentationDismissHandler] error: " + error);
 	});
 
 	Purchasely.setUserAttributeWithString("key_string", "value_string", Purchasely.DataProcessingLegalBasis.essential);
@@ -238,103 +238,133 @@ function onPurchaselySdkReady() {
 
 	Purchasely.removeUserAttributeListener();
 
-	Purchasely.setPaywallActionInterceptor((result) => {
-		console.log(result);
-		console.log('Received action from paywall ' + result.info.presentationId);
+	// Purchasely 6.0: per-action interceptor. Register a handler per action kind; each
+	// handler receives (info, parameters) and returns a Purchasely.InterceptResult telling
+	// the SDK how it was handled (notHandled = let the SDK proceed, success = app handled it).
+	Purchasely.removeAllActionInterceptors();
 
-		if (result.action === Purchasely.PaywallAction.navigate) {
-			console.log(
-			'User wants to navigate to website ' +
-				result.parameters.title +
-				' ' +
-				result.parameters.url
-			);
-			console.log('prevent Purchasely SDK to navigate to website');
-			Purchasely.onProcessAction(true);
-		} else if (result.action === Purchasely.PaywallAction.close) {
-			console.log('User wants to close paywall - close reason ' + result.parameters.closeReason);
-			Purchasely.onProcessAction(true);
-		} else if (result.action === Purchasely.PaywallAction.close_all) {
-		    console.log('User wants to close all paywalls');
-            Purchasely.onProcessAction(true);
-		} else if (result.action === Purchasely.PaywallAction.login) {
-			console.log('User wants to login');
-			//Present your own screen for user to log in
-			Purchasely.closePaywall();
-			Purchasely.userLogin('MY_USER_ID');
-			//Call this method to update Purchasely Paywall
-			Purchasely.onProcessAction(true);
-		} else if (result.action === Purchasely.PaywallAction.open_presentation) {
-			console.log('User wants to open a new paywall');
-			Purchasely.onProcessAction(true);
-	    } else if (result.action === Purchasely.PaywallAction.open_placement) {
-            console.log('User wants to open a new placement');
-            Purchasely.onProcessAction(true);
-		} else if (result.action === Purchasely.PaywallAction.purchase) {
-			console.log('User wants to purchase');
-			//If you want to intercept it, close paywall and display your screen
-			Purchasely.hidePresentation();
-		} else if (result.action === Purchasely.PaywallAction.web_checkout) {
-			console.log('User wants to proceed to web checkout');
-			console.log('web checkout url: ' + result.parameters.url);
-			console.log('web checkout provider: ' + result.parameters.webCheckoutProvider);
-	        console.log('web checkout client reference id: ' + result.parameters.clientReferenceId);
-	        console.log('web checkout query parameter key: ' + result.parameters.queryParameterKey);
-			Purchasely.onProcessAction(true);
-		} else {
-			console.log('Action unknown ' + result.action);
-			Purchasely.onProcessAction(true);
-		}
+	// NOTE: `info` and `parameters` can be null depending on the action and the
+	// platform (e.g. on iOS the `close` action carries no parameters). Always log
+	// them with safeStringify (null-safe) rather than reading fields directly, or
+	// a thrown handler is reported to the SDK as `failed` and the action (e.g.
+	// close) will NOT be performed.
+	Purchasely.interceptAction(Purchasely.PresentationAction.navigate, (info, parameters) => {
+		console.log('[interceptAction] navigate — info: ' + safeStringify(info) + ' — parameters: ' + safeStringify(parameters));
+		return Purchasely.InterceptResult.notHandled;
+	});
+
+	Purchasely.interceptAction(Purchasely.PresentationAction.close, (info, parameters) => {
+		console.log('[interceptAction] close — info: ' + safeStringify(info) + ' — parameters: ' + safeStringify(parameters));
+		return Purchasely.InterceptResult.notHandled;
+	});
+
+	Purchasely.interceptAction(Purchasely.PresentationAction.closeAll, (info, parameters) => {
+		console.log('[interceptAction] close_all — info: ' + safeStringify(info) + ' — parameters: ' + safeStringify(parameters));
+		return Purchasely.InterceptResult.notHandled;
+	});
+
+	Purchasely.interceptAction(Purchasely.PresentationAction.login, (info, parameters) => {
+		console.log('[interceptAction] login — info: ' + safeStringify(info) + ' — parameters: ' + safeStringify(parameters));
+		// Present your own screen for the user to log in, then report success so the paywall refreshes.
+		Purchasely.closePresentation();
+		Purchasely.userLogin('MY_USER_ID');
+		return Purchasely.InterceptResult.success;
+	});
+
+	Purchasely.interceptAction(Purchasely.PresentationAction.openPresentation, (info, parameters) => {
+		console.log('[interceptAction] open_presentation — info: ' + safeStringify(info) + ' — parameters: ' + safeStringify(parameters));
+		return Purchasely.InterceptResult.notHandled;
+	});
+
+	Purchasely.interceptAction(Purchasely.PresentationAction.openPlacement, (info, parameters) => {
+		console.log('[interceptAction] open_placement — info: ' + safeStringify(info) + ' — parameters: ' + safeStringify(parameters));
+		return Purchasely.InterceptResult.notHandled;
+	});
+
+	Purchasely.interceptAction(Purchasely.PresentationAction.purchase, (info, parameters) => {
+		console.log('[interceptAction] purchase — info: ' + safeStringify(info) + ' — parameters: ' + safeStringify(parameters));
+		// Let the SDK proceed with the purchase.
+		return Purchasely.InterceptResult.notHandled;
+	});
+
+	Purchasely.interceptAction(Purchasely.PresentationAction.webCheckout, (info, parameters) => {
+		console.log('[interceptAction] web_checkout — info: ' + safeStringify(info) + ' — parameters: ' + safeStringify(parameters));
+		return Purchasely.InterceptResult.notHandled;
 	});
 
 	Purchasely.clearBuiltInAttributes();
 }
 
+// Purchasely 6.0: `back()`/`close()` live on the request, not as bare top-level calls
+// (backPresentation() was removed). The example keeps a reference to the last request
+// it built/displayed so the "Back presentation" button below has something to drive.
+var currentPresentationRequest = null;
+
 function openPresentation() {
-	Purchasely.presentPresentationForPlacement(
-		'ONBOARDING', //placementId
-		null, //contentId
-		true, //fullscreen
-		(callback) => {
-			console.log(callback);
-			if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
-				console.log("User cancelled purchased");
+	// Purchasely 6.0: the v6 builder — pick a source (.placement/.screen/.defaultSource),
+	// chain lifecycle callbacks, .build(), then .display(transition?). display() resolves
+	// at dismiss with a 5-field outcome: { presentation, purchaseResult, plan, closeReason, error }.
+	currentPresentationRequest = Purchasely.presentation
+		.placement('ONBOARDING')
+		.onPresented((presentation, error) => {
+			console.log('[openPresentation] onPresented — ' + (presentation ? presentation.screenId : '') + (error ? ' error=' + error : ''));
+		})
+		.onCloseRequested(() => {
+			console.log('[openPresentation] onCloseRequested');
+		})
+		.build();
+
+	currentPresentationRequest
+		.display(Purchasely.TransitionType.fullScreen) //display mode (string) — or a transition object, see below
+		.then((outcome) => {
+			console.log('[openPresentation] onDismissed — purchaseResult=' + outcome.purchaseResult + ' — outcome: ' + safeStringify(outcome));
+			if (outcome.error) {
+				console.log("[openPresentation] error: " + outcome.error);
+			} else if (outcome.purchaseResult === 'purchased' || outcome.purchaseResult === 'restored') {
+				console.log("User purchased " + (outcome.plan ? outcome.plan.name : ''));
 			} else {
-				console.log("User purchased " + callback.plan.name);
+				console.log("User cancelled purchased - close reason " + outcome.closeReason);
 			}
-		},
-		(error) => {
-			console.log("Error with purchase : " + error);
-		}
-	);
+		});
+
+	// Purchasely 6.0 also supports:
+	//  - a rich transition object for drawer/popin sizing (see fetchPresentation below):
+	//      { type: Purchasely.TransitionType.drawer, dismissible: true,
+	//        height: { type: Purchasely.DimensionType.percentage, value: 0.8 }, backgroundColor: '#000000' }
+	//  - the default (audience-targeted) presentation, targeted with .defaultSource() (or its
+	//    iOS-style alias .default()):
+	//      Purchasely.presentation.defaultSource().build().display(Purchasely.TransitionType.fullScreen);
+	//  - stopping campaign/deeplink dismiss outcomes:
+	//      Purchasely.removeDefaultPresentationDismissHandler();
 }
 
 function fetchPresentation() {
-	Purchasely.fetchPresentationForPlacement(
-		'flow_demo', //placementId
-		null, //contentId
-		(presentation) => {
-			console.log(safeStringify(presentation));
-			Purchasely.presentPresentation(presentation, false, null,
-				(callback) => {
-					console.log(callback);
-					if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
-						console.log("User cancelled purchased");
-					} else {
-						console.log("User purchased " + callback.plan.name);
-					}
-				}, (error) => {
-					console.log("Error with present : " + error);
-				});
-		},
-		(error) => {
-			console.log("Error with purchase : " + error);
-		}
-	);
-}
-
-function presentSubscriptions() {
-	Purchasely.presentSubscriptions();
+	// Purchasely 6.0: preload() fetches without displaying; the resolved presentation
+	// exposes screenId (the authoritative identifier). Calling display() on the SAME
+	// request re-displays exactly what was preloaded.
+	const request = Purchasely.presentation.placement('flow_demo').build();
+	currentPresentationRequest = request;
+	request.preload().then((presentation) => {
+		console.log('[fetchPresentation] onFetched — presentation: ' + safeStringify(presentation));
+		// Rich transition object: drawer at 80% height, dismissible. (iOS applies the
+		// percentage height + dismissible; Android also supports pixel + popin width.)
+		request.display({
+			type: Purchasely.TransitionType.drawer,
+			dismissible: true,
+			height: { type: Purchasely.DimensionType.percentage, value: 0.8 }
+		}).then((outcome) => {
+			console.log('[fetchPresentation → display] onDismissed — purchaseResult=' + outcome.purchaseResult + ' — outcome: ' + safeStringify(outcome));
+			if (outcome.error) {
+				console.log("[fetchPresentation → display] error: " + outcome.error);
+			} else if (outcome.purchaseResult === 'purchased' || outcome.purchaseResult === 'restored') {
+				console.log("User purchased " + (outcome.plan ? outcome.plan.name : ''));
+			} else {
+				console.log("User cancelled purchased - close reason " + outcome.closeReason);
+			}
+		});
+	}, (error) => {
+		console.log("[fetchPresentation] error: " + safeStringify(error));
+	});
 }
 
 function purchaseWithPlanVendorId() {
@@ -342,22 +372,17 @@ function purchaseWithPlanVendorId() {
 }
 
 function processToPayment() {
-	// Call this method open paywall again
-	Purchasely.showPresentation();
+	// Call this method in observer mode to synchronize purchases with Purchasely
+	// Purchasely.synchronize((ok) => console.log("synchronized " + ok), (e) => console.log(e));
 
-	// Call this method in paywallObserver mode to synchronize purchases with Purchasely
-	// Purchasely.synchronize();
-
-	// Call this method to process to payment or false if you handled it
-	Purchasely.onProcessAction(true);
+	// Purchasely 6.0: with the per-action interceptor (interceptAction), each handler returns
+	// its own Purchasely.InterceptResult, so there is no separate "process action" step.
+	// Kept as a no-op for the example's existing button wiring.
+	console.log('processToPayment: no-op in v6 — interceptAction handlers report their own result');
 }
 
-function showPresentation() {
-	Purchasely.showPresentation();
-}
-
-function hidePresentation() {
-	Purchasely.hidePresentation();
+function backPresentation() {
+	if (currentPresentationRequest) currentPresentationRequest.back();
 }
 
 function closePresentation() {
@@ -416,7 +441,7 @@ function signPromotionalOffer() {
 }
 
 function openDeeplink() {
-	Purchasely.isDeeplinkHandled(
+	Purchasely.handleDeeplink(
 		"purchasely://ply/presentations/CAROUSEL",
 		isHandled => {
 			console.log("Deeplink is handled ? " + isHandled)

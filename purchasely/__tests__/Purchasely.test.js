@@ -47,6 +47,9 @@ describe('Purchasely', () => {
         expect(Purchasely.Attribute.APPSFLYER_ID).toBe(5);
         expect(Purchasely.Attribute.AMPLITUDE_USER_ID).toBe(16);
         expect(Purchasely.Attribute.BATCH_CUSTOM_USER_ID).toBe(20);
+        // ENM-02 / REC-11
+        expect(Purchasely.Attribute.ONESIGNAL_USER_ID).toBe(21);
+        expect(Purchasely.Attribute.oneSignalPlayerId).toBeUndefined();
       });
     });
 
@@ -96,25 +99,91 @@ describe('Purchasely', () => {
       });
     });
 
-    describe('RunningMode', () => {
-      it('should have correct running mode values', () => {
-        expect(Purchasely.RunningMode.paywallObserver).toBe(2);
-        expect(Purchasely.RunningMode.full).toBe(3);
+    describe('BillingPlanType', () => {
+      it('should have correct billing plan type values (iOS 26.4+ commitment, Apple only)', () => {
+        expect(Purchasely.BillingPlanType.unspecified).toBe(0);
+        expect(Purchasely.BillingPlanType.upFront).toBe(1);
+        expect(Purchasely.BillingPlanType.monthly).toBe(2);
       });
     });
 
-    describe('PaywallAction', () => {
-      it('should have correct paywall action values', () => {
-        expect(Purchasely.PaywallAction.close).toBe('close');
-        expect(Purchasely.PaywallAction.close_all).toBe('close_all');
-        expect(Purchasely.PaywallAction.login).toBe('login');
-        expect(Purchasely.PaywallAction.navigate).toBe('navigate');
-        expect(Purchasely.PaywallAction.purchase).toBe('purchase');
-        expect(Purchasely.PaywallAction.restore).toBe('restore');
-        expect(Purchasely.PaywallAction.open_presentation).toBe('open_presentation');
-        expect(Purchasely.PaywallAction.open_placement).toBe('open_placement');
-        expect(Purchasely.PaywallAction.promo_code).toBe('promo_code');
-        expect(Purchasely.PaywallAction.web_checkout).toBe('web_checkout');
+    describe('RunningMode', () => {
+      it('should expose the Purchasely 6.0 running modes by name', () => {
+        expect(Purchasely.RunningMode.observer).toBe('observer');
+        expect(Purchasely.RunningMode.full).toBe('full');
+      });
+    });
+
+    describe('PresentationAction', () => {
+      it('should have correct presentation action values', () => {
+        expect(Purchasely.PresentationAction.close).toBe('close');
+        expect(Purchasely.PresentationAction.closeAll).toBe('close_all');
+        expect(Purchasely.PresentationAction.login).toBe('login');
+        expect(Purchasely.PresentationAction.navigate).toBe('navigate');
+        expect(Purchasely.PresentationAction.purchase).toBe('purchase');
+        expect(Purchasely.PresentationAction.restore).toBe('restore');
+        expect(Purchasely.PresentationAction.openPresentation).toBe('open_presentation');
+        expect(Purchasely.PresentationAction.openPlacement).toBe('open_placement');
+        expect(Purchasely.PresentationAction.promoCode).toBe('promo_code');
+        expect(Purchasely.PresentationAction.webCheckout).toBe('web_checkout');
+      });
+    });
+
+    describe('InterceptResult', () => {
+      it('should have correct intercept result values', () => {
+        expect(Purchasely.InterceptResult.success).toBe('success');
+        expect(Purchasely.InterceptResult.failed).toBe('failed');
+        expect(Purchasely.InterceptResult.notHandled).toBe('notHandled');
+      });
+    });
+
+    describe('PresentationType', () => {
+      it('should have correct presentation type values', () => {
+        expect(Purchasely.PresentationType.normal).toBe(0);
+        expect(Purchasely.PresentationType.fallback).toBe(1);
+        expect(Purchasely.PresentationType.deactivated).toBe(2);
+        expect(Purchasely.PresentationType.client).toBe(3);
+      });
+    });
+
+    describe('CloseReason', () => {
+      it('should have correct close reason values', () => {
+        expect(Purchasely.CloseReason.button).toBe('button');
+        expect(Purchasely.CloseReason.backSystem).toBe('back_system');
+        expect(Purchasely.CloseReason.programmatic).toBe('programmatic');
+      });
+    });
+
+    describe('TransitionType', () => {
+      it('should have correct transition type values', () => {
+        expect(Purchasely.TransitionType.fullScreen).toBe('fullScreen');
+        expect(Purchasely.TransitionType.modal).toBe('modal');
+        expect(Purchasely.TransitionType.drawer).toBe('drawer');
+        expect(Purchasely.TransitionType.popin).toBe('popin');
+        expect(Purchasely.TransitionType.push).toBe('push');
+        expect(Purchasely.TransitionType.inlinePaywall).toBe('inlinePaywall');
+      });
+    });
+
+    describe('DimensionType', () => {
+      it('should have correct dimension type values', () => {
+        expect(Purchasely.DimensionType.pixel).toBe('pixel');
+        expect(Purchasely.DimensionType.percentage).toBe('percentage');
+      });
+    });
+
+    describe('Store', () => {
+      it('should have correct store values', () => {
+        expect(Purchasely.Store.google).toBe('Google');
+        expect(Purchasely.Store.huawei).toBe('Huawei');
+        expect(Purchasely.Store.amazon).toBe('Amazon');
+      });
+    });
+
+    describe('StorekitVersion', () => {
+      it('should have correct storekit version values', () => {
+        expect(Purchasely.StorekitVersion.storeKit1).toBe('storeKit1');
+        expect(Purchasely.StorekitVersion.storeKit2).toBe('storeKit2');
       });
     });
 
@@ -135,23 +204,157 @@ describe('Purchasely', () => {
   });
 
   describe('start', () => {
-    it('should call exec with correct parameters', () => {
+    it('should call exec with a single options object (with sdkVersion appended)', () => {
       const success = jest.fn();
       const error = jest.fn();
 
-      Purchasely.start('API_KEY', ['GOOGLE'], false, 'user123', 1, 3, success, error);
+      Purchasely.start(
+        {
+          apiKey: 'API_KEY',
+          stores: [Purchasely.Store.google],
+          storeKit1: false,
+          appUserId: 'user123',
+          logLevel: Purchasely.LogLevel.INFO,
+          runningMode: Purchasely.RunningMode.full
+        },
+        success,
+        error
+      );
 
       expect(mockExec).toHaveBeenCalledWith(
         success,
         error,
         'Purchasely',
         'start',
-        ['API_KEY', ['GOOGLE'], false, 'user123', 1, 3, '5.6.2']
+        [
+          {
+            apiKey: 'API_KEY',
+            stores: ['Google'],
+            storeKit1: false,
+            appUserId: 'user123',
+            logLevel: 1,
+            runningMode: 'full',
+            sdkVersion: '5.6.2'
+          }
+        ]
+      );
+    });
+
+    it('should fall back to the literal default sdkVersion when plugin_list metadata is missing', () => {
+      const metadata = global.cordova.define.moduleMap['cordova/plugin_list'].exports.metadata;
+      const original = metadata['cordova-plugin-purchasely'];
+      delete metadata['cordova-plugin-purchasely'];
+
+      try {
+        Purchasely.start({ apiKey: 'API_KEY' }, jest.fn(), jest.fn());
+
+        expect(mockExec).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.any(Function),
+          'Purchasely',
+          'start',
+          [{ apiKey: 'API_KEY', sdkVersion: '6.0.0' }]
+        );
+      } finally {
+        metadata['cordova-plugin-purchasely'] = original;
+      }
+    });
+
+    it('should treat a v5-style positional call as broken (no longer supported)', () => {
+      // Purchasely 6.0: `start` takes a single options object. A v5-style positional
+      // call (apiKey, stores, storeKit1, ...) is NOT supported: `options` becomes the
+      // raw apiKey string (sdkVersion silently fails to attach to a string primitive),
+      // and `success`/`error` are mis-bound to the 2nd/3rd positional args instead of
+      // the real callbacks. This documents the breaking change from MIGRATION-v6.md.
+      const legacyStores = ['Google'];
+      const legacyStoreKit1 = false;
+
+      Purchasely.start('API_KEY', legacyStores, legacyStoreKit1, null, 0, 'full', jest.fn(), jest.fn());
+
+      expect(mockExec).toHaveBeenCalledWith(
+        legacyStores,
+        legacyStoreKit1,
+        'Purchasely',
+        'start',
+        ['API_KEY']
       );
     });
   });
 
-  describe('addEventsListener', () => {
+  describe('builder(apiKey) (fluent alias of start)', () => {
+    it('accumulates chained options and delegates to exports.start with (success, error) callbacks', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.builder('API_KEY')
+        .appUserId('user123')
+        .runningMode(Purchasely.RunningMode.full)
+        .logLevel(Purchasely.LogLevel.INFO)
+        .allowDeeplink(true)
+        .allowCampaigns(false)
+        .stores([Purchasely.Store.google])
+        .storekitVersion(Purchasely.StorekitVersion.storeKit2)
+        .storeKit1(false)
+        .deeplink('myapp://deeplink')
+        .start(success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        success,
+        error,
+        'Purchasely',
+        'start',
+        [
+          {
+            apiKey: 'API_KEY',
+            appUserId: 'user123',
+            runningMode: 'full',
+            logLevel: 1,
+            allowDeeplink: true,
+            allowCampaigns: false,
+            stores: ['Google'],
+            storekitVersion: 'storeKit2',
+            storeKit1: false,
+            deeplink: 'myapp://deeplink',
+            sdkVersion: '5.6.2'
+          }
+        ]
+      );
+    });
+
+    it('start() with no callbacks returns a Promise resolving the isConfigured value', async () => {
+      const startPromise = Purchasely.builder('API_KEY').start();
+
+      const call = mockExec.mock.calls[mockExec.mock.calls.length - 1];
+      expect(call[2]).toBe('Purchasely');
+      expect(call[3]).toBe('start');
+      expect(call[4]).toEqual([{ apiKey: 'API_KEY', sdkVersion: '5.6.2' }]);
+      call[0](true); // native success callback -> isConfigured
+
+      await expect(startPromise).resolves.toBe(true);
+    });
+
+    it('rejects the Promise on native start failure', async () => {
+      const startPromise = Purchasely.builder('API_KEY').start();
+
+      const call = mockExec.mock.calls[mockExec.mock.calls.length - 1];
+      call[1]('Invalid API Key');
+
+      await expect(startPromise).rejects.toEqual({ message: 'Invalid API Key' });
+    });
+  });
+
+  describe('addEventListener (canonical, REC-18/PAR-18)', () => {
+    it('should call exec with correct parameters', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.addEventListener(success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'addEventsListener', []);
+    });
+  });
+
+  describe('addEventsListener (deprecated alias)', () => {
     it('should call exec with correct parameters', () => {
       const success = jest.fn();
       const error = jest.fn();
@@ -173,7 +376,21 @@ describe('Purchasely', () => {
     });
   });
 
-  describe('removeEventsListener', () => {
+  describe('removeEventListener (canonical, REC-18/PAR-18)', () => {
+    it('should call exec with correct parameters', () => {
+      Purchasely.removeEventListener();
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'removeEventsListener',
+        []
+      );
+    });
+  });
+
+  describe('removeEventsListener (deprecated alias)', () => {
     it('should call exec with correct parameters', () => {
       Purchasely.removeEventsListener();
 
@@ -212,6 +429,17 @@ describe('Purchasely', () => {
     });
   });
 
+  describe('isAnonymous (REC-12 / PAR-04)', () => {
+    it('should call exec with correct parameters', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.isAnonymous(success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'isAnonymous', []);
+    });
+  });
+
   describe('userLogin', () => {
     it('should call exec with correct parameters', () => {
       const success = jest.fn();
@@ -229,7 +457,7 @@ describe('Purchasely', () => {
   });
 
   describe('userLogout', () => {
-    it('should call exec with correct parameters', () => {
+    it('defaults clearUserAttributes to true when omitted (PAR-30)', () => {
       Purchasely.userLogout();
 
       expect(mockExec).toHaveBeenCalledWith(
@@ -237,7 +465,19 @@ describe('Purchasely', () => {
         expect.any(Function),
         'Purchasely',
         'userLogout',
-        []
+        [true]
+      );
+    });
+
+    it('forwards an explicit clearUserAttributes value', () => {
+      Purchasely.userLogout(false);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'userLogout',
+        [false]
       );
     });
   });
@@ -270,33 +510,56 @@ describe('Purchasely', () => {
     });
   });
 
-  describe('readyToOpenDeeplink', () => {
+  describe('allowDeeplink', () => {
     it('should call exec with correct parameters', () => {
-      Purchasely.readyToOpenDeeplink(true);
+      Purchasely.allowDeeplink(true);
 
       expect(mockExec).toHaveBeenCalledWith(
         expect.any(Function),
         expect.any(Function),
         'Purchasely',
-        'readyToOpenDeeplink',
+        'allowDeeplink',
         [true]
       );
     });
   });
 
-  describe('setDefaultPresentationResultHandler', () => {
+  describe('allowCampaigns', () => {
+    it('should call exec with correct parameters', () => {
+      Purchasely.allowCampaigns(false);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'allowCampaigns',
+        [false]
+      );
+    });
+  });
+
+  describe('setDefaultPresentationDismissHandler', () => {
     it('should call exec with correct parameters', () => {
       const success = jest.fn();
       const error = jest.fn();
 
-      Purchasely.setDefaultPresentationResultHandler(success, error);
+      Purchasely.setDefaultPresentationDismissHandler(success, error);
 
-      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'setDefaultPresentationResultHandler', []);
+      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'setDefaultPresentationDismissHandler', []);
     });
   });
 
   describe('synchronize', () => {
-    it('should call exec with correct parameters', () => {
+    it('should call exec with the provided callbacks', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.synchronize(success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'synchronize', []);
+    });
+
+    it('should default callbacks when none provided', () => {
       Purchasely.synchronize();
 
       expect(mockExec).toHaveBeenCalledWith(
@@ -309,135 +572,424 @@ describe('Purchasely', () => {
     });
   });
 
-  describe('presentPresentationWithIdentifier', () => {
-    it('should call exec with correct parameters', () => {
-      const success = jest.fn();
-      const error = jest.fn();
+  // Purchasely 6.0: the v5 presentation surface (fetchPresentation*, presentPresentation*,
+  // backPresentation) is REMOVED, replaced by the promise-based v6 builder
+  // (Purchasely.presentation), which re-wraps the very same native exec actions.
+  describe('presentation builder (v6)', () => {
+    // Grabs the exec() call for a given native action, most recent first.
+    const execCallFor = (action) => {
+      const calls = mockExec.mock.calls.filter((c) => c[3] === action);
+      return calls[calls.length - 1];
+    };
 
-      Purchasely.presentPresentationWithIdentifier('presentation1', 'content1', true, success, error);
+    // normalizePresentation always returns this exact whitelist of documented fields
+    // (defaulting the ones the raw payload didn't carry to null); tests merge in the
+    // fields they care about rather than repeating the full shape each time.
+    const fullPresentation = (overrides) => ({
+      screenId: null,
+      placementId: null,
+      contentId: null,
+      audienceId: null,
+      abTestId: null,
+      abTestVariantId: null,
+      campaignId: null,
+      flowId: null,
+      language: null,
+      type: null,
+      plans: null,
+      metadata: null,
+      height: null,
+      ...overrides,
+    });
 
-      expect(mockExec).toHaveBeenCalledWith(
-        success,
-        error,
-        'Purchasely',
-        'presentPresentationWithIdentifier',
-        ['presentation1', 'content1', true]
-      );
+    describe('sources', () => {
+      it('.placement(id).build().display() calls presentPresentationForPlacement', async () => {
+        const outcomePromise = Purchasely.presentation.placement('placement1').build().display();
+
+        const call = execCallFor('presentPresentationForPlacement');
+        expect(call[4]).toEqual(['placement1', null, undefined]);
+        call[0]({ purchaseResult: null, plan: null, closeReason: 'button', error: null, presentation: null });
+
+        const outcome = await outcomePromise;
+        expect(outcome.closeReason).toBe('button');
+      });
+
+      it('.screen(id).build().display() calls presentPresentationWithIdentifier', async () => {
+        const outcomePromise = Purchasely.presentation.screen('screen1').build().display();
+
+        const call = execCallFor('presentPresentationWithIdentifier');
+        expect(call[4]).toEqual(['screen1', null, undefined]);
+        call[0]({ purchaseResult: null, plan: null, closeReason: 'programmatic', error: null, presentation: null });
+
+        await outcomePromise;
+      });
+
+      it('.defaultSource().build().display() calls presentPresentationForDefault', async () => {
+        const outcomePromise = Purchasely.presentation.defaultSource().build().display();
+
+        const call = execCallFor('presentPresentationForDefault');
+        expect(call[4]).toEqual([null, undefined]);
+        call[0]({ purchaseResult: null, plan: null, closeReason: 'button', error: null, presentation: null });
+
+        await outcomePromise;
+      });
+
+      it('.default() is an alias of .defaultSource()', async () => {
+        const outcomePromise = Purchasely.presentation.default().build().display();
+
+        const call = execCallFor('presentPresentationForDefault');
+        expect(call[4]).toEqual([null, undefined]);
+        call[0]({ purchaseResult: null, plan: null, closeReason: 'button', error: null, presentation: null });
+
+        await outcomePromise;
+      });
+    });
+
+    describe('contentId', () => {
+      it('is forwarded to the matching present* action', async () => {
+        const outcomePromise = Purchasely.presentation.placement('placement1').contentId('content1').build().display();
+
+        const call = execCallFor('presentPresentationForPlacement');
+        expect(call[4]).toEqual(['placement1', 'content1', undefined]);
+        call[0]({ closeReason: 'button' });
+
+        await outcomePromise;
+      });
+    });
+
+    describe('display(transition)', () => {
+      it('normalizes a display-mode string to a transition object', async () => {
+        const outcomePromise = Purchasely.presentation.screen('screen1').build().display(Purchasely.TransitionType.drawer);
+
+        const call = execCallFor('presentPresentationWithIdentifier');
+        expect(call[4][2]).toEqual({ type: 'drawer' });
+        call[0]({ closeReason: 'button' });
+
+        await outcomePromise;
+      });
+
+      it('passes a full transition object through unchanged', async () => {
+        const transition = { type: 'drawer', dismissible: false, height: { type: 'percentage', value: 0.8 } };
+        const outcomePromise = Purchasely.presentation.placement('placement1').build().display(transition);
+
+        const call = execCallFor('presentPresentationForPlacement');
+        expect(call[4][2]).toEqual(transition);
+        call[0]({ closeReason: 'button' });
+
+        await outcomePromise;
+      });
+    });
+
+    describe('backgroundColor', () => {
+      it('merges into the transition object on the direct present* path (no forced type)', async () => {
+        const outcomePromise = Purchasely.presentation
+          .placement('placement1')
+          .backgroundColor('#101010')
+          .build()
+          .display();
+
+        const call = execCallFor('presentPresentationForPlacement');
+        // No display-mode given: only backgroundColor, no `type`, so the backend
+        // transition default is still honored (CDV-W-12).
+        expect(call[4][2]).toEqual({ backgroundColor: '#101010' });
+        call[0]({ closeReason: 'button' });
+        await outcomePromise;
+      });
+
+      it('is forwarded as presentPresentation\'s native backgroundColor arg on the re-display path', async () => {
+        const request = Purchasely.presentation.screen('screen1').backgroundColor('#202020').build();
+
+        const preloadPromise = request.preload();
+        const rawFetched = { screenId: 'screen1', fetchId: 'ply_fetch_789' };
+        execCallFor('fetchPresentation')[0](rawFetched);
+        await preloadPromise;
+
+        const outcomePromise = request.display();
+        const displayCall = execCallFor('presentPresentation');
+        expect(displayCall[4][0]).toBe(rawFetched);
+        expect(displayCall[4][2]).toBe('#202020');
+        displayCall[0]({ closeReason: 'programmatic' });
+        await outcomePromise;
+      });
+
+      it('does not expose progressColor / displayCloseButton / displayBackButton (no Cordova native support)', () => {
+        const builder = Purchasely.presentation.placement('placement1');
+        expect(builder.progressColor).toBeUndefined();
+        expect(builder.displayCloseButton).toBeUndefined();
+        expect(builder.displayBackButton).toBeUndefined();
+      });
+    });
+
+    describe('lifecycle callbacks', () => {
+      it('routes presented/closeRequested envelopes to the builder callbacks, and the final outcome to onDismissed + the resolved promise', async () => {
+        const onPresented = jest.fn();
+        const onCloseRequested = jest.fn();
+        const onDismissed = jest.fn();
+
+        const outcomePromise = Purchasely.presentation
+          .placement('placement1')
+          .onPresented(onPresented)
+          .onCloseRequested(onCloseRequested)
+          .onDismissed(onDismissed)
+          .build()
+          .display();
+
+        const call = execCallFor('presentPresentationForPlacement');
+        const dispatch = call[0];
+        dispatch({ event: 'presented', presentation: { screenId: 's' } });
+        dispatch({ event: 'closeRequested' });
+        dispatch({ purchaseResult: 'cancelled', plan: null, closeReason: 'button', error: null, presentation: { screenId: 's' } });
+
+        const outcome = await outcomePromise;
+
+        // The 'presented' envelope's presentation is screenId-normalized like everywhere else.
+        expect(onPresented).toHaveBeenCalledWith(fullPresentation({ screenId: 's' }), null);
+        expect(onCloseRequested).toHaveBeenCalledTimes(1);
+        expect(onDismissed).toHaveBeenCalledWith(outcome);
+        expect(outcome).toEqual({
+          presentation: fullPresentation({ screenId: 's' }),
+          purchaseResult: 'cancelled',
+          plan: null,
+          closeReason: 'button',
+          error: null,
+        });
+      });
+    });
+
+    describe('outcome normalization (5 fields)', () => {
+      it('exposes exactly presentation/purchaseResult/plan/closeReason/error, with screenId tolerance', async () => {
+        const outcomePromise = Purchasely.presentation.placement('placement1').build().display();
+
+        const call = execCallFor('presentPresentationForPlacement');
+        call[0]({
+          result: 1, // legacy field: not part of the v6 builder's outcome contract
+          purchaseResult: 'purchased',
+          plan: { name: 'Plus' },
+          closeReason: null,
+          error: null,
+          presentation: { id: 'screen-id-only' }, // no screenId key: exercises the fallback
+        });
+
+        const outcome = await outcomePromise;
+        expect(outcome).toEqual({
+          presentation: fullPresentation({ screenId: 'screen-id-only' }),
+          purchaseResult: 'purchased',
+          plan: { name: 'Plus' },
+          closeReason: null,
+          error: null,
+        });
+        expect(outcome.result).toBeUndefined();
+      });
+
+      it('synthesizes an outcome carrying `error` when the native call fails, without rejecting', async () => {
+        const outcomePromise = Purchasely.presentation.placement('placement1').build().display();
+
+        const call = execCallFor('presentPresentationForPlacement');
+        call[1]('Presentation not loaded'); // native error callback
+
+        const outcome = await outcomePromise;
+        expect(outcome.error).toBe('Presentation not loaded');
+        expect(outcome.presentation).toBeNull();
+        expect(outcome.closeReason).toBeNull();
+      });
+    });
+
+    describe('preload() -> display() re-display', () => {
+      it('preload() resolves a screenId-normalized presentation, and the follow-up display() re-displays it via presentPresentation carrying the native handle', async () => {
+        const request = Purchasely.presentation.placement('placement1').build();
+
+        const preloadPromise = request.preload();
+        const fetchCall = execCallFor('fetchPresentation');
+        expect(fetchCall[4]).toEqual(['placement1', null, null]);
+
+        const rawFetched = { screenId: 'onboarding-screen', placementId: 'placement1', fetchId: 'ply_fetch_123' };
+        fetchCall[0](rawFetched);
+
+        const presentation = await preloadPromise;
+        // The screenId-normalized data is present (methods are added on top, below).
+        expect(presentation).toMatchObject(fullPresentation({ screenId: 'onboarding-screen', placementId: 'placement1' }));
+        // The native re-display handle is never exposed on the returned object.
+        expect(presentation.fetchId).toBeUndefined();
+        expect(presentation.id).toBeUndefined();
+
+        const outcomePromise = request.display();
+        const displayCall = execCallFor('presentPresentation');
+        // The exact raw fetch payload (with its private handle) is forwarded as-is.
+        expect(displayCall[4][0]).toBe(rawFetched);
+        displayCall[0]({ closeReason: 'programmatic' });
+
+        const outcome = await outcomePromise;
+        expect(outcome.closeReason).toBe('programmatic');
+      });
+
+      it('the loaded presentation exposes display()/close()/back() delegating to its request', async () => {
+        const request = Purchasely.presentation.screen('screen1').build();
+
+        const preloadPromise = request.preload();
+        const rawFetched = { screenId: 'screen1', fetchId: 'ply_fetch_456' };
+        execCallFor('fetchPresentation')[0](rawFetched);
+
+        const loaded = await preloadPromise;
+        expect(typeof loaded.display).toBe('function');
+        expect(typeof loaded.close).toBe('function');
+        expect(typeof loaded.back).toBe('function');
+
+        // display() on the loaded object re-displays via the same request/handle.
+        const outcomePromise = loaded.display();
+        const displayCall = execCallFor('presentPresentation');
+        expect(displayCall[4][0]).toBe(rawFetched);
+        displayCall[0]({ closeReason: 'programmatic' });
+        await outcomePromise;
+
+        // close() / back() delegate to the request's native actions.
+        loaded.close();
+        expect(execCallFor('closeAllScreens')).toBeDefined();
+        loaded.back();
+        expect(execCallFor('backPresentation')).toBeDefined();
+      });
+
+      it('rejects preload() on native failure', async () => {
+        const request = Purchasely.presentation.screen('screen1').build();
+        const preloadPromise = request.preload();
+
+        const fetchCall = execCallFor('fetchPresentation');
+        fetchCall[1]('Screen not found');
+
+        await expect(preloadPromise).rejects.toEqual({ message: 'Screen not found' });
+      });
+
+      // Android asymmetry regression (v6 audit): onPresented/onCloseRequested previously only
+      // fired on the direct present* path. The re-display action (presentPresentation, reached
+      // via preload() -> display()) must route the very same keep-alive envelopes to the
+      // builder's callbacks, resolving the display() Promise only once the final (non-kept)
+      // outcome envelope arrives -- envelopes strictly before resolution.
+      it('routes presented/closeRequested envelopes on the preload() -> display() path too, resolving only at the final outcome', async () => {
+        const onPresented = jest.fn();
+        const onCloseRequested = jest.fn();
+        const order = [];
+        onPresented.mockImplementation(() => order.push('presented'));
+        onCloseRequested.mockImplementation(() => order.push('closeRequested'));
+
+        const request = Purchasely.presentation
+          .screen('screen1')
+          .onPresented(onPresented)
+          .onCloseRequested(onCloseRequested)
+          .build();
+
+        const preloadPromise = request.preload();
+        const rawFetched = { screenId: 'screen1', fetchId: 'ply_fetch_789' };
+        execCallFor('fetchPresentation')[0](rawFetched);
+        await preloadPromise;
+
+        const outcomePromise = request.display();
+        const displayCall = execCallFor('presentPresentation');
+        const dispatch = displayCall[0];
+
+        dispatch({ event: 'presented', presentation: { screenId: 'screen1' } });
+        dispatch({ event: 'closeRequested' });
+        expect(order).toEqual(['presented', 'closeRequested']);
+        // Neither envelope resolves the Promise -- only the final outcome does.
+        let settled = false;
+        outcomePromise.then(() => { settled = true; });
+        await Promise.resolve();
+        expect(settled).toBe(false);
+        order.push('outcome-dispatched');
+
+        dispatch({ closeReason: 'button', presentation: { screenId: 'screen1' } });
+        const outcome = await outcomePromise;
+
+        // Envelopes fired strictly before the Promise resolved.
+        expect(order).toEqual(['presented', 'closeRequested', 'outcome-dispatched']);
+        expect(onPresented).toHaveBeenCalledWith(fullPresentation({ screenId: 'screen1' }), null);
+        expect(onCloseRequested).toHaveBeenCalledTimes(1);
+        expect(outcome.closeReason).toBe('button');
+      });
+    });
+
+    describe('onLoaded builder callback', () => {
+      it('fires onLoaded with the screenId-normalized presentation once preload() loads it', async () => {
+        const onLoaded = jest.fn();
+        const request = Purchasely.presentation.screen('screen1').onLoaded(onLoaded).build();
+
+        const preloadPromise = request.preload();
+        const rawFetched = { screenId: 'screen1', fetchId: 'ply_fetch_loaded' };
+        execCallFor('fetchPresentation')[0](rawFetched);
+
+        await preloadPromise;
+
+        expect(onLoaded).toHaveBeenCalledWith(fullPresentation({ screenId: 'screen1' }), null);
+      });
+
+      it('does not fire onLoaded when preload() fails (parity with RN/Flutter)', async () => {
+        const onLoaded = jest.fn();
+        const request = Purchasely.presentation.screen('screen1').onLoaded(onLoaded).build();
+
+        const preloadPromise = request.preload();
+        execCallFor('fetchPresentation')[1]('Screen not found');
+
+        await expect(preloadPromise).rejects.toEqual({ message: 'Screen not found' });
+        expect(onLoaded).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('display() direct (no prior preload())', () => {
+      it('calls the matching present* action directly, without ever calling fetchPresentation', async () => {
+        mockExec.mockClear();
+        const outcomePromise = Purchasely.presentation.screen('screen1').build().display();
+
+        expect(mockExec.mock.calls.some((c) => c[3] === 'fetchPresentation')).toBe(false);
+        expect(mockExec.mock.calls.some((c) => c[3] === 'presentPresentationWithIdentifier')).toBe(true);
+
+        const call = execCallFor('presentPresentationWithIdentifier');
+        call[0]({ closeReason: 'button' });
+        await outcomePromise;
+      });
+    });
+
+    describe('request.close()', () => {
+      it('delegates to closeAllScreens (current bridge semantics)', () => {
+        mockExec.mockClear();
+        const request = Purchasely.presentation.placement('placement1').build();
+
+        request.close();
+
+        expect(mockExec).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.any(Function),
+          'Purchasely',
+          'closeAllScreens',
+          []
+        );
+      });
+    });
+
+    describe('request.back()', () => {
+      it('calls exec with the backPresentation native action', () => {
+        mockExec.mockClear();
+        const request = Purchasely.presentation.placement('placement1').build();
+
+        request.back();
+
+        expect(mockExec).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.any(Function),
+          'Purchasely',
+          'backPresentation',
+          []
+        );
+      });
     });
   });
 
-  describe('presentPresentationForPlacement', () => {
+  describe('removeDefaultPresentationDismissHandler', () => {
     it('should call exec with correct parameters', () => {
-      const success = jest.fn();
-      const error = jest.fn();
-
-      Purchasely.presentPresentationForPlacement('placement1', 'content1', false, success, error);
-
-      expect(mockExec).toHaveBeenCalledWith(
-        success,
-        error,
-        'Purchasely',
-        'presentPresentationForPlacement',
-        ['placement1', 'content1', false]
-      );
-    });
-  });
-
-  describe('presentProductWithIdentifier', () => {
-    it('should call exec with correct parameters', () => {
-      const success = jest.fn();
-      const error = jest.fn();
-
-      Purchasely.presentProductWithIdentifier('product1', 'presentation1', 'content1', true, success, error);
-
-      expect(mockExec).toHaveBeenCalledWith(
-        success,
-        error,
-        'Purchasely',
-        'presentProductWithIdentifier',
-        ['product1', 'presentation1', 'content1', true]
-      );
-    });
-  });
-
-  describe('presentPlanWithIdentifier', () => {
-    it('should call exec with correct parameters', () => {
-      const success = jest.fn();
-      const error = jest.fn();
-
-      Purchasely.presentPlanWithIdentifier('plan1', 'presentation1', 'content1', false, success, error);
-
-      expect(mockExec).toHaveBeenCalledWith(
-        success,
-        error,
-        'Purchasely',
-        'presentPlanWithIdentifier',
-        ['plan1', 'presentation1', 'content1', false]
-      );
-    });
-  });
-
-  describe('fetchPresentation', () => {
-    it('should call exec with correct parameters', () => {
-      const success = jest.fn();
-      const error = jest.fn();
-
-      Purchasely.fetchPresentation('presentation1', 'content1', success, error);
-
-      expect(mockExec).toHaveBeenCalledWith(
-        success,
-        error,
-        'Purchasely',
-        'fetchPresentation',
-        [null, 'presentation1', 'content1']
-      );
-    });
-  });
-
-  describe('fetchPresentationForPlacement', () => {
-    it('should call exec with correct parameters', () => {
-      const success = jest.fn();
-      const error = jest.fn();
-
-      Purchasely.fetchPresentationForPlacement('placement1', 'content1', success, error);
-
-      expect(mockExec).toHaveBeenCalledWith(
-        success,
-        error,
-        'Purchasely',
-        'fetchPresentation',
-        ['placement1', null, 'content1']
-      );
-    });
-  });
-
-  describe('presentPresentation', () => {
-    it('should call exec with correct parameters', () => {
-      const success = jest.fn();
-      const error = jest.fn();
-      const presentation = { id: 'test' };
-
-      Purchasely.presentPresentation(presentation, true, '#FFFFFF', success, error);
-
-      expect(mockExec).toHaveBeenCalledWith(
-        success,
-        error,
-        'Purchasely',
-        'presentPresentation',
-        [presentation, true, '#FFFFFF']
-      );
-    });
-  });
-
-  describe('presentSubscriptions', () => {
-    it('should call exec with correct parameters', () => {
-      Purchasely.presentSubscriptions();
+      Purchasely.removeDefaultPresentationDismissHandler();
 
       expect(mockExec).toHaveBeenCalledWith(
         expect.any(Function),
         expect.any(Function),
         'Purchasely',
-        'presentSubscriptions',
+        'removeDefaultPresentationDismissHandler',
         []
       );
     });
@@ -493,18 +1045,18 @@ describe('Purchasely', () => {
     });
   });
 
-  describe('isDeeplinkHandled', () => {
+  describe('handleDeeplink', () => {
     it('should call exec with correct parameters', () => {
       const success = jest.fn();
       const error = jest.fn();
 
-      Purchasely.isDeeplinkHandled('https://example.com/deeplink', success, error);
+      Purchasely.handleDeeplink('https://example.com/deeplink', success, error);
 
       expect(mockExec).toHaveBeenCalledWith(
         success,
         error,
         'Purchasely',
-        'isDeeplinkHandled',
+        'handleDeeplink',
         ['https://example.com/deeplink']
       );
     });
@@ -559,33 +1111,141 @@ describe('Purchasely', () => {
     });
   });
 
-  describe('setPaywallActionInterceptor', () => {
-    it('should call exec with correct parameters', () => {
-      const success = jest.fn();
+  // Flush pending microtasks (the interceptor result is reported through a Promise chain).
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-      Purchasely.setPaywallActionInterceptor(success);
+  // Returns the native success callback exec() was given for a registerActionInterceptor(kind).
+  const nativeInterceptorFor = (kind) => {
+    const call = mockExec.mock.calls.find(
+      (c) => c[3] === 'registerActionInterceptor' && c[4][0] === kind
+    );
+    return call && call[0];
+  };
+
+  describe('interceptAction (v6 per-action)', () => {
+    it('registers a native interceptor for the given kind', () => {
+      Purchasely.interceptAction('purchase', jest.fn());
 
       expect(mockExec).toHaveBeenCalledWith(
-        success,
+        expect.any(Function),
         expect.any(Function),
         'Purchasely',
-        'setPaywallActionInterceptor',
-        []
+        'registerActionInterceptor',
+        ['purchase']
+      );
+    });
+
+    it('invokes the handler with (info, parameters) and reports its result', async () => {
+      const handler = jest.fn().mockReturnValue(Purchasely.InterceptResult.success);
+      Purchasely.interceptAction('purchase', handler);
+      const nativeSuccess = nativeInterceptorFor('purchase');
+      mockExec.mockClear();
+
+      const event = {
+        action: 'purchase',
+        callbackId: 'purchase#1',
+        info: { contentId: 'c1' },
+        parameters: { plan: 'p1' },
+      };
+      nativeSuccess(event);
+      await flush();
+
+      expect(handler).toHaveBeenCalledWith(event.info, event.parameters);
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'completeActionInterceptor',
+        ['purchase#1', 'success']
+      );
+    });
+
+    // Commitment fields (iOS 26.4+, Apple only) ride on the plan carried by the purchase
+    // payload's `parameters.plan`. The JS layer forwards `parameters` verbatim, so a plan's
+    // `commitmentInfo` must survive untouched — this guards against a future param whitelist
+    // silently dropping it.
+    it('forwards a purchase payload plan carrying commitmentInfo to the handler', async () => {
+      const handler = jest.fn().mockReturnValue(Purchasely.InterceptResult.success);
+      Purchasely.interceptAction('purchase', handler);
+      const nativeSuccess = nativeInterceptorFor('purchase');
+
+      const parameters = {
+        plan: {
+          vendorId: 'plan_monthly_12m',
+          commitmentInfo: [
+            {
+              billingPlanType: Purchasely.BillingPlanType.monthly,
+              billingPrice: 9.99,
+              billingPeriod: 'P1M',
+              totalPrice: 119.88,
+              totalPeriod: 'P1Y',
+              totalDuration: 12,
+            },
+          ],
+        },
+      };
+      nativeSuccess({ action: 'purchase', callbackId: 'purchase#c', info: null, parameters });
+      await flush();
+
+      expect(handler).toHaveBeenCalledWith(null, parameters);
+      expect(handler.mock.calls[0][1].plan.commitmentInfo[0].billingPlanType).toBe(2);
+    });
+
+    it('ignores events whose action does not match the registered kind', async () => {
+      const handler = jest.fn();
+      Purchasely.interceptAction('restore', handler);
+      const nativeSuccess = nativeInterceptorFor('restore');
+
+      nativeSuccess({ action: 'purchase', callbackId: 'purchase#2' });
+      await flush();
+
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it('reports failed when the handler throws', async () => {
+      Purchasely.interceptAction('purchase', () => { throw new Error('boom'); });
+      const nativeSuccess = nativeInterceptorFor('purchase');
+      mockExec.mockClear();
+
+      nativeSuccess({ action: 'purchase', callbackId: 'purchase#3' });
+      await flush();
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'completeActionInterceptor',
+        ['purchase#3', 'failed']
       );
     });
   });
 
-  describe('onProcessAction', () => {
-    it('should call exec with correct parameters', () => {
-      Purchasely.onProcessAction(true);
+  describe('removeActionInterceptor', () => {
+    it('unregisters a single kind', () => {
+      Purchasely.removeActionInterceptor('purchase');
 
       expect(mockExec).toHaveBeenCalledWith(
         expect.any(Function),
         expect.any(Function),
         'Purchasely',
-        'onProcessAction',
-        [true]
+        'unregisterActionInterceptor',
+        ['purchase']
       );
+    });
+  });
+
+  describe('removeAllActionInterceptors', () => {
+    it('unregisters every registered kind', () => {
+      Purchasely.interceptAction('purchase', jest.fn());
+      Purchasely.interceptAction('restore', jest.fn());
+      mockExec.mockClear();
+
+      Purchasely.removeAllActionInterceptors();
+
+      const unregistered = mockExec.mock.calls
+        .filter((c) => c[3] === 'unregisterActionInterceptor')
+        .map((c) => c[4][0]);
+      expect(unregistered).toEqual(expect.arrayContaining(['purchase', 'restore']));
     });
   });
 
@@ -604,7 +1264,7 @@ describe('Purchasely', () => {
   });
 
   describe('userSubscriptions', () => {
-    it('should call exec with correct parameters', () => {
+    it('defaults invalidateCache to false when omitted (PAR-29)', () => {
       const success = jest.fn();
       const error = jest.fn();
 
@@ -615,13 +1275,28 @@ describe('Purchasely', () => {
         expect.any(Function),
         'Purchasely',
         'userSubscriptions',
-        []
+        [false]
+      );
+    });
+
+    it('forwards an explicit invalidateCache value', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.userSubscriptions(success, error, true);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        success,
+        expect.any(Function),
+        'Purchasely',
+        'userSubscriptions',
+        [true]
       );
     });
   });
 
   describe('userSubscriptionsHistory', () => {
-    it('should call exec with correct parameters', () => {
+    it('defaults invalidateCache to false when omitted (PAR-29)', () => {
       const success = jest.fn();
       const error = jest.fn();
 
@@ -632,7 +1307,22 @@ describe('Purchasely', () => {
         expect.any(Function),
         'Purchasely',
         'userSubscriptionsHistory',
-        []
+        [false]
+      );
+    });
+
+    it('forwards an explicit invalidateCache value', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.userSubscriptionsHistory(success, error, true);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        success,
+        expect.any(Function),
+        'Purchasely',
+        'userSubscriptionsHistory',
+        [true]
       );
     });
   });
@@ -651,43 +1341,38 @@ describe('Purchasely', () => {
     });
   });
 
-  describe('showPresentation', () => {
+  describe('closeAllScreens', () => {
     it('should call exec with correct parameters', () => {
-      Purchasely.showPresentation();
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.closeAllScreens(success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'closeAllScreens', []);
+    });
+
+    it('should default callbacks when none provided', () => {
+      Purchasely.closeAllScreens();
 
       expect(mockExec).toHaveBeenCalledWith(
         expect.any(Function),
         expect.any(Function),
         'Purchasely',
-        'showPresentation',
+        'closeAllScreens',
         []
       );
     });
   });
 
-  describe('hidePresentation', () => {
-    it('should call exec with correct parameters', () => {
-      Purchasely.hidePresentation();
-
-      expect(mockExec).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.any(Function),
-        'Purchasely',
-        'hidePresentation',
-        []
-      );
-    });
-  });
-
-  describe('closePresentation', () => {
-    it('should call exec with correct parameters', () => {
+  describe('closePresentation (deprecated alias of closeAllScreens)', () => {
+    it('should delegate to closeAllScreens', () => {
       Purchasely.closePresentation();
 
       expect(mockExec).toHaveBeenCalledWith(
         expect.any(Function),
         expect.any(Function),
         'Purchasely',
-        'closePresentation',
+        'closeAllScreens',
         []
       );
     });
@@ -872,6 +1557,79 @@ describe('Purchasely', () => {
         );
       });
     });
+
+    describe('getBuiltInAttributes (PAR-07)', () => {
+      it('should call exec with correct parameters', () => {
+        const success = jest.fn();
+        const error = jest.fn();
+
+        Purchasely.getBuiltInAttributes(success, error);
+
+        expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'getBuiltInAttributes', []);
+      });
+    });
+
+    describe('getBuiltInAttribute (PAR-07)', () => {
+      it('should call exec with correct parameters', () => {
+        const success = jest.fn();
+        const error = jest.fn();
+
+        Purchasely.getBuiltInAttribute('ply_session_count', success, error);
+
+        expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'getBuiltInAttribute', ['ply_session_count']);
+      });
+    });
+
+    describe('userAttributes (REC-12 / PAR-03)', () => {
+      it('should call exec with correct parameters', () => {
+        const success = jest.fn();
+        const error = jest.fn();
+
+        Purchasely.userAttributes(success, error);
+
+        expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'userAttributes', []);
+      });
+    });
+
+    describe('incrementUserAttribute (REC-12 / PAR-02)', () => {
+      it('should call exec with correct parameters', () => {
+        Purchasely.incrementUserAttribute('counter', 5);
+
+        expect(mockExec).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.any(Function),
+          'Purchasely',
+          'incrementUserAttribute',
+          ['counter', 5]
+        );
+      });
+
+      it('should forward an omitted value as-is (native defaults it to 1)', () => {
+        Purchasely.incrementUserAttribute('counter');
+
+        expect(mockExec).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.any(Function),
+          'Purchasely',
+          'incrementUserAttribute',
+          ['counter', undefined]
+        );
+      });
+    });
+
+    describe('decrementUserAttribute (REC-12 / PAR-02)', () => {
+      it('should call exec with correct parameters', () => {
+        Purchasely.decrementUserAttribute('counter', 3);
+
+        expect(mockExec).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.any(Function),
+          'Purchasely',
+          'decrementUserAttribute',
+          ['counter', 3]
+        );
+      });
+    });
   });
 
   describe('isEligibleForIntroOffer', () => {
@@ -941,6 +1699,128 @@ describe('Purchasely', () => {
         'setDebugMode',
         [true]
       );
+    });
+  });
+
+  describe('Dynamic Offerings (PAR-05)', () => {
+    describe('setDynamicOffering', () => {
+      it('should call exec with correct parameters, forwarding billingPlanType', () => {
+        const success = jest.fn();
+        const error = jest.fn();
+
+        Purchasely.setDynamicOffering('ref_1', 'plan_vendor_id', 'offer_vendor_id', Purchasely.BillingPlanType.monthly, success, error);
+
+        expect(mockExec).toHaveBeenCalledWith(
+          success,
+          error,
+          'Purchasely',
+          'setDynamicOffering',
+          ['ref_1', 'plan_vendor_id', 'offer_vendor_id', 2]
+        );
+      });
+
+      it('should forward a null offerVendorId and default billingPlanType to unspecified when omitted', () => {
+        Purchasely.setDynamicOffering('ref_1', 'plan_vendor_id', null, undefined, jest.fn(), jest.fn());
+
+        expect(mockExec).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.any(Function),
+          'Purchasely',
+          'setDynamicOffering',
+          ['ref_1', 'plan_vendor_id', null, 0]
+        );
+      });
+    });
+
+    describe('getDynamicOfferings', () => {
+      it('should call exec with correct parameters', () => {
+        const success = jest.fn();
+        const error = jest.fn();
+
+        Purchasely.getDynamicOfferings(success, error);
+
+        expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'getDynamicOfferings', []);
+      });
+    });
+
+    describe('removeDynamicOffering', () => {
+      it('should call exec with correct parameters', () => {
+        Purchasely.removeDynamicOffering('ref_1');
+
+        expect(mockExec).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.any(Function),
+          'Purchasely',
+          'removeDynamicOffering',
+          ['ref_1']
+        );
+      });
+    });
+
+    describe('clearDynamicOfferings', () => {
+      it('should call exec with correct parameters', () => {
+        Purchasely.clearDynamicOfferings();
+
+        expect(mockExec).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.any(Function),
+          'Purchasely',
+          'clearDynamicOfferings',
+          []
+        );
+      });
+    });
+  });
+
+  // Purchasely 6.0: these v5 APIs were deliberately removed (see MIGRATION-v6.md).
+  // Asserting their absence guards against accidental resurrection/typos reintroducing
+  // a v5-shaped surface alongside the v6 replacements.
+  describe('Removed v5 APIs (should not exist in v6)', () => {
+    it('removes the presentation methods with no v6 native screen equivalent', () => {
+      expect(Purchasely.presentSubscriptions).toBeUndefined();
+      expect(Purchasely.presentProductWithIdentifier).toBeUndefined();
+      expect(Purchasely.presentPlanWithIdentifier).toBeUndefined();
+      expect(Purchasely.showPresentation).toBeUndefined();
+      expect(Purchasely.hidePresentation).toBeUndefined();
+    });
+
+    // The imperative presentation surface is replaced by the Purchasely.presentation
+    // builder (see the 'presentation builder (v6)' suite above).
+    it('removes the imperative presentation surface in favor of Purchasely.presentation', () => {
+      expect(Purchasely.fetchPresentation).toBeUndefined();
+      expect(Purchasely.fetchPresentationForPlacement).toBeUndefined();
+      expect(Purchasely.fetchPresentationForDefault).toBeUndefined();
+      expect(Purchasely.presentPresentationWithIdentifier).toBeUndefined();
+      expect(Purchasely.presentPresentationForPlacement).toBeUndefined();
+      expect(Purchasely.presentPresentationForDefault).toBeUndefined();
+      expect(Purchasely.presentPresentation).toBeUndefined();
+      expect(Purchasely.backPresentation).toBeUndefined();
+
+      expect(typeof Purchasely.presentation.placement).toBe('function');
+      expect(typeof Purchasely.presentation.screen).toBe('function');
+      expect(typeof Purchasely.presentation.defaultSource).toBe('function');
+      expect(typeof Purchasely.presentation.default).toBe('function');
+    });
+
+    it('removes the single global action interceptor in favor of interceptAction(kind, handler)', () => {
+      expect(Purchasely.setPaywallActionInterceptor).toBeUndefined();
+      expect(Purchasely.onProcessAction).toBeUndefined();
+      expect(Purchasely.PaywallAction).toBeUndefined();
+    });
+
+    it('removes the renamed deeplink methods', () => {
+      expect(Purchasely.readyToOpenDeeplink).toBeUndefined();
+      expect(Purchasely.isDeeplinkHandled).toBeUndefined();
+    });
+
+    it('removes the renamed default dismiss handler', () => {
+      expect(Purchasely.setDefaultPresentationResultHandler).toBeUndefined();
+    });
+
+    it('removes the RunningMode values dropped by native 6.0', () => {
+      expect(Purchasely.RunningMode.paywallObserver).toBeUndefined();
+      expect(Purchasely.RunningMode.transactionOnly).toBeUndefined();
+      expect(Object.keys(Purchasely.RunningMode).sort()).toEqual(['full', 'observer']);
     });
   });
 });

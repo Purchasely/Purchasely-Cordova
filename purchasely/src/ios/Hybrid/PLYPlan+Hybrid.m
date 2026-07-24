@@ -79,6 +79,25 @@
 		[dict setObject:introPeriod forKey:@"introPeriod"];
 	}
 
+	// Commitment installment details (iOS 26.4+ multi-period commitments, e.g. "monthly
+	// subscription with 12-month commitment"). Apple-only: the array is empty for every other
+	// plan, so the key is omitted then. Mirrors PLYPlan.commitmentInfo: [PLYCommitmentInfo].
+	NSArray<PLYCommitmentInfo *> *commitmentInfo = self.commitmentInfo;
+	if (commitmentInfo.count > 0) {
+		NSMutableArray<NSDictionary *> *commitmentArray = [NSMutableArray new];
+		for (PLYCommitmentInfo *info in commitmentInfo) {
+			[commitmentArray addObject:@{
+				@"billingPlanType": @(info.billingPlanType),
+				@"billingPrice":    info.billingPrice,
+				@"billingPeriod":   info.billingPeriod,
+				@"totalPrice":      info.totalPrice,
+				@"totalPeriod":     info.totalPeriod,
+				@"totalDuration":   @(info.totalDuration)
+			}];
+		}
+		[dict setObject:commitmentArray forKey:@"commitmentInfo"];
+	}
+
 	return dict;
 }
 

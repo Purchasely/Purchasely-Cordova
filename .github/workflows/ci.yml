@@ -4,6 +4,11 @@ on:
   pull_request:
     branches: [main, master]
   workflow_call:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   unit-tests:
@@ -12,16 +17,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Install dependencies
         working-directory: purchasely
-        run: npm install
+        run: npm ci
 
       - name: Run tests
         working-directory: purchasely
@@ -34,12 +39,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "24"
           cache: "npm"
           cache-dependency-path: purchasely/example/package-lock.json
 
@@ -48,7 +53,7 @@ jobs:
 
       - name: Install example dependencies
         working-directory: purchasely/example
-        run: npm install
+        run: npm ci
 
       # Restore CocoaPods downloaded pod sources BEFORE `cordova platform add`
       # so the implicit `pod install` triggered by `cordova prepare` reuses
@@ -56,7 +61,7 @@ jobs:
       # (legacy spec repo, ~1.5 GB) since CocoaPods CDN handles spec lookups
       # on demand and the cache save was the real bottleneck.
       - name: Cache CocoaPods
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/Library/Caches/CocoaPods
           key: ${{ runner.os }}-cocoapods-${{ hashFiles('purchasely/plugin.xml') }}
@@ -66,14 +71,31 @@ jobs:
       - name: Setup iOS platform and plugins
         working-directory: purchasely/example
         run: |
-          cordova plugin remove @purchasely/cordova-plugin-purchasely || true
-          cordova platform remove ios || true
-          cordova platform add ios
-          cordova plugin add ../ --link
+          cordova plugin remove @purchasely/cordova-plugin-purchasely --nosave || true
+          cordova platform remove ios --nosave || true
+          cordova platform add ios@8.1.1 --nosave
+          cordova plugin add ../ --link --nosave
 
-      - name: Build iOS
+      - name: Build iOS release unsigned
         working-directory: purchasely/example
-        run: cordova build ios --emulator
+        run: |
+          xcodebuild build \
+            -workspace platforms/ios/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Archive iOS release unsigned
+        working-directory: purchasely/example
+        run: |
+          xcodebuild archive \
+            -workspace platforms/ios/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/App.xcarchive \
+            CODE_SIGNING_ALLOWED=NO
 
   build-android:
     name: Build Android
@@ -81,17 +103,17 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "24"
           cache: "npm"
           cache-dependency-path: purchasely/example/package-lock.json
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: "temurin"
           java-version: "17"
@@ -104,7 +126,7 @@ jobs:
 
       - name: Install example dependencies
         working-directory: purchasely/example
-        run: npm install
+        run: npm ci
 
       - name: Setup Android platform and plugins
         working-directory: purchasely/example
@@ -126,15 +148,17 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Check version consistency
         run: |
           # Extract versions from different files
-          PLUGIN_XML_VERSION=$(grep -oP 'plugin id="@purchasely/cordova-plugin-purchasely" version="\K[^"]+' purchasely/plugin.xml)
+          PLUGIN_XML_VERSION=$(sed -nE 's/.*plugin id="@purchasely\/cordova-plugin-purchasely" version="([^"]+)".*/\1/p' purchasely/plugin.xml)
           PACKAGE_JSON_VERSION=$(jq -r '.version' purchasely/package.json)
-          GOOGLE_PLUGIN_XML_VERSION=$(grep -oP 'plugin id="@purchasely/cordova-plugin-purchasely-google" version="\K[^"]+' purchasely-google/plugin.xml)
+          GOOGLE_PLUGIN_XML_VERSION=$(sed -nE 's/.*plugin id="@purchasely\/cordova-plugin-purchasely-google" version="([^"]+)".*/\1/p' purchasely-google/plugin.xml)
           GOOGLE_PACKAGE_JSON_VERSION=$(jq -r '.version' purchasely-google/package.json)
+          GOOGLE_LOCK_TOP_VERSION=$(jq -r '.version' purchasely-google/package-lock.json)
+          GOOGLE_LOCK_PKG_VERSION=$(jq -r '.packages[""].version' purchasely-google/package-lock.json)
           LOCK_TOP_VERSION=$(jq -r '.version' purchasely/package-lock.json)
           LOCK_PKG_VERSION=$(jq -r '.packages[""].version' purchasely/package-lock.json)
           EXAMPLE_LOCK_PLUGIN_VERSION=$(jq -r '.packages[".."].version' purchasely/example/package-lock.json)
@@ -144,6 +168,8 @@ jobs:
           echo "purchasely/package.json: $PACKAGE_JSON_VERSION"
           echo "purchasely-google/plugin.xml: $GOOGLE_PLUGIN_XML_VERSION"
           echo "purchasely-google/package.json: $GOOGLE_PACKAGE_JSON_VERSION"
+          echo "purchasely-google/package-lock.json (top): $GOOGLE_LOCK_TOP_VERSION"
+          echo "purchasely-google/package-lock.json (packages['']): $GOOGLE_LOCK_PKG_VERSION"
           echo "purchasely/package-lock.json (top): $LOCK_TOP_VERSION"
           echo "purchasely/package-lock.json (packages['']): $LOCK_PKG_VERSION"
           echo "purchasely/example/package-lock.json (packages['..']): $EXAMPLE_LOCK_PLUGIN_VERSION"
@@ -159,6 +185,8 @@ jobs:
           check "purchasely/package.json" "$PACKAGE_JSON_VERSION"
           check "purchasely-google/plugin.xml" "$GOOGLE_PLUGIN_XML_VERSION"
           check "purchasely-google/package.json" "$GOOGLE_PACKAGE_JSON_VERSION"
+          check "purchasely-google/package-lock.json (top)" "$GOOGLE_LOCK_TOP_VERSION"
+          check "purchasely-google/package-lock.json (packages[''])" "$GOOGLE_LOCK_PKG_VERSION"
           check "purchasely/package-lock.json (top)" "$LOCK_TOP_VERSION"
           check "purchasely/package-lock.json (packages[''])" "$LOCK_PKG_VERSION"
           check "purchasely/example/package-lock.json (packages['..'])" "$EXAMPLE_LOCK_PLUGIN_VERSION"
