@@ -30,7 +30,10 @@ for i in $(seq 1 30); do
 done
 
 run_suite() { # $1 = spec, $2 = hard|soft
-  local spec="$1" gate="$2" tries=3 n=1
+  # More retries than Android: WebDriverAgent's cold first build (~10-13 min) can outlast a
+  # few session-creation attempts, and the hard-gate bridge spec runs first — extra tries let
+  # WDA finish building (it is then cached via derivedDataPath, so later specs are instant).
+  local spec="$1" gate="$2" tries="${E2E_TRIES:-6}" n=1
   while [ $n -le $tries ]; do
     echo "== [$gate] $spec (attempt $n/$tries) =="
     if npx wdio run ./wdio.ios.conf.js --spec "$spec" 2>&1 | tee "$LOGDIR/wdio-$(basename "$spec").log"; then
