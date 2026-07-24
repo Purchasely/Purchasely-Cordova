@@ -117,15 +117,15 @@ describe('Purchasely', () => {
     describe('PresentationAction', () => {
       it('should have correct presentation action values', () => {
         expect(Purchasely.PresentationAction.close).toBe('close');
-        expect(Purchasely.PresentationAction.close_all).toBe('close_all');
+        expect(Purchasely.PresentationAction.closeAll).toBe('close_all');
         expect(Purchasely.PresentationAction.login).toBe('login');
         expect(Purchasely.PresentationAction.navigate).toBe('navigate');
         expect(Purchasely.PresentationAction.purchase).toBe('purchase');
         expect(Purchasely.PresentationAction.restore).toBe('restore');
-        expect(Purchasely.PresentationAction.open_presentation).toBe('open_presentation');
-        expect(Purchasely.PresentationAction.open_placement).toBe('open_placement');
-        expect(Purchasely.PresentationAction.promo_code).toBe('promo_code');
-        expect(Purchasely.PresentationAction.web_checkout).toBe('web_checkout');
+        expect(Purchasely.PresentationAction.openPresentation).toBe('open_presentation');
+        expect(Purchasely.PresentationAction.openPlacement).toBe('open_placement');
+        expect(Purchasely.PresentationAction.promoCode).toBe('promo_code');
+        expect(Purchasely.PresentationAction.webCheckout).toBe('web_checkout');
       });
     });
 

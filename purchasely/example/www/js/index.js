@@ -258,7 +258,7 @@ function onPurchaselySdkReady() {
 		return Purchasely.InterceptResult.notHandled;
 	});
 
-	Purchasely.interceptAction(Purchasely.PresentationAction.close_all, (info, parameters) => {
+	Purchasely.interceptAction(Purchasely.PresentationAction.closeAll, (info, parameters) => {
 		console.log('[interceptAction] close_all — info: ' + safeStringify(info) + ' — parameters: ' + safeStringify(parameters));
 		return Purchasely.InterceptResult.notHandled;
 	});
@@ -271,12 +271,12 @@ function onPurchaselySdkReady() {
 		return Purchasely.InterceptResult.success;
 	});
 
-	Purchasely.interceptAction(Purchasely.PresentationAction.open_presentation, (info, parameters) => {
+	Purchasely.interceptAction(Purchasely.PresentationAction.openPresentation, (info, parameters) => {
 		console.log('[interceptAction] open_presentation — info: ' + safeStringify(info) + ' — parameters: ' + safeStringify(parameters));
 		return Purchasely.InterceptResult.notHandled;
 	});
 
-	Purchasely.interceptAction(Purchasely.PresentationAction.open_placement, (info, parameters) => {
+	Purchasely.interceptAction(Purchasely.PresentationAction.openPlacement, (info, parameters) => {
 		console.log('[interceptAction] open_placement — info: ' + safeStringify(info) + ' — parameters: ' + safeStringify(parameters));
 		return Purchasely.InterceptResult.notHandled;
 	});
@@ -287,7 +287,7 @@ function onPurchaselySdkReady() {
 		return Purchasely.InterceptResult.notHandled;
 	});
 
-	Purchasely.interceptAction(Purchasely.PresentationAction.web_checkout, (info, parameters) => {
+	Purchasely.interceptAction(Purchasely.PresentationAction.webCheckout, (info, parameters) => {
 		console.log('[interceptAction] web_checkout — info: ' + safeStringify(info) + ' — parameters: ' + safeStringify(parameters));
 		return Purchasely.InterceptResult.notHandled;
 	});

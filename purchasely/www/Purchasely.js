@@ -704,17 +704,19 @@ exports.RunningMode = {
 }
 
 // Purchasely 6.0: the paywall action kinds handled by interceptAction.
+// Keys are camelCase (RN/Flutter parity); values are the wire-format
+// snake_case strings the native bridges map/emit -- unchanged.
 exports.PresentationAction = {
     close: 'close',
-    close_all: 'close_all',
+    closeAll: 'close_all',
     login: 'login',
     navigate: 'navigate',
     purchase: 'purchase',
     restore: 'restore',
-    open_presentation: 'open_presentation',
-    open_placement: 'open_placement',
-    promo_code: 'promo_code',
-    web_checkout: 'web_checkout'
+    openPresentation: 'open_presentation',
+    openPlacement: 'open_placement',
+    promoCode: 'promo_code',
+    webCheckout: 'web_checkout'
 }
 
 // Purchasely 6.0: result returned by an interceptAction handler after handling
