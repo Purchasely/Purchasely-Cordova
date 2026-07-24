@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { config } = require('./wdio.shared.conf');
 
 // Path to the .app built by `cordova build ios --emulator` (simulator build).
@@ -34,5 +35,10 @@ exports.config = Object.assign({}, config, {
     'appium:wdaStartupRetries': 1,
     'appium:wdaStartupRetryInterval': 20000,
     'appium:useNewWDA': false,
+    // Build WebDriverAgent into a FIXED DerivedData dir so it is compiled once and reused
+    // across spec retries. Without it appium uses a fresh temp dir per session, so WDA is
+    // rebuilt from scratch every attempt and the hard-gate bridge spec times out before the
+    // (slow, cold) build ever finishes.
+    'appium:derivedDataPath': path.join(os.tmpdir(), 'ply-wda-derived'),
   }],
 });
