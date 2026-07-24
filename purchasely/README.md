@@ -29,31 +29,31 @@ Purchasely.start(
     }
 );
 
-Purchasely.presentPresentationWithIdentifier(
-    'my_presentation_id', // may be null
-    'my_content_id', // may be null
-    Purchasely.TransitionType.fullScreen, // display mode
-    (callback) => {
-        console.log(callback);
-        if(callback.result == Purchasely.PurchaseResult.CANCELLED) {
-            console.log("User cancelled purchased");
+Purchasely.presentation
+    .placement('my_placement_id') // or .screen('my_presentation_id'), .defaultSource()
+    .contentId('my_content_id') // may be omitted
+    .build()
+    .display(Purchasely.TransitionType.fullScreen) // display mode
+    .then((outcome) => {
+        console.log(outcome);
+        if (outcome.purchaseResult === 'purchased') {
+            console.log("User purchased " + outcome.plan.name);
+        } else if (outcome.purchaseResult === 'cancelled') {
+            console.log("User cancelled purchase");
         } else {
-            console.log("User purchased " + callback.plan.name);
+            console.log("Dismissed", outcome.closeReason);
         }
-    },
-    (error) => {
-        console.log("Error with purchase : " + error);
-    }
-);
+    });
 ```
 
 ## Limitations
 
 - **No inline/embedded paywall view.** iOS, Android, Flutter and React Native all support
   embedding a paywall directly inside a screen (`PLYPresentationView` / `buildView` /
-  `getFragment`). This is not available on Cordova: the plugin only supports modal/fullscreen
-  presentation via `presentPresentation*`. Embedding a native view inside the WebView isn't
-  supported by this bridge architecture; this is an accepted platform limitation, not a bug.
+  `getFragment`). This is not available on Cordova: the plugin only supports
+  modal/fullscreen/push presentation via the presentation builder
+  (`Purchasely.presentation.…build().display()`). Embedding a native view inside the WebView
+  isn't supported by this bridge architecture; this is an accepted platform limitation, not a bug.
 
 ## 🏁 Documentation
 
