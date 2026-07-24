@@ -158,7 +158,7 @@ exports.synchronize = function (success, error) {
 //   Purchasely.presentation.placement(id) | .screen(id) | .defaultSource()  // alias: .default()
 //     .contentId(id)
 //     .backgroundColor(hex)
-//     .onPresented(cb) / .onCloseRequested(cb) / .onDismissed(cb)
+//     .onLoaded(cb) / .onPresented(cb) / .onCloseRequested(cb) / .onDismissed(cb)
 //     .build()
 //       .preload()             -> Promise<loadedPresentation>      (screenId is authoritative;
 //                                  the resolved object also exposes display()/close()/back())
@@ -234,13 +234,19 @@ function PLYPresentationRequest(config) {
 
 PLYPresentationRequest.prototype.preload = function () {
     var self = this;
+    var callbacks = this._config.callbacks;
     return new Promise(function (resolve, reject) {
         exec(function (raw) {
             self._raw = raw;
+            var presentation = normalizePresentation(raw);
+            // Purchasely 6.0: onLoaded fires once the presentation has loaded
+            // (parity with RN/Flutter's onLoaded, which only fires on a
+            // successful load -- a failed preload() rejects below instead).
+            if (callbacks.onLoaded) callbacks.onLoaded(presentation, null);
             // Resolve a "loaded presentation": the screenId-normalized data plus
             // display()/close()/back() delegating to this request (parity with RN's
             // PLYLoadedPresentation and the native preload()->display() flow).
-            resolve(Object.assign({}, normalizePresentation(raw), {
+            resolve(Object.assign({}, presentation, {
                 display: function (transition) { return self.display(transition); },
                 close: function () { return self.close(); },
                 back: function () { return self.back(); }
@@ -327,6 +333,14 @@ PLYPresentationBuilder.prototype.contentId = function (id) {
 // displayCloseButton / displayBackButton are intentionally not exposed.
 PLYPresentationBuilder.prototype.backgroundColor = function (hex) {
     this._config.backgroundColor = hex;
+    return this;
+};
+
+// Purchasely 6.0: fires (presentation, error) once preload() loads the
+// presentation. Only fires on a successful load; preload() still rejects on
+// failure (parity with RN/Flutter's onLoaded).
+PLYPresentationBuilder.prototype.onLoaded = function (handler) {
+    this._config.callbacks.onLoaded = handler;
     return this;
 };
 

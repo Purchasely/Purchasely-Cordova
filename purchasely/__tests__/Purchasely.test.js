@@ -844,6 +844,32 @@ describe('Purchasely', () => {
       });
     });
 
+    describe('onLoaded builder callback', () => {
+      it('fires onLoaded with the screenId-normalized presentation once preload() loads it', async () => {
+        const onLoaded = jest.fn();
+        const request = Purchasely.presentation.screen('screen1').onLoaded(onLoaded).build();
+
+        const preloadPromise = request.preload();
+        const rawFetched = { screenId: 'screen1', fetchId: 'ply_fetch_loaded' };
+        execCallFor('fetchPresentation')[0](rawFetched);
+
+        await preloadPromise;
+
+        expect(onLoaded).toHaveBeenCalledWith(fullPresentation({ screenId: 'screen1' }), null);
+      });
+
+      it('does not fire onLoaded when preload() fails (parity with RN/Flutter)', async () => {
+        const onLoaded = jest.fn();
+        const request = Purchasely.presentation.screen('screen1').onLoaded(onLoaded).build();
+
+        const preloadPromise = request.preload();
+        execCallFor('fetchPresentation')[1]('Screen not found');
+
+        await expect(preloadPromise).rejects.toEqual({ message: 'Screen not found' });
+        expect(onLoaded).not.toHaveBeenCalled();
+      });
+    });
+
     describe('display() direct (no prior preload())', () => {
       it('calls the matching present* action directly, without ever calling fetchPresentation', async () => {
         mockExec.mockClear();
