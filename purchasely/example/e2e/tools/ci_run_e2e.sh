@@ -26,8 +26,11 @@ echo "== Starting Appium =="
 # Chromedriver matching the Cordova WebView's Chrome version on demand. Without it,
 # switching to the WEBVIEW context fails ("No Chromedriver found that can automate
 # Chrome 'X'"), which breaks every bridge test in its `before all` hook.
+# Detach Appium's stdout/stderr (it logs to --log anyway): if it keeps the script's
+# output pipe open, the android-emulator-runner action hangs after the tests finish
+# instead of returning.
 npx appium --allow-insecure=uiautomator2:chromedriver_autodownload \
-  --log "$LOGDIR/appium-android.log" --log-level info &
+  --log "$LOGDIR/appium-android.log" --log-level info >/dev/null 2>&1 &
 APPIUM_PID=$!
 trap 'kill $APPIUM_PID 2>/dev/null || true' EXIT
 # Wait for Appium to accept connections.

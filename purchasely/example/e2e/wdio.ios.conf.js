@@ -25,12 +25,13 @@ exports.config = Object.assign({}, config, {
     'appium:platformVersion': process.env.PURCHASELY_E2E_IOS_VERSION || undefined,
     'appium:newCommandTimeout': 240,
     'appium:autoAcceptAlerts': true,
-    // WebDriverAgent's first build on a cold CI runner routinely exceeds the 60s
-    // default and aborts session creation ("Unable to start WebDriverAgent ...
-    // after 60000ms"). Give it room and keep the built WDA between retries.
-    'appium:wdaLaunchTimeout': 240000,
-    'appium:wdaConnectionTimeout': 240000,
-    'appium:wdaStartupRetries': 2,
+    // WebDriverAgent's FIRST build on a cold CI runner can take several minutes; even 240s
+    // wasn't enough ("Unable to start WebDriverAgent ... after 240000ms"), so the first spec
+    // burned all its retries before WDA finished building. Give one attempt a long window to
+    // build WDA, then reuse it (useNewWDA:false) — later specs start in a few seconds.
+    'appium:wdaLaunchTimeout': 600000,
+    'appium:wdaConnectionTimeout': 600000,
+    'appium:wdaStartupRetries': 1,
     'appium:wdaStartupRetryInterval': 20000,
     'appium:useNewWDA': false,
   }],

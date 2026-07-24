@@ -19,7 +19,9 @@ echo "== Ensuring xcuitest driver is installed =="
 npx appium driver install xcuitest 2>/dev/null || true
 
 echo "== Starting Appium =="
-npx appium --log "$LOGDIR/appium-ios.log" --log-level info &
+# Detach Appium's stdout/stderr (it logs to --log anyway) so it can't hold the runner's
+# output pipe open after the tests finish.
+npx appium --log "$LOGDIR/appium-ios.log" --log-level info >/dev/null 2>&1 &
 APPIUM_PID=$!
 trap 'kill $APPIUM_PID 2>/dev/null || true' EXIT
 for i in $(seq 1 30); do
