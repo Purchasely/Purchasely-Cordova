@@ -57,5 +57,8 @@
   "bugs": {
     "url": "https://github.com/Purchasely/Purchasely-Cordova/issues"
   },
-  "homepage": "https://github.com/Purchasely/Purchasely-Cordova#readme"
+  "homepage": "https://github.com/Purchasely/Purchasely-Cordova#readme",
+  "overrides": {
+    "brace-expansion@1": "^1.1.16"
+  }
 }
