@@ -60,7 +60,7 @@ function onDeviceReady() {
 	Purchasely.setLanguage('en');
 
 	document.getElementById("openPresentation").addEventListener("click", openPresentation);
-	document.getElementById("fetchPresentation").addEventListener("click", fetchPresentation);
+	document.getElementById("preloadThenDisplay").addEventListener("click", preloadThenDisplay);
 	document.getElementById("backPresentation").addEventListener("click", backPresentation);
 	document.getElementById("closePresentation").addEventListener("click", closePresentation);
 	document.getElementById("purchaseWithPlanVendorId").addEventListener("click", purchaseWithPlanVendorId);
@@ -328,7 +328,7 @@ function openPresentation() {
 		});
 
 	// Purchasely 6.0 also supports:
-	//  - a rich transition object for drawer/popin sizing (see fetchPresentation below):
+	//  - a rich transition object for drawer/popin sizing (see preloadThenDisplay below):
 	//      { type: Purchasely.TransitionType.drawer, dismissible: true,
 	//        height: { type: Purchasely.DimensionType.percentage, value: 0.8 }, backgroundColor: '#000000' }
 	//  - the default (audience-targeted) presentation, targeted with .defaultSource() (or its
@@ -338,14 +338,14 @@ function openPresentation() {
 	//      Purchasely.removeDefaultPresentationDismissHandler();
 }
 
-function fetchPresentation() {
+function preloadThenDisplay() {
 	// Purchasely 6.0: preload() fetches without displaying; the resolved presentation
 	// exposes screenId (the authoritative identifier). Calling display() on the SAME
 	// request re-displays exactly what was preloaded.
 	const request = Purchasely.presentation.placement('flow_demo').build();
 	currentPresentationRequest = request;
 	request.preload().then((presentation) => {
-		console.log('[fetchPresentation] onFetched — presentation: ' + safeStringify(presentation));
+		console.log('[preload] onPreloaded — presentation: ' + safeStringify(presentation));
 		// Rich transition object: drawer at 80% height, dismissible. (iOS applies the
 		// percentage height + dismissible; Android also supports pixel + popin width.)
 		request.display({
@@ -353,9 +353,9 @@ function fetchPresentation() {
 			dismissible: true,
 			height: { type: Purchasely.DimensionType.percentage, value: 0.8 }
 		}).then((outcome) => {
-			console.log('[fetchPresentation → display] onDismissed — purchaseResult=' + outcome.purchaseResult + ' — outcome: ' + safeStringify(outcome));
+			console.log('[preload → display] onDismissed — purchaseResult=' + outcome.purchaseResult + ' — outcome: ' + safeStringify(outcome));
 			if (outcome.error) {
-				console.log("[fetchPresentation → display] error: " + outcome.error);
+				console.log("[preload → display] error: " + outcome.error);
 			} else if (outcome.purchaseResult === 'purchased' || outcome.purchaseResult === 'restored') {
 				console.log("User purchased " + (outcome.plan ? outcome.plan.name : ''));
 			} else {
@@ -363,7 +363,7 @@ function fetchPresentation() {
 			}
 		});
 	}, (error) => {
-		console.log("[fetchPresentation] error: " + safeStringify(error));
+		console.log("[preload] error: " + safeStringify(error));
 	});
 }
 
