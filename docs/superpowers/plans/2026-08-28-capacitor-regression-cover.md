@@ -97,3 +97,16 @@ Post-fix (PR #66 cherry-picked, `npx cap sync ios`):
     ** TEST SUCCEEDED **
 
 `purchasely` jest suite: 125 passed, 125 total.
+
+## Open item
+
+The Capacitor E2E leg is blocked on Appium's WebKit remote inspector reporting zero pages
+for the Capacitor web view. Ruled out: the app (loads, `deviceready` fires),
+`ios.webContentsDebuggingEnabled`, forcing `isInspectable` in `sceneDidBecomeActive`
+(verified applied via NSLog), and the runner (the Cordova leg passes on the same one).
+Whether to keep digging is a call for the team; `AppTests` covers the bug class
+deterministically in the meantime.
+
+Separately: Capacitor 8 defaults to SPM, and the SPM path silently drops `plugin.xml`'s
+`<podspec>` (the Purchasely SDK). A client scaffolding a fresh Capacitor 8 app today gets
+the plugin with no SDK behind it. Worth its own investigation.

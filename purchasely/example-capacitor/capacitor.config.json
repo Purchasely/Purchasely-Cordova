@@ -1,5 +1,8 @@
 {
   "appId": "io.purchasely.sample.capacitor",
   "appName": "HelloCapacitor",
-  "webDir": "../example/www"
+  "webDir": "../example/www",
+  "ios": {
+    "webContentsDebuggingEnabled": true
+  }
 }
