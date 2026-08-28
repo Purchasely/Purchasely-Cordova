@@ -159,21 +159,27 @@ jobs:
           set -euo pipefail
           APP=build/Build/Products/Debug-iphonesimulator/App.app
 
-          # Xcode puts the app code in App.debug.dylib for Debug builds and in the App
-          # binary otherwise, so try every file at the bundle root. One nm per file on
-          # purpose: piping a batched nm into grep under `pipefail` reports failure as soon
-          # as nm chokes on a non-Mach-O file (a PNG, Info.plist), which reads as "symbol
-          # absent" even when it is present.
+          # Search the whole bundle rather than guessing where the class lands. Which
+          # Mach-O holds it varies by Xcode version and by package manager: Xcode 26 Debug
+          # builds put app code in App.debug.dylib, older ones in the App binary, and the
+          # CocoaPods path can link it into an embedded framework instead. All that matters
+          # is that it is somewhere the runtime can load.
+          #
+          # One nm per file on purpose: piping a batched nm into grep under `pipefail`
+          # reports failure as soon as nm chokes on a non-Mach-O file (a PNG, Info.plist),
+          # which reads as "symbol absent" even when it is present.
           FOUND=0
-          for f in "$APP"/*; do
-            [ -f "$f" ] || continue
+          while IFS= read -r f; do
             if nm -a "$f" 2>/dev/null | grep -q '_OBJC_CLASS_\$_CDVPurchasely'; then
+              echo "CDVPurchasely found in ${f#"$APP"/}"
               FOUND=1
               break
             fi
-          done
+          done < <(find "$APP" -type f)
           if [ "$FOUND" -ne 1 ]; then
             echo "::error::CDVPurchasely is not linked into the app. Cordova registers plugins with NSClassFromString, so it would be nil at runtime."
+            echo "Bundle contents, for diagnosis:"
+            find "$APP" -maxdepth 2 | sed "s|^$APP|.|"
             exit 1
           fi
 
