@@ -48,6 +48,19 @@ describe('Preloaded presentation display', () => {
     // explicit message below, which is exactly what happened at a 120s ceiling.
     const preloaded = await callPresentation('placement', PLACEMENT, 'preload', undefined, 90000);
     if (!preloaded.ok) {
+      // This failure has only ever reproduced in CI, never locally, so make the log carry
+      // enough to diagnose it without another 40-minute round trip. bridge.e2e.js T3 runs
+      // the same preload but tolerates a clean error, and pollGlobal's timeout returns
+      // { error: 'timeout' } whose typeof is 'string', so T3 goes green on exactly this
+      // failure. That is why this spec is the only place it shows up.
+      const diag = await browser.execute(function () {
+        return {
+          plyResult: window.__plyResult === undefined ? '<undefined>' : window.__plyResult,
+          hasPurchasely: typeof window.Purchasely,
+          hasPresentationApi: window.Purchasely && typeof window.Purchasely.presentation,
+        };
+      });
+      console.log('[preload-display] diagnostics: ' + JSON.stringify(diag));
       throw new Error(
         'preload() failed for placement "' + PLACEMENT + '" (' + preloaded.error + '). ' +
         'This spec cannot verify the preload->display path without a loaded presentation; ' +

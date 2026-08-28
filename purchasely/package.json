@@ -41,6 +41,12 @@
   "author": "Purchasely",
   "license": "ISC",
   "main": "index.js",
+  "files": [
+    "src",
+    "www",
+    "plugin.xml",
+    "Package.swift"
+  ],
   "directories": {
     "example": "example"
   },
