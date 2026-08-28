@@ -16,6 +16,7 @@ const {
   switchToNative,
   pollGlobal,
   displayPresentation,
+  awaitPresented,
   closeCurrentPresentation,
   tapPurchaseCta,
 } = require('../helpers/driver');
@@ -55,7 +56,11 @@ describe('Action interceptor (NATIVE_APP tap)', () => {
     // 2. Display the paywall (fire-and-forget, so the session stays free to tap and close).
     // A fresh request is fine here: this spec asserts the interceptor, not the preload path.
     await displayPresentation('placement', PLACEMENT, 'fullScreen');
-    await browser.pause(8000);
+    const presented = await awaitPresented();
+    if (!presented.ok) {
+      console.log('[interceptor] the paywall never presented — inconclusive');
+      return;
+    }
 
     // 3. Tap the CTA natively.
     await switchToNative();

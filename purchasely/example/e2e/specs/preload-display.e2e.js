@@ -16,6 +16,7 @@ const {
   waitForPurchaselyReady,
   callPresentation,
   displayLastPresentation,
+  awaitPresented,
   awaitDismissOutcome,
   closeCurrentPresentation,
 } = require('../helpers/driver');
@@ -63,7 +64,10 @@ describe('Preloaded presentation display', () => {
     // 2. Display THAT presentation (fire-and-forget: display() settles at dismiss and would
     // otherwise block the session so close() could never run), then close it.
     await displayLastPresentation('fullScreen');
-    await browser.pause(6000);
+    // Wait for the paywall to be on screen rather than guessing with a fixed pause: a
+    // close() sent before it presents produces no outcome at all, which would read as a
+    // timeout rather than as the "Presentation not loaded" this spec looks for.
+    await awaitPresented();
     await closeCurrentPresentation();
 
     const outcome = await awaitDismissOutcome(30000);

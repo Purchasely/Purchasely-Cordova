@@ -113,10 +113,17 @@ async function callPresentation(source, sourceId, action, transition, timeoutMs 
       var settled = false;
       var finish = function (payload) { if (!settled) { settled = true; window.__plyResult = payload; } };
       try {
+        window.__plyPresented = undefined;
         var builder = sourceId
           ? window.Purchasely.presentation[source](sourceId)
           : window.Purchasely.presentation[source]();
-        var request = builder.build();
+        // Wired here too so a later displayLastPresentation() on this same request can be
+        // awaited with awaitPresented() instead of a fixed pause.
+        var request = builder
+          .onPresented(function (presentation, error) {
+            window.__plyPresented = { ok: !error, error: error ? String(error) : null };
+          })
+          .build();
         window.__plyLastRequest = request;
         var promise = action === 'preload' ? request.preload() : request.display(transition);
         promise.then(
@@ -143,10 +150,19 @@ async function displayPresentation(source, sourceId, transition) {
   await browser.execute(
     function (source, sourceId, transition) {
       window.__plyOutcome = undefined;
+      window.__plyPresented = undefined;
       var builder = sourceId
         ? window.Purchasely.presentation[source](sourceId)
         : window.Purchasely.presentation[source]();
-      var request = builder.build();
+      // onPresented fires when the paywall is actually on screen. Without it a caller can
+      // only guess with a fixed pause, and close() sent before the presentation exists
+      // produces no dismiss outcome at all -- the timeout that made dismiss.e2e.js fail on
+      // loaded CI runners while passing locally in 14s.
+      var request = builder
+        .onPresented(function (presentation, error) {
+          window.__plyPresented = { ok: !error, error: error ? String(error) : null };
+        })
+        .build();
       window.__plyLastRequest = request;
       request.display(transition).then(
         function (v) { window.__plyOutcome = { ok: true, value: v }; },
@@ -157,6 +173,13 @@ async function displayPresentation(source, sourceId, transition) {
     sourceId,
     transition
   );
+}
+
+// Wait until the presentation started by displayPresentation() is actually on screen.
+// Resolves { ok:false, error:'timeout' } if it never presents, which callers treat as
+// "nothing to close" rather than asserting on a dismiss outcome that cannot arrive.
+async function awaitPresented(timeoutMs = 45000) {
+  return pollGlobal('__plyPresented', timeoutMs);
 }
 
 // Display the presentation PRELOADED by the last callPresentation(..., 'preload'), i.e.
@@ -248,6 +271,7 @@ module.exports = {
   fireBridge,
   callPresentation,
   displayPresentation,
+  awaitPresented,
   displayLastPresentation,
   awaitDismissOutcome,
   closeCurrentPresentation,
