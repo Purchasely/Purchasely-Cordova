@@ -19,8 +19,11 @@ exports.config = Object.assign({}, config, {
     platformName: 'iOS',
     'appium:automationName': 'XCUITest',
     'appium:app': APP,
-    // The Cordova sample's id. The Capacitor leg (e2e-ios-capacitor.yml) runs the same
-    // specs against its own .app, so both the app path and the id are overridable.
+    // The Cordova sample's id. Both the app path and the id are overridable so this config
+    // can drive another host's .app unchanged. No workflow does that today: the Capacitor
+    // leg is blocked because Appium cannot attach to the Capacitor web view, and the
+    // elimination trail is in purchasely/example-capacitor/README.md. The overrides are
+    // kept because they cost one line each and are what re-enabling that leg needs.
     'appium:bundleId': process.env.PURCHASELY_E2E_BUNDLE_ID || 'com.purchasely.demo',
     'appium:deviceName': process.env.PURCHASELY_E2E_SIM || 'iPhone 16',
     // Pin an already-booted simulator when provided (CI boots one and exports its udid).

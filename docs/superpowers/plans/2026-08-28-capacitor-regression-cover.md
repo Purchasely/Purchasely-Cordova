@@ -63,11 +63,15 @@ toggle so observer mode is reachable.
 - `interceptor.e2e.js` (**soft gate**): register an interceptor, display a paywall, tap
   the CTA natively, assert the JS callback fires. Tap-driven, so gated like `dismiss`.
 
-Both specs run against both hosts.
+Both specs run against the Cordova host. See the D4 note for why the Capacitor leg is not
+shipped.
 
 ### D4. CI
-- `ci.yml`: new PR-gating `capacitor-ios-unit` job running D1.
-- `e2e-ios-capacitor.yml`: mirrors `e2e-ios.yml` against the Capacitor `.app`.
+- `ci.yml`: new PR-gating `capacitor-ios-tests` job running D1. **Shipped, passing.**
+- `e2e-ios-capacitor.yml`: **BLOCKED, not shipped.** Appium cannot attach to the Capacitor
+  web view; the elimination trail is in the sample's README. `wdio.ios.conf.js` keeps the
+  `PURCHASELY_E2E_APP` / `PURCHASELY_E2E_BUNDLE_ID` overrides, so re-enabling it is one
+  workflow file.
 
 ### D5. Supported-host declaration (DEFERRED, not in this branch)
 `plugin.xml` declares no `cordova-ios` minimum, which is how cordova-ios 6.x users stayed
