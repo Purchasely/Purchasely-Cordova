@@ -51,6 +51,8 @@ run_suite() { # $1 = spec, $2 = hard|soft
 
 cd "$HERE"
 rc=0
-run_suite "./specs/bridge.e2e.js"  hard || rc=1
-run_suite "./specs/dismiss.e2e.js" soft || true
+run_suite "./specs/bridge.e2e.js"          hard || rc=1
+run_suite "./specs/preload-display.e2e.js" hard || rc=1
+run_suite "./specs/dismiss.e2e.js"         soft || true
+run_suite "./specs/interceptor.e2e.js"     soft || true
 exit $rc

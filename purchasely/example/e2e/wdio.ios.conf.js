@@ -19,7 +19,9 @@ exports.config = Object.assign({}, config, {
     platformName: 'iOS',
     'appium:automationName': 'XCUITest',
     'appium:app': APP,
-    'appium:bundleId': 'com.purchasely.demo',
+    // The Cordova sample's id. The Capacitor leg (e2e-ios-capacitor.yml) runs the same
+    // specs against its own .app, so both the app path and the id are overridable.
+    'appium:bundleId': process.env.PURCHASELY_E2E_BUNDLE_ID || 'com.purchasely.demo',
     'appium:deviceName': process.env.PURCHASELY_E2E_SIM || 'iPhone 16',
     // Pin an already-booted simulator when provided (CI boots one and exports its udid).
     'appium:udid': process.env.PURCHASELY_E2E_UDID || undefined,

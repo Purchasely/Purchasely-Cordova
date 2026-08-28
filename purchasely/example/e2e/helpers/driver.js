@@ -159,6 +159,31 @@ async function displayPresentation(source, sourceId, transition) {
   );
 }
 
+// Display the presentation PRELOADED by the last callPresentation(..., 'preload'), i.e.
+// re-display the SAME request object. That request carries preload()'s native payload
+// (`_raw`), so display() routes through the native `presentPresentation` action — the one
+// that looks the presentation up in the iOS `presentationsLoaded` array and answers
+// "Presentation not loaded" when it is not there.
+// displayPresentation() cannot cover this: it BUILDS A FRESH request whose empty `_raw`
+// makes display() fall back to presentPresentationForPlacement — a direct fetch+display
+// that never reads presentationsLoaded, so it would pass on a host where preload state is
+// silently dropped. Fire-and-forget + poll for the same reason as displayPresentation():
+// display()'s promise only settles at dismiss, which would deadlock the session.
+async function displayLastPresentation(transition) {
+  await browser.execute(
+    function (transition) {
+      window.__plyOutcome = undefined;
+      var request = window.__plyLastRequest;
+      if (!request) { window.__plyOutcome = { ok: false, error: 'no preloaded request' }; return; }
+      request.display(transition).then(
+        function (v) { window.__plyOutcome = { ok: true, value: v }; },
+        function (e) { window.__plyOutcome = { ok: false, error: String(e) }; }
+      );
+    },
+    transition
+  );
+}
+
 // Poll for the dismiss outcome stashed by displayPresentation(). Resolves { ok, value } /
 // { ok:false, error } once display()'s promise settles (i.e. after close()), or
 // { ok:false, error:'timeout' } if no outcome arrives in time.
@@ -174,14 +199,57 @@ async function closeCurrentPresentation() {
   });
 }
 
+// Labels a paywall call-to-action carries. The example app points at the real backend, so
+// the rendered screen (and its language) is not fixed — match loosely, in en + fr.
+const CTA_PATTERN = /subscribe|continue|start|try|unlock|buy|purchase|abonn|essai|continuer|commencer/i;
+
+// Max native elements inspected while hunting the CTA. Every getText()/getAttribute() is a
+// WebDriver round trip, and an unbounded sweep of a paywall's view tree eats the whole
+// mocha timeout on iOS. 30 is well past where a CTA sits in the tree order.
+const CTA_SCAN_LIMIT = 30;
+
+// Tap the paywall purchase CTA from NATIVE_APP context (caller must switchToNative()
+// first). Returns true if an element was tapped, false if no CTA-looking element was
+// found — paywall layouts vary per app/backend config, so callers treat false as
+// "cannot conclude", not as a failure.
+async function tapPurchaseCta() {
+  // Purchasely renders the paywall natively on both platforms: buttons on iOS, any
+  // clickable node on Android (Compose rows surface as clickable android.view.View).
+  const selector = browser.isAndroid ? '//*[@clickable="true"]' : '//XCUIElementTypeButton';
+  const elements = await browser.$$(selector);
+
+  for (const element of elements.slice(0, CTA_SCAN_LIMIT)) {
+    let label = '';
+    try {
+      // getText() covers the Android text/iOS label case; content-desc is the fallback for
+      // Compose nodes that expose only an accessibility description. Elements go stale as
+      // the paywall animates in, and a stale read throws — skip those.
+      label = (await element.getText()) || (await element.getAttribute('content-desc')) || '';
+    } catch (e) {
+      continue;
+    }
+    if (!CTA_PATTERN.test(label)) continue;
+    try {
+      await element.click();
+      return true;
+    } catch (e) {
+      continue;
+    }
+  }
+  return false;
+}
+
 module.exports = {
   switchToWebview,
   switchToNative,
   waitForPurchaselyReady,
+  pollGlobal,
   callBridge,
   fireBridge,
   callPresentation,
   displayPresentation,
+  displayLastPresentation,
   awaitDismissOutcome,
   closeCurrentPresentation,
+  tapPurchaseCta,
 };
