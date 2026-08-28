@@ -13,14 +13,20 @@
 
 @implementation CDVPurchasely
 
-- (instancetype)init {
-    self = [super init];
+// pluginInitialize is Cordova's setup hook and is called by every host, after
+// viewController/webView/commandDelegate are assigned. The previous -init override was only
+// reached on cordova-ios, whose -initWithWebViewEngine: calls [self init]; Capacitor's
+// vendored CapacitorCordova calls [super init] instead, which dispatches to NSObject and
+// never reaches a subclass override - so under Capacitor these collections stayed nil, and
+// writing into a nil NSMutableDictionary/NSMutableArray is a silent no-op. That lost every
+// interceptor callbackId (intercepted actions completed .notHandled without reaching JS) and
+// every preloaded presentation ("Presentation not loaded" from preload/display).
+- (void)pluginInitialize {
+    [super pluginInitialize];
 
     self.presentationsLoaded = [NSMutableArray new];
     self.actionInterceptorCallbackIds = [NSMutableDictionary new];
     self.pendingInterceptCompletions = [NSMutableDictionary new];
-
-    return self;
 }
 
 - (void)start:(CDVInvokedUrlCommand*)command {
