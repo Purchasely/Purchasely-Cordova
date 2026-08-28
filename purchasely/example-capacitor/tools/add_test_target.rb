@@ -50,5 +50,13 @@ scheme.add_test_target(test_target)
 scheme.set_launch_target(app)
 scheme.save_as(PROJECT, TARGET_NAME)
 
+# Xcode autocreates the App scheme into xcuserdata, which ios/.gitignore excludes, so a
+# fresh clone has no App scheme and `xcodebuild -scheme App` fails. Share it explicitly:
+# the E2E workflow builds the simulator .app with it.
+app_scheme = Xcodeproj::XCScheme.new
+app_scheme.add_build_target(app)
+app_scheme.set_launch_target(app)
+app_scheme.save_as(PROJECT, app.name)
+
 project.save
 puts "Added #{TARGET_NAME} target and scheme"
