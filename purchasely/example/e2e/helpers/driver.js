@@ -30,6 +30,25 @@ async function waitForPurchaselyReady() {
     async () => browser.execute(() => typeof window.Purchasely !== 'undefined'),
     { timeout: 60000, timeoutMsg: 'window.Purchasely never became available' }
   );
+
+  // window.Purchasely existing only means the plugin was clobbered onto the page; it says
+  // nothing about Purchasely.start() having finished configuring the SDK natively. Calls
+  // made in that window can simply never settle.
+  //
+  // bridge.e2e.js hid this by accident: its preload is the third test, so getAnonymousUserId
+  // and allProducts had already given start() time to complete. preload-display.e2e.js
+  // calls preload first and failed 6/6 with "preload() failed (timeout)" while bridge's
+  // identical preload passed on the same app, same placement, same run.
+  //
+  // getAnonymousUserId is the cheapest proof the native side is actually serving commands:
+  // no store, no paywall fetch, and it only answers once start() has configured the SDK.
+  await browser.waitUntil(
+    async () => {
+      const res = await callBridge('getAnonymousUserId', [], 10000);
+      return res.ok && typeof res.value === 'string' && res.value.length > 0;
+    },
+    { timeout: 90000, interval: 2000, timeoutMsg: 'the Purchasely SDK never finished starting' }
+  );
 }
 
 // Poll a window global until a native callback has populated it, then return it.
