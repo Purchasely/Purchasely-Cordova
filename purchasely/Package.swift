@@ -51,7 +51,11 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apache/cordova-ios.git", from: "8.0.0"),
-        .package(url: "https://github.com/Purchasely/Purchasely-iOS.git", from: "6.0.0")
+        // exact, not `from:`. `from: "6.0.0"` permits any 6.x, so a fresh resolve already
+        // picked up 6.0.1 in CI while the podspec pins 6.0.0 and VERSIONS.md documents
+        // 6.0.0 for this plugin release. That made the linked SDK depend on install time
+        // and let the two integration paths drift apart. Bump this with the podspec.
+        .package(url: "https://github.com/Purchasely/Purchasely-iOS.git", exact: "6.0.0")
     ],
     targets: [
         .target(

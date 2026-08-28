@@ -84,6 +84,109 @@ jobs:
             -archivePath build/App.xcarchive \
             CODE_SIGNING_ALLOWED=NO
 
+  capacitor-ios-dependency-paths:
+    name: Capacitor iOS (${{ matrix.manager }})
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    # Both halves of this PR's promise, each of which the existing jobs stopped covering:
+    #
+    #   SPM       the path this PR adds. build-ios only exercises SPM through Cordova, and
+    #             never runs the Capacitor CLI's rewrite of Package.swift. That rewrite is
+    #             positional string replacement, so one stray token in a comment above the
+    #             first dependency silently retargets the URL and the plugin builds with no
+    #             SDK behind it. Cordova CI would stay green through that.
+    #   Cocoapods the path this PR promises to retain. With package="swift" the only
+    #             PR-gating iOS build (cordova-ios 8.1.1) moved to SPM, so a regression in
+    #             the <podspec> block or in nospm handling would otherwise reach a release
+    #             unnoticed.
+    #
+    # The build succeeding is not the assertion. The bug this PR fixes compiles cleanly and
+    # only shows up as a missing framework, so the linkage check below is the real gate.
+    strategy:
+      fail-fast: false
+      matrix:
+        manager: [SPM, Cocoapods]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+
+      # Pack rather than install by path: npm links a `file:` dependency as a symlink, and
+      # `cap sync` rewrites Package.swift in place through it. A tarball is also what a
+      # client actually installs, so this checks Package.swift really ships.
+      - name: Pack the plugin
+        run: npm pack --pack-destination "$RUNNER_TEMP" --workspaces=false
+        working-directory: purchasely
+
+      - name: Scaffold a Capacitor 8 app around the packed plugin
+        working-directory: ${{ runner.temp }}
+        run: |
+          mkdir capacitor-ci && cd capacitor-ci
+          npm init -y
+          npm install @capacitor/core@8 @capacitor/ios@8
+          npm install --save-dev @capacitor/cli@8
+          mkdir www && cp -R "$GITHUB_WORKSPACE/purchasely/example/www/." www/
+          npx cap init "CapacitorCI" "io.purchasely.ci" --web-dir www
+          npm install "$RUNNER_TEMP"/purchasely-cordova-plugin-purchasely-*.tgz
+          npx cap add ios --packagemanager ${{ matrix.manager }}
+
+      - name: Build the simulator app
+        working-directory: ${{ runner.temp }}/capacitor-ci/ios/App
+        run: |
+          # CocoaPods integrates through a workspace; the SPM path has no workspace at all.
+          if [ -d App.xcworkspace ]; then
+            CONTAINER=(-workspace App.xcworkspace)
+          else
+            CONTAINER=(-project App.xcodeproj)
+          fi
+          xcodebuild build "${CONTAINER[@]}" \
+            -scheme App \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Assert the plugin and the Purchasely SDK are linked
+        working-directory: ${{ runner.temp }}/capacitor-ci/ios/App
+        run: |
+          set -euo pipefail
+          APP=build/Build/Products/Debug-iphonesimulator/App.app
+
+          # Xcode puts the app code in App.debug.dylib for Debug builds and in the App
+          # binary otherwise, so try every file at the bundle root. One nm per file on
+          # purpose: piping a batched nm into grep under `pipefail` reports failure as soon
+          # as nm chokes on a non-Mach-O file (a PNG, Info.plist), which reads as "symbol
+          # absent" even when it is present.
+          FOUND=0
+          for f in "$APP"/*; do
+            [ -f "$f" ] || continue
+            if nm -a "$f" 2>/dev/null | grep -q '_OBJC_CLASS_\$_CDVPurchasely'; then
+              FOUND=1
+              break
+            fi
+          done
+          if [ "$FOUND" -ne 1 ]; then
+            echo "::error::CDVPurchasely is not linked into the app. Cordova registers plugins with NSClassFromString, so it would be nil at runtime."
+            exit 1
+          fi
+
+          # The whole point of this PR: before it, the Capacitor SPM path dropped the
+          # <podspec> and shipped the plugin with no SDK, and the build still went green.
+          if [ ! -d "$APP/Frameworks/Purchasely.framework" ]; then
+            echo "::error::Purchasely.framework is missing from the app bundle. The ${{ matrix.manager }} path is not linking the SDK."
+            ls -1 "$APP/Frameworks" || true
+            exit 1
+          fi
+
+          echo "OK: CDVPurchasely linked and Purchasely.framework embedded (${{ matrix.manager }})"
+
   build-android:
     name: Build Android
     runs-on: ubuntu-latest
