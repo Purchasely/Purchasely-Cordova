@@ -38,14 +38,18 @@ describe('Preloaded presentation display', () => {
     await waitForPurchaselyReady();
   });
 
-  it('preload() then display() on the same request does not report "Presentation not loaded"', async () => {
+  it('preload() then display() on the same request does not report "Presentation not loaded"', async function () {
+    // The shared mocha timeout is 120s (wdio.shared.conf.js). This spec needs preload plus
+    // a display plus a dismiss poll, and on a cold CI runner the first preload against the
+    // real backend has taken over 60s. Squeezing preload to fit 120s instead made the spec
+    // fail its first three attempts with "preload() failed (timeout)" and only pass on the
+    // fourth, which is a retry loop papering over a budget that was simply too small. Give
+    // the whole test room and let preload keep its default window.
+    this.timeout(300000);
+
     // 1. Preload. Unlike bridge.e2e.js T3 this does NOT tolerate a preload error: a
-    // tolerated branch would silently skip the regression check that follows. The nightly
-    // iOS run resolves preload cleanly against the real backend, so a failure here is a
-    // real problem and must be loud.
-    // 60s, not the 90s default: 90 + the 6s pause + the 30s outcome poll overruns the 120s
-    // mocha timeout, which would replace the loud message below with a generic timeout.
-    const preloaded = await callPresentation('placement', PLACEMENT, 'preload', undefined, 60000);
+    // tolerated branch would silently skip the regression check that follows.
+    const preloaded = await callPresentation('placement', PLACEMENT, 'preload', undefined, 120000);
     if (!preloaded.ok) {
       throw new Error(
         'preload() failed for placement "' + PLACEMENT + '" (' + preloaded.error + '). ' +

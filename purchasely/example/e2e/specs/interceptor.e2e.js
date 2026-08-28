@@ -8,7 +8,8 @@
 // never run it, so the dictionary stays nil, `registerActionInterceptor` writes its Cordova
 // callbackId into nothing, and the native handler later reads back nil and completes
 // `.notHandled` without ever calling into JS. Silent: every paywall CTA is inert and
-// nothing is logged. Only a real tap can observe it.
+// nothing is logged. Only a real tap can observe it end to end, which is what this spec
+// attempts; see the note in the test body for what a negative result can and cannot prove.
 const {
   waitForPurchaselyReady,
   switchToWebview,
@@ -63,22 +64,47 @@ describe('Action interceptor (NATIVE_APP tap)', () => {
     // 4. Read the handler's record back — polling a window global needs WEBVIEW context.
     await switchToWebview();
 
+    // What this spec can and cannot conclude.
+    //
+    // tapPurchaseCta() matches on a label, so a `true` return means "tapped an element
+    // whose label looks like a CTA", NOT "triggered a purchase action". On the first CI
+    // run this spec failed all six attempts against a host that HAS the fix, blaming a nil
+    // actionInterceptorCallbackIds that was demonstrably non-nil: it had tapped some other
+    // element on the paywall. A soft-gated check that cries wolf on a healthy host is
+    // worse than no check, because it trains everyone to skip the warning.
+    //
+    // So a missing callback is reported and NOT failed: from the outside we cannot
+    // distinguish "tapped something that was never a purchase action" from "the
+    // interceptor is dead". A callback that DOES arrive is still worth asserting the shape
+    // of, and its arrival is real evidence the round trip works.
+    //
+    // The deterministic gate for this bug is the native test instead:
+    // purchasely/example-capacitor/ios/App/AppTests/CDVPurchaselyLifecycleTests.m, which
+    // proves the callbackId survives a write and fails in 0.015s when it does not.
     if (!tapped) {
-      // Tolerated: paywall layout varies per backend configuration, so "no CTA found" is
-      // inconclusive rather than a regression. Mirrors dismiss.e2e.js's best-effort stance.
-      console.log('[interceptor] no purchase CTA found in the native view tree — skipping the assertion');
-    } else {
-      const intercepted = await pollGlobal('__plyIntercept', 20000);
-      if (!intercepted || intercepted.error === 'timeout') {
-        throw new Error(
-          'a purchase CTA was tapped but the interceptor handler never ran in JS. ' + BROKEN_HOST_HINT
-        );
-      }
-      expect(intercepted).toBeDefined();
+      console.log('[interceptor] no CTA-looking element found in the native view tree — inconclusive');
+      return;
     }
 
-    // 5. Close so the next spec starts on a clean screen. The handler already answered
-    // 'failed', so the paywall is not waiting on the intercept.
+    const intercepted = await pollGlobal('__plyIntercept', 20000);
+    if (!intercepted || intercepted.error === 'timeout') {
+      console.log(
+        '[interceptor] tapped a CTA-looking element but no interceptor callback arrived — ' +
+        'inconclusive (the tap may not have been a purchase action). If a purchase action ' +
+        'WAS pressed, this is the bug: ' + BROKEN_HOST_HINT
+      );
+      return;
+    }
+    expect(intercepted.info === null || typeof intercepted.info === 'object').toBe(true);
+    console.log('[interceptor] handler ran in JS — round trip confirmed');
+
+  });
+
+  // Always close, including after the inconclusive early returns above, so the next spec
+  // starts on a clean screen. The handler already answered 'failed', so the paywall is not
+  // waiting on the intercept.
+  afterEach(async () => {
+    await switchToWebview();
     await closeCurrentPresentation();
     await browser.pause(1000);
   });
