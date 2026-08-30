@@ -31,24 +31,34 @@ async function waitForPurchaselyReady() {
     { timeout: 60000, timeoutMsg: 'window.Purchasely never became available' }
   );
 
-  // window.Purchasely existing only means the plugin was clobbered onto the page; it says
-  // nothing about Purchasely.start() having finished configuring the SDK natively. Calls
-  // made in that window can simply never settle.
+  // window.Purchasely existing only means the plugin was clobbered onto the page. It says
+  // nothing about Purchasely.start() having finished configuring the SDK natively.
   //
-  // bridge.e2e.js hid this by accident: its preload is the third test, so getAnonymousUserId
-  // and allProducts had already given start() time to complete. preload-display.e2e.js
-  // calls preload first and failed 6/6 with "preload() failed (timeout)" while bridge's
-  // identical preload passed on the same app, same placement, same run.
+  // An earlier version of this gate polled getAnonymousUserId and claimed that proved
+  // start() had completed. It does not: natively that call is synchronous and reads a
+  // locally generated, cached UUID, so it answers long before configuration finishes. The
+  // gate was a placebo and preload still raced it.
   //
-  // getAnonymousUserId is the cheapest proof the native side is actually serving commands:
-  // no store, no paywall fetch, and it only answers once start() has configured the SDK.
+  // The only honest signal is start()'s own callback, which the sample records on
+  // window.__plyStarted / window.__plyStartError (example/www/js/index.js).
   await browser.waitUntil(
-    async () => {
-      const res = await callBridge('getAnonymousUserId', [], 10000);
-      return res.ok && typeof res.value === 'string' && res.value.length > 0;
-    },
-    { timeout: 90000, interval: 2000, timeoutMsg: 'the Purchasely SDK never finished starting' }
+    async () => browser.execute(() => window.__plyStarted === true || !!window.__plyStartError),
+    { timeout: 120000, interval: 1000, timeoutMsg: 'Purchasely.start() never completed' }
   );
+  const startError = await browser.execute(() => window.__plyStartError);
+  if (startError) throw new Error('Purchasely.start() failed: ' + startError);
+
+  // Warm StoreKit before the first paywall call. preload()'s completion is gated behind an
+  // unbounded StoreKit 2 await inside the SDK (PlansEligibilityManager.fetchProductsEligibility
+  // -> Transaction.currentEntitlements / Product.products), so the FIRST cold StoreKit call
+  // on a loaded CI simulator is the one that stalls and never settles. bridge.e2e.js only
+  // ever passed because allProducts ran before its preload and warmed that path; specs that
+  // preload first failed. The result is deliberately ignored: on a simulator with no
+  // StoreKit configuration allProducts settles as a clean error, which warms it just the same.
+  //
+  // This reduces the exposure, it does not remove it. The real fix is bounding that await
+  // in the SDK, tracked separately.
+  await callBridge('allProducts', [], 30000);
 }
 
 // Poll a window global until a native callback has populated it, then return it.
@@ -67,7 +77,15 @@ async function pollGlobal(name, timeoutMs) {
       { timeout: timeoutMs, interval: 250, timeoutMsg: name + ' never settled' }
     );
   } catch (e) {
-    return { ok: false, error: 'timeout' };
+    // `timedOut: true` distinguishes "the native side never answered" from "the native side
+    // answered with an error". Specs that tolerate a clean native error must NOT tolerate
+    // this: a bridge call that never settles is a defect, not an environment quirk.
+    //
+    // Without this flag the sentinel is indistinguishable from a real answer, and the
+    // tolerant assertions swallowed it. bridge.e2e.js T3 does
+    // `expect(typeof res.error).toBe('string')`, and typeof 'timeout' is 'string', so T3
+    // reported success on exactly the failure that was breaking preload for hours.
+    return { ok: false, error: 'timeout', timedOut: true };
   }
   return value;
 }

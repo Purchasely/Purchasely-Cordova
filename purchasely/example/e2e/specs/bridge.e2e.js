@@ -25,6 +25,16 @@ describe('Purchasely bridge (WEBVIEW context)', () => {
     const res = await callBridge('allProducts');
     if (res.ok) {
       expect(Array.isArray(res.value)).toBe(true);
+    } else if (res.timedOut) {
+      // KNOWN DEFECT, deliberately not failed here. On a store-less simulator this call
+      // never settles: no success, no error. It is the same unbounded StoreKit await that
+      // gates preload() inside the SDK, so failing it would paint the hard gate red for a
+      // defect this PR does not fix. Logged loudly instead of being swallowed, which is
+      // what the old `expect(typeof res.error).toBe('string')` did: the timeout sentinel's
+      // error is the string 'timeout', so the assertion passed on a call that never
+      // answered. Tighten this to expect(res.timedOut).not.toBe(true) once the SDK bounds
+      // that await.
+      console.log('[bridge] KNOWN: this call never settled (timedOut) — tracked as an SDK defect');
     } else {
       expect(typeof res.error).toBe('string');
     }
@@ -42,6 +52,16 @@ describe('Purchasely bridge (WEBVIEW context)', () => {
       if (res.value) {
         expect(typeof res.value.screenId).toBe('string');
       }
+    } else if (res.timedOut) {
+      // KNOWN DEFECT, deliberately not failed here. On a store-less simulator this call
+      // never settles: no success, no error. It is the same unbounded StoreKit await that
+      // gates preload() inside the SDK, so failing it would paint the hard gate red for a
+      // defect this PR does not fix. Logged loudly instead of being swallowed, which is
+      // what the old `expect(typeof res.error).toBe('string')` did: the timeout sentinel's
+      // error is the string 'timeout', so the assertion passed on a call that never
+      // answered. Tighten this to expect(res.timedOut).not.toBe(true) once the SDK bounds
+      // that await.
+      console.log('[bridge] KNOWN: this call never settled (timedOut) — tracked as an SDK defect');
     } else {
       expect(typeof res.error).toBe('string');
     }
@@ -51,6 +71,14 @@ describe('Purchasely bridge (WEBVIEW context)', () => {
   // with no billing, exactly one of success/error must fire (no fire-and-forget).
   it('synchronize resolves exactly one callback', async () => {
     const res = await callBridge('synchronize');
+    // `expect(typeof res.ok).toBe('boolean')` alone passes on a timeout too, since the
+    // sentinel carries ok:false, so this test never verified what its name claims. It still
+    // does not: synchronize is one of the calls that never settles on a store-less
+    // simulator (same unbounded StoreKit await as preload), so asserting it would paint the
+    // hard gate red for a defect this PR does not fix. Surface it instead.
+    if (res.timedOut) {
+      console.log('[bridge] KNOWN: synchronize never settled (timedOut) — tracked as an SDK defect');
+    }
     expect(typeof res.ok).toBe('boolean');
   });
 
@@ -90,6 +118,16 @@ describe('Purchasely bridge (WEBVIEW context)', () => {
     const res = await callBridge('userSubscriptions');
     if (res.ok) {
       expect(Array.isArray(res.value)).toBe(true);
+    } else if (res.timedOut) {
+      // KNOWN DEFECT, deliberately not failed here. On a store-less simulator this call
+      // never settles: no success, no error. It is the same unbounded StoreKit await that
+      // gates preload() inside the SDK, so failing it would paint the hard gate red for a
+      // defect this PR does not fix. Logged loudly instead of being swallowed, which is
+      // what the old `expect(typeof res.error).toBe('string')` did: the timeout sentinel's
+      // error is the string 'timeout', so the assertion passed on a call that never
+      // answered. Tighten this to expect(res.timedOut).not.toBe(true) once the SDK bounds
+      // that await.
+      console.log('[bridge] KNOWN: this call never settled (timedOut) — tracked as an SDK defect');
     } else {
       expect(typeof res.error).toBe('string');
     }

@@ -49,9 +49,16 @@ function onDeviceReady() {
 			runningMode: Purchasely.RunningMode.full
 		},
 		(isConfigured) => {
+			// E2E readiness marker. The suite needs to know when start() has actually
+			// finished, and no other signal proves it: getAnonymousUserId answers from a
+			// locally generated UUID and returns long before configuration completes.
+			window.__plyStarted = isConfigured === true;
+			if (!isConfigured) window.__plyStartError = 'start() reported isConfigured=false';
 			if(isConfigured) onPurchaselySdkReady();
 		},
 		(error) => {
+			// Recorded so the suite fails fast with the real reason instead of timing out.
+			window.__plyStartError = String(error);
 			console.log(error);
 		});
 
