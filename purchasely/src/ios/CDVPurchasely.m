@@ -1272,6 +1272,18 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
             } else if (presentation != nil) {
                 [self.presentationsLoaded addObject:presentation];
                 [self successFor:command resultDict:[self resultDictionaryForFetchPresentation:presentation]];
+            } else {
+                // Neither branch taken means the Cordova command is never completed and the
+                // JS promise returned by preload() stays pending for the life of the page:
+                // no resolve, no reject, no error, nothing logged. Answer instead, so the
+                // caller can handle it.
+                //
+                // Purchasely 6.0.0 does not produce this pair (PresentationRequest.swift
+                // maps a success-with-nil presentation to PLYError.presentationNotLoaded),
+                // so this is defence in depth against a future SDK, not a fix for a
+                // reproduced failure. It costs one branch and removes a whole class of
+                // silent hang.
+                [self failureFor:command resultString: @"Presentation preload completed without a presentation and without an error"];
             }
         }];
     });
