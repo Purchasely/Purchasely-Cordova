@@ -18,23 +18,46 @@ results is a host difference.
 
 ```bash
 npm ci
-npx cap sync ios          # copies the plugin sources and runs pod install
+npx cap sync ios          # copies the plugin sources and resolves the Swift packages
 ```
 
-CocoaPods, not the Capacitor 8 SPM default: `plugin.xml` declares the Purchasely SDK
-through `<podspec>`, and the SPM path drops it silently. The platform was added with
-`npx cap add ios --packagemanager Cocoapods`.
+Swift Package Manager, which is the Capacitor 8 default. The platform was added with a
+plain `npx cap add ios`, so there is no Podfile and no `pod install` anywhere in this
+sample.
 
-`ios/capacitor-cordova-ios-plugins` and `ios/App/Pods` are gitignored, so `cap sync`
-always rebuilds them from the plugin sources in this working tree.
+That was not possible at first. Capacitor's SPM path never reads `<podspec>`, so the
+sample originally had to pin `--packagemanager Cocoapods` or ship with no Purchasely SDK
+linked at all. `plugin.xml` now carries `package="swift"` and the plugin ships its own
+`Package.swift`, so the SPM path resolves the SDK properly.
+
+The CocoaPods path is still covered, by the `capacitor-ios-dependency-paths` matrix job in
+`ci.yml`, which builds a scaffolded app once per package manager. Dropping it here does not
+stop testing it.
+
+`ios/capacitor-cordova-ios-plugins` is gitignored, so `cap sync` always rebuilds it from
+the plugin sources in this working tree.
+
+`ios/App/CapApp-SPM` is committed on purpose. The Capacitor CLI decides which package
+manager an existing project uses purely by whether that directory exists
+(`@capacitor/cli`, `dist/util/spm.js:20-26`), so ignoring it would make `cap sync` fall
+back to CocoaPods on a fresh clone and then fail looking for a Podfile.
+
+One trap when working on the plugin locally: npm installs a `file:` dependency as a
+symlink, so `npx cap sync` here rewrites `purchasely/Package.swift` **in the repository**,
+pointing it at `capacitor-swift-pm`. Check `git status` after syncing and restore it.
 
 ## Native tests
 
 ```bash
 cd ios/App
-xcodebuild test -workspace App.xcworkspace -scheme AppTests \
-  -destination 'platform=iOS Simulator,name=iPhone 16'
+xcodebuild test -project App.xcodeproj -scheme AppTests \
+  -destination "id=$(xcrun simctl list devices available \
+    | grep -oE 'iPhone[^(]*\(([0-9A-F-]{36})\)' | head -1 | grep -oE '[0-9A-F-]{36}')"
 ```
+
+`-project`, not `-workspace`: the SPM path generates no workspace. The destination is
+resolved by udid because simulator names move with each Xcode release, and a run already
+failed on a runner that had no `iPhone 16`.
 
 `AppTests/CDVPurchaselyLifecycleTests.m` builds the plugin through Capacitor's
 `initWithWebViewEngine:` + `pluginInitialize` path and asserts the mutable collections

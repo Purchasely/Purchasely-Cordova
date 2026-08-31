@@ -180,6 +180,17 @@ jobs:
             echo "::error::CDVPurchasely is not linked into the app. Cordova registers plugins with NSClassFromString, so it would be nil at runtime."
             echo "Bundle contents, for diagnosis:"
             find "$APP" -maxdepth 2 | sed "s|^$APP|.|"
+            # Which Mach-O files were actually searched, and what Cordova/Purchasely
+            # symbols each one does carry. Without this the failure only says "absent",
+            # which is indistinguishable from "the search looked in the wrong place" and
+            # cost a full round trip the last time this fired.
+            echo "Mach-O files and their CDV/Purchasely classes:"
+            while IFS= read -r f; do
+              syms=$(nm -a "$f" 2>/dev/null | grep -oE '_OBJC_CLASS_\$_(CDV|PLY)[A-Za-z]*' | sort -u | tr '\n' ' ')
+              if [ -n "$syms" ]; then echo "  ${f#"$APP"/}: $syms"; fi
+            done < <(find "$APP" -type f)
+            echo "Linker flags in effect:"
+            grep -rh "OTHER_LDFLAGS" ../../ios/App/Pods/Target\ Support\ Files/Pods-App/*.xcconfig 2>/dev/null | head -3 || true
             exit 1
           fi
 
@@ -216,14 +227,6 @@ jobs:
           cache: "npm"
           cache-dependency-path: purchasely/example-capacitor/package-lock.json
 
-      - name: Cache CocoaPods
-        uses: actions/cache@v5
-        with:
-          path: ~/Library/Caches/CocoaPods
-          key: ${{ runner.os }}-cocoapods-${{ hashFiles('purchasely/plugin.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-cocoapods-
-
       - name: Install sample dependencies
         working-directory: purchasely/example-capacitor
         run: npm ci
@@ -258,7 +261,7 @@ jobs:
         working-directory: purchasely/example-capacitor/ios/App
         run: |
           xcodebuild test \
-            -workspace App.xcworkspace \
+            -project App.xcodeproj \
             -scheme AppTests \
             -destination "id=${{ steps.sim.outputs.udid }}" \
             CODE_SIGNING_ALLOWED=NO

@@ -3,6 +3,7 @@
   "appName": "HelloCapacitor",
   "webDir": "../example/www",
   "ios": {
-    "webContentsDebuggingEnabled": true
+    "webContentsDebuggingEnabled": true,
+    "packageManager": "SPM"
   }
 }
