@@ -24,10 +24,12 @@ Update **all** of the following files:
 | `purchasely/plugin.xml` | `version` attribute in `<plugin>` tag |
 | `purchasely/plugin.xml` | `<pod name="Purchasely" spec="IOS_VERSION"/>` |
 | `purchasely/plugin.xml` | `<framework src="io.purchasely:core:ANDROID_VERSION" />` |
+| `purchasely/Package.swift` | `.package(url: ".../Purchasely-iOS.git", exact: "IOS_VERSION")` — must match the podspec |
 | `purchasely/package.json` | `version` field |
 | `purchasely/package-lock.json` | top-level `version` and `packages[""].version` |
 | `purchasely/example/package-lock.json` | `packages[".."].version` and `packages["../../purchasely-google"].version` |
 | `purchasely/www/Purchasely.js` | `cordovaSdkVersion` fallback string |
+| `purchasely/__tests__/Purchasely.test.js` | the expected `sdkVersion` in the `start` test, which asserts that fallback |
 | `purchasely-google/plugin.xml` | `version` attribute in `<plugin>` tag |
 | `purchasely-google/plugin.xml` | `<framework src="io.purchasely:google-play:ANDROID_VERSION" />` |
 | `purchasely-google/package.json` | `version` field |
