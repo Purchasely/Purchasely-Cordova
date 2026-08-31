@@ -18,7 +18,7 @@ results is a host difference.
 
 ```bash
 npm ci
-npx cap sync ios          # copies the plugin sources and runs pod install
+npx cap sync ios          # copies the plugin sources and resolves the Swift packages
 ```
 
 Swift Package Manager, which is the Capacitor 8 default. The platform was added with a
