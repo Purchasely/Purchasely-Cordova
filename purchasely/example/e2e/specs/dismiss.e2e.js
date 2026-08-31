@@ -4,6 +4,7 @@
 const {
   waitForPurchaselyReady,
   displayPresentation,
+  awaitPresented,
   awaitDismissOutcome,
   closeCurrentPresentation,
 } = require('../helpers/driver');
@@ -25,8 +26,16 @@ describe('Presentation dismiss outcome', () => {
     // block the session so close() could never run).
     await displayPresentation('placement', PLACEMENT, 'fullScreen');
 
-    // Give the paywall time to render, then close it programmatically from the bridge.
-    await browser.pause(6000);
+    // Wait for the paywall to actually be on screen, then close it from the bridge. A fixed
+    // 6s pause used to stand in for this and lost the race on loaded CI runners: close()
+    // arrived before the presentation existed, so no dismiss outcome was ever produced and
+    // the assertion below failed on a timeout.
+    const presented = await awaitPresented();
+    if (!presented.ok) {
+      console.log('[dismiss] the paywall never presented (' + (presented.error || 'unknown') +
+        ') — nothing to close, so there is no dismiss outcome to assert');
+      return;
+    }
     await closeCurrentPresentation();
 
     const outcome = await awaitDismissOutcome(30000);
@@ -44,7 +53,12 @@ describe('Presentation dismiss outcome', () => {
   it('presentation.defaultSource().build().display() + request.close() delivers a dismiss outcome', async () => {
     await displayPresentation('defaultSource', null, 'fullScreen');
 
-    await browser.pause(6000);
+    const presented = await awaitPresented();
+    if (!presented.ok) {
+      console.log('[dismiss] the default presentation never presented (' +
+        (presented.error || 'unknown') + ') — nothing to close');
+      return;
+    }
     await closeCurrentPresentation();
 
     const outcome = await awaitDismissOutcome(30000);

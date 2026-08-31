@@ -18,7 +18,15 @@ exports.config = {
   reporters: ['spec'],
   mochaOpts: {
     ui: 'bdd',
-    timeout: 120000,
+    // 300s, not 120s. These specs drive a real backend and a real paywall: a preload plus
+    // a display plus a dismiss can legitimately exceed two minutes on a loaded CI runner.
+    // At 120s mocha killed the test first and reported a bare "Error: Timeout", which hid
+    // whichever step was actually slow. Setting it per-test with this.timeout() inside the
+    // it() did not take effect under @wdio/mocha-framework, so it belongs here.
+    // A larger ceiling costs nothing when specs pass; it only stops a slow run being
+    // reported as a failure. Keep each spec's own budgets summing below it so a real
+    // problem surfaces as that step's explicit message rather than as this timeout.
+    timeout: 300000,
   },
   // Appium is started as a service by the CI runner scripts (tools/ci_run_e2e*.sh),
   // so we point WDIO at the already-running server rather than the @wdio/appium-service.
