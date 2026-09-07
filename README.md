@@ -189,7 +189,7 @@ The result has five fields:
 | `context` | What the redemption granted, or `null`. `context.subscription` is separately nullable |
 | `replay` | `true` when the server reports the token was redeemed before |
 | `errorCode` | `'EXPIRED_REDEMPTION_TOKEN'`, `'INVALID_REDEMPTION_TOKEN'`, or `null` |
-| `errorMessage` | Human-readable reason, or `null` |
+| `errorMessage` | Human-readable reason, or `null`. **Can carry a masked email address on both platforms — see the privacy note below** |
 
 Three behaviours to know:
 
@@ -198,10 +198,16 @@ Three behaviours to know:
 - A redemption deeplink is **not** subject to `allowDeeplink`. The native SDK intercepts
   `ply/redeem` before the routing branch that gate sits behind, so a redemption still
   completes with `allowDeeplink: false`.
-- **On iOS only**, `errorMessage` for an expired link can contain a masked email address,
-  so you can tell the user where the fresh link went. Show that text to the user. Do not
-  send it to an analytics stack or to a crash reporter. The `REDEMPTION_FAILED` event
-  drops it.
+- **Privacy, on both platforms.** `errorMessage` for an expired link can contain a
+  **masked email address**, so you can tell the user where the fresh link went. Show that
+  text to the user. Do **not** send it to an analytics stack, to a crash reporter, or to a
+  log.
+
+  **The rule is unconditional. Do not gate it on a platform check.** Both native SDKs
+  append the hint in their expired-link branch — Android in
+  `RedemptionOutcome.Expired.toResult()`, whose own comment reads `masked email = PII`, and
+  iOS in its matching branch. The `REDEMPTION_FAILED` event drops the hint on both
+  platforms, so the analytics channel is safe; this listener is the only place it appears.
 
 The SDK also emits two analytics events for a redemption, `REDEMPTION_CONSUMED` and
 `REDEMPTION_FAILED`. Read them with `Purchasely.addEventListener`. The payload is in
@@ -216,24 +222,36 @@ The SDK also emits two analytics events for a redemption, `REDEMPTION_CONSUMED` 
 | `error_code` | failed | `'EXPIRED_REDEMPTION_TOKEN'`, `'INVALID_REDEMPTION_TOKEN'`, or absent for a failure that never reached the server |
 
 A failure also carries the reason in the **top-level** `event.properties.error_message`,
-not inside `redemption`. The masked email hint never reaches this event: the SDK gives it
-to the redemption listener only, on iOS.
+not inside `redemption`. The masked email hint never reaches this event, on either
+platform: each SDK's `toEvent` drops it, and only the redemption listener carries it.
 
-### A note on subscription fields, on iOS
+### A note on subscription fields: the two platforms report absence differently
 
-The native iOS `PLYSubscription` has no purchase token property, so the iOS bridge cannot
-emit `purchaseToken` and never did. It also omits `nextRenewalDate` and `cancelledDate`
-when the native date is `nil`.
+`purchaseToken`, `nextRenewalDate` and `cancelledDate` can all be absent, and **the two
+platforms do not report absence the same way**:
 
-Read all three as optional rather than as guaranteed strings. This affects
-`userSubscriptions()` and `userSubscriptionsHistory()` as well as the redemption
-`context.subscription`, since the three share one mapper. Cordova ships plain JavaScript
-with no type declarations, so nothing enforces this for you:
+| Platform | What you receive |
+|----------|------------------|
+| Android | the key is **present** with an explicit `null`. `PLYSubscription.toMap()` assigns it unconditionally from a nullable field |
+| iOS | the key is **omitted**, so reading it gives `undefined`. `PLYSubscription+Hybrid.m` only sets a key when the native value is non-nil, and the native `PLYSubscription` has no purchase token property at all, so `purchaseToken` is never emitted |
+
+So "optional" is not enough: handle `null` **and** `undefined`. A truthiness check covers
+both; an `=== undefined` check does not.
 
 ```js
-const token = subscription.purchaseToken;         // undefined on iOS
+// Right: covers a present null and an omitted key.
+const token = subscription.purchaseToken || null;
 const renews = subscription.nextRenewalDate || null;
+
+// Wrong: passes on iOS, keeps a null on Android.
+if (subscription.nextRenewalDate !== undefined) { /* ... */ }
 ```
+
+Never read an absent date as an empty string. Neither platform sends `''`.
+
+This affects `userSubscriptions()` and `userSubscriptionsHistory()` as well as the
+redemption `context.subscription`, since the three share one mapper. Cordova ships plain
+JavaScript with no type declarations, so nothing enforces this for you.
 
 ## 🏁 Documentation
 

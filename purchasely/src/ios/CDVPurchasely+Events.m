@@ -38,6 +38,10 @@
 /// `errorMessage` can hold the backend's masked email hint for an expired link. The
 /// REDEMPTION_FAILED event drops that hint on purpose; this channel keeps it, so the app
 /// can tell the user where the fresh link went.
+///
+/// The Android bridge carries it too: `RedemptionOutcome.Expired.toResult()` appends the
+/// same hint. So the "show it, never log it" rule the JS docs state is unconditional, and
+/// must not be written as an iOS-only caveat.
 - (void)webRedemptionCompletedWithResult:(PLYWebRedemptionResult * _Nonnull)result {
 	if (self.webRedemptionCommand == nil) {
 		return;

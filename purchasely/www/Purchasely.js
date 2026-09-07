@@ -245,7 +245,10 @@ exports.addEventsListener = function (success, error) {
 //   context       { subscription } or null. `subscription` is separately nullable: a
 //                 success can carry no context at all, and a present context can carry no
 //                 subscription. The subscription has the same shape userSubscriptions()
-//                 reports.
+//                 reports, which means purchaseToken, nextRenewalDate and cancelledDate
+//                 may be ABSENT, and the two platforms differ on how: Android sends the
+//                 key with an explicit null, iOS omits it. Handle both -- a truthiness
+//                 check covers them, `!== undefined` does not.
 //   replay        Bool. true when the SERVER reports the token was redeemed before. It is
 //                 a verdict about the token, not an observation of the user: the SDK keeps
 //                 no cache and calls the server on every attempt. Always false on failure.
@@ -261,10 +264,17 @@ exports.addEventsListener = function (success, error) {
 // A redemption deeplink is NOT subject to allowDeeplink: the native SDK intercepts
 // `ply/redeem` before the routing branch that gate sits behind.
 //
-// ON iOS ONLY, errorMessage for an expired link can carry a masked email address, so the
-// app can tell the user where the fresh link went. Show that text to the user. Do not
-// send it to an analytics stack or to a crash reporter. The REDEMPTION_FAILED event drops
-// it on purpose.
+// PRIVACY, ON BOTH PLATFORMS. errorMessage for an expired link can carry a MASKED EMAIL
+// ADDRESS, so the app can tell the user where the fresh link went. Show that text to the
+// user. Do NOT send it to an analytics stack, to a crash reporter, or to a log.
+//
+// The rule is unconditional. DO NOT gate it on a platform check. Both native SDKs append
+// the hint in their expired-link branch: Android in RedemptionOutcome.Expired.toResult(),
+// whose own comment reads "masked email = PII", and iOS in its matching branch. Verified
+// against the released 6.1.0 sources of both.
+//
+// The REDEMPTION_FAILED event does drop the hint, on both platforms, so the analytics
+// channel is safe. This listener is the only place it appears.
 exports.addWebRedemptionListener = function (success, error) {
     exec(success, error, 'Purchasely', 'addWebRedemptionListener', []);
 };
@@ -888,12 +898,23 @@ exports.PurchaseResult = {
 	RESTORED: 2
 }
 
+// Values are the NATIVE raw values, verified against the shipped 6.1.0 artifacts:
+// iOS PLYSubscriptionSource (stripe = 4, none = 5) and Android StoreType ordinals
+// (WEB_CHECKOUT_STRIPE = 4, NONE = 5). Both platforms agree, so there is no
+// per-platform mapping here and no renumbering hazard.
+//
+// `webCheckoutStripe` was missing and `none` was 4, which was correct before the native
+// SDKs inserted the Stripe case at 4 (Android ~5.5.0) and pushed NONE to 5. A Web2App
+// subscription therefore reported `none`, and a genuinely sourceless one reported a value
+// this object had no name for. A Web2App redemption grants a subscription from exactly
+// that source, so `context.subscription` is the payload most likely to carry it.
 exports.SubscriptionSource = {
     appleAppStore: 0,
     googlePlayStore: 1,
     amazonAppstore: 2,
     huaweiAppGallery: 3,
-    none: 4
+    webCheckoutStripe: 4,
+    none: 5
 }
 
 exports.PlanType = {

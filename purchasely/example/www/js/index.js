@@ -56,10 +56,11 @@ function onDeviceReady() {
 				+ ' subscription=' + (result.context && result.context.subscription
 					? result.context.subscription.plan.vendorId : null));
 		} else {
-			// The code is safe to log. errorMessage is NOT: on iOS, an expired link
-			// puts the backend's masked email hint in it, and a console line reaches
-			// `adb logcat` and the Xcode console, which support runs capture. Route
-			// the message to the UI instead, and log the code alone.
+			// The code is safe to log. errorMessage is NOT, ON EITHER PLATFORM: an
+			// expired link puts the backend's masked email hint in it, and a console
+			// line reaches `adb logcat` and the Xcode console, which support runs
+			// capture. Route the message to the UI instead, and log the code alone.
+			// Do not make this a platform check: Android appends the hint too.
 			console.log('Redemption failed. code=' + result.errorCode);
 			if (result.errorMessage) alert(result.errorMessage);
 		}
