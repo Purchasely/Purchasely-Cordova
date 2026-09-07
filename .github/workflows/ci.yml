@@ -136,6 +136,23 @@ jobs:
           npm install "$RUNNER_TEMP"/purchasely-cordova-plugin-purchasely-*.tgz
           npx cap add ios --packagemanager ${{ matrix.manager }}
 
+      # Record what this run actually resolved, on success as well as on failure.
+      #
+      # The Capacitor packages above are installed by RANGE (@8), and @capacitor/ios is
+      # what generates the Podfile carrying `-ObjC` — the flag that forces CDVPurchasely
+      # out of the CordovaPluginsStatic static library, since Cordova only ever reaches it
+      # through NSClassFromString. A run of this job failed the linkage assertion and then
+      # passed on a rerun of the identical commit, and the versions were nowhere in the
+      # log, so the cause could not be pinned. Print them.
+      - name: Record the resolved toolchain
+        working-directory: ${{ runner.temp }}/capacitor-ci
+        run: |
+          node -e "for (const p of ['@capacitor/core','@capacitor/ios','@capacitor/cli']) console.log(p, require(p + '/package.json').version)"
+          echo "CocoaPods: $(pod --version 2>/dev/null || echo 'n/a')"
+          echo "Xcode: $(xcodebuild -version | tr '\n' ' ')"
+          echo "Effective OTHER_LDFLAGS:"
+          grep -rh "OTHER_LDFLAGS" "ios/App/Pods/Target Support Files/Pods-App/"*.xcconfig 2>/dev/null || echo "  (no Pods config; SPM path)"
+
       - name: Build the simulator app
         working-directory: ${{ runner.temp }}/capacitor-ci/ios/App
         run: |
@@ -203,6 +220,23 @@ jobs:
           fi
 
           echo "OK: CDVPurchasely linked and Purchasely.framework embedded (${{ matrix.manager }})"
+
+      # A rerun RESETS the failed job's log, so re-running before downloading it destroys
+      # the evidence -- which is exactly what happened when this assertion last fired.
+      # Artifacts survive a rerun, so keep the generated project config here instead.
+      - name: Upload the generated iOS project config on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capacitor-${{ matrix.manager }}-ios-config
+          path: |
+            ${{ runner.temp }}/capacitor-ci/package.json
+            ${{ runner.temp }}/capacitor-ci/package-lock.json
+            ${{ runner.temp }}/capacitor-ci/ios/App/Podfile
+            ${{ runner.temp }}/capacitor-ci/ios/App/Podfile.lock
+            ${{ runner.temp }}/capacitor-ci/ios/App/Package.swift
+            ${{ runner.temp }}/capacitor-ci/ios/App/Pods/Target Support Files/Pods-App/
+          if-no-files-found: warn
 
   capacitor-ios-tests:
     name: Capacitor iOS Native Tests
