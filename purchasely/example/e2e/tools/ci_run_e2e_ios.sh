@@ -68,13 +68,14 @@ for i in $(seq 1 30); do
 done
 
 run_suite() { # $1 = spec, $2 = hard|soft
-  # 3 tries, same as Android. It used to be 6, to let WebDriverAgent's cold build finish
-  # across several session-creation attempts — but that only ever "worked" because the client
-  # was abandoning each attempt after 2 minutes, and the extra attempts were what piled nine
-  # xcodebuilds onto one simulator. WDA is now built once, before Appium starts, and the
-  # client waits for the session it asked for. 6 tries would also let a genuinely broken
-  # session outlive the job's 60-minute timeout; 3 keeps the failure path bounded.
-  local spec="$1" gate="$2" tries="${E2E_TRIES:-3}" n=1
+  # 6 tries, not Android's 3. The comment here used to justify that by WebDriverAgent's cold
+  # build outlasting a few session-creation attempts; that reason is gone (WDA is now built
+  # once, before Appium starts). The retries stay anyway, because the logs show a SECOND,
+  # unrelated reason: preload-display is flaky against the real backend. On the 2026-09-07
+  # nightly (run 34081722877) it failed five times with `preload() failed for placement
+  # "ONBOARDING" (timeout)` — ~2m56s of real test each — and passed on the sixth. Lowering
+  # this to 3 would have turned that green job red. Fix the flake, then lower the number.
+  local spec="$1" gate="$2" tries="${E2E_TRIES:-6}" n=1
   while [ $n -le $tries ]; do
     echo "== [$gate] $spec (attempt $n/$tries) =="
     if npx wdio run ./wdio.ios.conf.js --spec "$spec" 2>&1 | tee "$LOGDIR/wdio-$(basename "$spec").log"; then
