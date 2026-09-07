@@ -48,6 +48,9 @@ function onDeviceReady() {
 	// A redemption deeplink is not subject to allowDeeplink: the native SDK intercepts
 	// `ply/redeem` before the routing branch that gate sits behind.
 	Purchasely.addWebRedemptionListener((result) => {
+		// E2E marker. The suite drives a `ply/redeem` deeplink and needs the settled
+		// outcome; there is no other signal, since the SDK reports it only here.
+		window.__plyRedemption = result;
 		if (result.isSuccess) {
 			console.log('Redemption granted. replay=' + result.replay
 				+ ' subscription=' + (result.context && result.context.subscription
