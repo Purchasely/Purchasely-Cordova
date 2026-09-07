@@ -25,12 +25,7 @@ exports.config = Object.assign({}, config, {
     // every one of its 6.1.0 lookups came back 'undefined' against code that is present in
     // the APK. A cordova build never bumps the version, so this cannot be left to
     // Appium's version comparison.
-    // Scoped to the first session of a CI run by tools/ci_run_e2e*.sh: the app binary cannot
-    // change while a job runs, so only the session that installs it has to force the issue.
-    // The polarity is deliberate — an UNSET variable means "install". A developer running one
-    // spec by hand, or a future spec that runs standalone, still gets the freshly built app;
-    // the runner has to opt out explicitly, once it has watched an install succeed.
-    'appium:enforceAppInstall': process.env.PURCHASELY_E2E_SKIP_INSTALL !== '1',
+    'appium:enforceAppInstall': true,
     'appium:appPackage': 'com.purchasely.demo',
     // Pin the target device when several are attached (env override); CI has a
     // single emulator so this is normally undefined.
