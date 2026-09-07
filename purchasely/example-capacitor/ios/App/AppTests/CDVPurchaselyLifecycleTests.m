@@ -25,6 +25,41 @@
 #import <WebKit/WebKit.h>
 #import "CDVPurchasely.h"
 
+/// Records what the bridge hands to Cordova.
+///
+/// The SDK's own behaviour is out of scope for these tests; the bridge boundary is not.
+/// Only -sendPluginResult:callbackId: does anything, the rest satisfies the protocol.
+@interface CDVFakeCommandDelegate : NSObject <CDVCommandDelegate>
+@property (nonatomic, strong) NSMutableArray<CDVPluginResult *> *results;
+@property (nonatomic, strong) NSMutableArray<NSString *> *callbackIds;
+@end
+
+@implementation CDVFakeCommandDelegate
+@synthesize urlTransformer;
+
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        _results = [NSMutableArray new];
+        _callbackIds = [NSMutableArray new];
+    }
+    return self;
+}
+
+- (void)sendPluginResult:(CDVPluginResult *)result callbackId:(NSString *)callbackId {
+    [self.results addObject:result];
+    [self.callbackIds addObject:callbackId ?: @""];
+}
+
+- (NSDictionary *)settings { return @{}; }
+- (NSString *)pathForResource:(NSString *)resourcepath { return nil; }
+- (id)getCommandInstance:(NSString *)pluginName { return nil; }
+- (void)evalJs:(NSString *)js {}
+- (void)evalJs:(NSString *)js scheduledOnRunLoop:(BOOL)scheduledOnRunLoop {}
+- (void)evalJsHelper2:(NSString *)js {}
+- (void)runInBackground:(void (^)(void))block { if (block) block(); }
+@end
+
 @interface CDVPurchaselyLifecycleTests : XCTestCase
 @end
 
@@ -390,5 +425,93 @@
     [self assertWebRedemptionShape:body];
     XCTAssertEqualObjects(body[@"errorCode"], [NSNull null]);
     XCTAssertEqualObjects(body[@"errorMessage"], @"Network error");
+}
+#pragma mark - callback streams (6.1.0)
+
+// Everything below drives the real bridge with a FAKE command delegate. The SDK's own
+// behaviour is out of scope; what matters is what the bridge hands to Cordova.
+//
+// `commandDelegate` is a weak property, so the test holds the fake itself.
+
+- (CDVInvokedUrlCommand *)commandWithId:(NSString *)callbackId {
+    return [[CDVInvokedUrlCommand alloc] initWithArguments:@[]
+                                               callbackId:callbackId
+                                                className:@"CDVPurchasely"
+                                               methodName:@"test"];
+}
+
+// A listener's stream must be CLOSED when it is replaced or removed, or its JavaScript
+// closure stays in cordova.callbacks until the WebView reloads. NO_RESULT with
+// keepCallback NO is cordova.js's documented way to free it without invoking the callbacks.
+- (void)testReleaseCallbackStreamSendsATerminalNoResult {
+    CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+    CDVFakeCommandDelegate *delegate = [CDVFakeCommandDelegate new];
+    plugin.commandDelegate = delegate;
+
+    [plugin releaseCallbackStream:[self commandWithId:@"cb-1"]];
+
+    XCTAssertEqual(delegate.results.count, (NSUInteger)1);
+    XCTAssertEqualObjects(delegate.callbackIds.firstObject, @"cb-1");
+    XCTAssertEqualObjects(delegate.results.firstObject.status, @(CDVCommandStatus_NO_RESULT),
+                          @"NO_RESULT frees the entry without invoking success or error");
+    XCTAssertEqualObjects(delegate.results.firstObject.keepCallback, @NO,
+                          @"keepCallback must be NO, or the entry is never deleted");
+}
+
+- (void)testReleaseCallbackStreamIgnoresNil {
+    CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+    CDVFakeCommandDelegate *delegate = [CDVFakeCommandDelegate new];
+    plugin.commandDelegate = delegate;
+
+    [plugin releaseCallbackStream:nil];
+
+    XCTAssertEqual(delegate.results.count, (NSUInteger)0);
+}
+
+- (void)testRegisteringTwiceClosesTheStreamItReplaces {
+    CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+    CDVFakeCommandDelegate *delegate = [CDVFakeCommandDelegate new];
+    plugin.commandDelegate = delegate;
+
+    [plugin addWebRedemptionListener:[self commandWithId:@"first"]];
+    [plugin addWebRedemptionListener:[self commandWithId:@"second"]];
+
+    XCTAssertEqual(delegate.results.count, (NSUInteger)1,
+                   @"exactly the replaced listener is closed");
+    XCTAssertEqualObjects(delegate.callbackIds.firstObject, @"first");
+    XCTAssertEqualObjects(delegate.results.firstObject.keepCallback, @NO);
+    XCTAssertEqualObjects(plugin.webRedemptionCommand.callbackId, @"second",
+                          @"the replacement is the live one");
+}
+
+- (void)testRemovingClosesTheStreamAndAcknowledgesTheCommand {
+    CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+    CDVFakeCommandDelegate *delegate = [CDVFakeCommandDelegate new];
+    plugin.commandDelegate = delegate;
+
+    [plugin addWebRedemptionListener:[self commandWithId:@"listener"]];
+    [plugin removeWebRedemptionListener:[self commandWithId:@"remove"]];
+
+    XCTAssertNil(plugin.webRedemptionCommand);
+    XCTAssertEqual(delegate.results.count, (NSUInteger)2);
+    // The listener's stream is closed...
+    XCTAssertEqualObjects(delegate.callbackIds[0], @"listener");
+    XCTAssertEqualObjects(delegate.results[0].status, @(CDVCommandStatus_NO_RESULT));
+    // ...and the remove answers, so ITS OWN callbackId is freed too.
+    XCTAssertEqualObjects(delegate.callbackIds[1], @"remove");
+    XCTAssertEqualObjects(delegate.results[1].status, @(CDVCommandStatus_OK));
+    XCTAssertEqualObjects(delegate.results[1].keepCallback, @NO);
+}
+
+- (void)testRemovingWithNoListenerStillAcknowledges {
+    CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+    CDVFakeCommandDelegate *delegate = [CDVFakeCommandDelegate new];
+    plugin.commandDelegate = delegate;
+
+    [plugin removeWebRedemptionListener:[self commandWithId:@"remove"]];
+
+    XCTAssertEqual(delegate.results.count, (NSUInteger)1);
+    XCTAssertEqualObjects(delegate.callbackIds.firstObject, @"remove");
+    XCTAssertEqualObjects(delegate.results.firstObject.status, @(CDVCommandStatus_OK));
 }
 @end

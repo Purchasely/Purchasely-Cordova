@@ -2,7 +2,13 @@ package cordova.plugin.purchasely
 
 import org.apache.cordova.CallbackContext
 import org.apache.cordova.PluginResult
+import io.purchasely.ext.PLYWebRedemptionListener
+import io.purchasely.ext.Purchasely
 import io.purchasely.ext.StoreType
+import io.purchasely.ext.DistributionType
+import io.purchasely.models.PLYPlan
+import io.purchasely.models.PLYProduct
+import io.purchasely.models.PLYSubscription
 import io.purchasely.models.PLYSubscriptionData
 import io.purchasely.models.PLYWebRedemptionContext
 import io.purchasely.models.PLYWebRedemptionResult
@@ -15,11 +21,15 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.UUID
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
 
 /**
  * Unit tests for the Android bridge's 6.1.0 surface.
@@ -168,6 +178,212 @@ class PurchaselyBridgeTest {
         assertNotEquals(PLYProxyOption.Absent, resolveProxyOption(JSONObject().put("proxy", "")))
         assertNotEquals(PLYProxyOption.Clear, resolveProxyOption(JSONObject().put("proxy", "")))
     }
+
+    // endregion
+
+    // region applyStartOptions: which builder call each state produces
+
+    // The resolvers were covered on their own, but the branch CONSUMING them was not.
+    // Swapping the Clear and Set cases, or inverting the override flag, passed every test
+    // in this repository. These close that gap.
+
+    private fun builderMock() = mock<Purchasely.Builder>()
+    private val noopListener = PLYWebRedemptionListener { }
+
+    private fun apply(
+        builder: Purchasely.Builder,
+        proxy: PLYProxyOption = PLYProxyOption.Absent,
+        anonymousUserId: UUID? = null,
+        override: Boolean = false,
+        appHandlesRedemptionAlert: Boolean = false,
+    ) = applyStartOptions(
+        builder, proxy, anonymousUserId, override, appHandlesRedemptionAlert, noopListener
+    )
+
+    @Test
+    fun `a Set proxy reaches the builder with its url`() {
+        val builder = builderMock()
+
+        apply(builder, proxy = PLYProxyOption.Set("https://svc.purchasely.io"))
+
+        verify(builder).proxy("https://svc.purchasely.io")
+    }
+
+    /** `proxy(null)` is a real native operation. It must NOT be confused with no call. */
+    @Test
+    fun `a Clear proxy calls proxy with null`() {
+        val builder = builderMock()
+
+        apply(builder, proxy = PLYProxyOption.Clear)
+
+        verify(builder).proxy(null)
+    }
+
+    @Test
+    fun `an Absent proxy makes NO builder call, so the SDK keeps its setting`() {
+        val builder = builderMock()
+
+        apply(builder, proxy = PLYProxyOption.Absent)
+
+        verify(builder, never()).proxy(anyOrNull())
+    }
+
+    @Test
+    fun `an Invalid proxy makes NO builder call either`() {
+        val builder = builderMock()
+
+        apply(builder, proxy = PLYProxyOption.Invalid("ht tp://nope"))
+
+        verify(builder, never()).proxy(anyOrNull())
+    }
+
+    /** Asserted against each other: swapping the two branches must fail. */
+    @Test
+    fun `Clear and Set produce different builder calls`() {
+        val cleared = builderMock()
+        val set = builderMock()
+
+        apply(cleared, proxy = PLYProxyOption.Clear)
+        apply(set, proxy = PLYProxyOption.Set("https://svc.purchasely.io"))
+
+        verify(cleared).proxy(null)
+        verify(cleared, never()).proxy("https://svc.purchasely.io")
+        verify(set).proxy("https://svc.purchasely.io")
+        verify(set, never()).proxy(null)
+    }
+
+    @Test
+    fun `the anonymous user id reaches the builder with its override flag`() {
+        val id = UUID.fromString("3f2504e0-4f89-11d3-9a0c-0305e82c3301")
+        val withOverride = builderMock()
+        val without = builderMock()
+
+        apply(withOverride, anonymousUserId = id, override = true)
+        apply(without, anonymousUserId = id, override = false)
+
+        // Asserted both ways, so an inverted flag cannot pass.
+        verify(withOverride).anonymousUserId(id, true)
+        verify(without).anonymousUserId(id, false)
+    }
+
+    @Test
+    fun `no anonymous user id means no builder call`() {
+        val builder = builderMock()
+
+        apply(builder, anonymousUserId = null, override = true)
+
+        verify(builder, never()).anonymousUserId(anyOrNull(), any())
+    }
+
+    /** Registered on every start, whatever the flag, so an outcome always has a route. */
+    @Test
+    fun `the redemption listener is always registered, with the alert flag as given`() {
+        val handled = builderMock()
+        val notHandled = builderMock()
+
+        apply(handled, appHandlesRedemptionAlert = true)
+        apply(notHandled, appHandlesRedemptionAlert = false)
+
+        verify(handled).webRedemptionListener(true, noopListener)
+        verify(notHandled).webRedemptionListener(false, noopListener)
+    }
+
+    // endregion
+
+    // region delivery: a faked SDK result, through the real bridge, to Cordova
+
+    // The SDK's own network call and UI are out of scope: what matters is the wiring from a
+    // settled result to what JavaScript receives. So the result is fabricated and pushed
+    // through the SHIPPED delivery path.
+
+    private fun deliveredJson(result: PLYWebRedemptionResult): JSONObject {
+        val callback = mock<CallbackContext>()
+        PurchaselyPlugin.webRedemptionCallback = callback
+
+        PurchaselyPlugin().deliverRedemption(result)
+
+        val sent = argumentCaptor<PluginResult>()
+        verify(callback).sendPluginResult(sent.capture())
+        assertTrue(
+            "the stream must stay open for the next redemption",
+            sent.firstValue.keepCallback
+        )
+        assertEquals(PluginResult.Status.OK.ordinal, sent.firstValue.status)
+        return JSONObject(sent.firstValue.message)
+    }
+
+    /**
+     * A faked subscription, deep enough for the real mapper to run.
+     *
+     * [storeType] is a parameter because a Web2App redemption grants exactly a
+     * WEB_CHECKOUT_STRIPE subscription, and that is the source no end-to-end test can
+     * observe: it needs a real Stripe purchase.
+     */
+    private fun fakeSubscription(storeType: StoreType): PLYSubscriptionData {
+        // Built as separate locals, not nested mock { } blocks: nesting confuses Mockito's
+        // stubbing state and throws UnfinishedStubbingException.
+        val subscription = mock<PLYSubscription>()
+        whenever(subscription.toMap()).doReturn(mapOf("id" to "subs-1", "purchaseToken" to null))
+        whenever(subscription.storeType).doReturn(storeType)
+
+        // plan is non-null in the SDK, so it is faked rather than omitted.
+        val plan = mock<PLYPlan>()
+        whenever(plan.toMap()).doReturn(mapOf("vendorId" to "monthly"))
+        whenever(plan.type).doReturn(DistributionType.RENEWING_SUBSCRIPTION)
+        whenever(plan.isEligibleToOffer(anyOrNull())).doReturn(false)
+
+        val product = mock<PLYProduct>()
+        whenever(product.toMap()).doReturn(mapOf("vendorId" to "premium"))
+
+        val data = mock<PLYSubscriptionData>()
+        whenever(data.data).doReturn(subscription)
+        whenever(data.plan).doReturn(plan)
+        whenever(data.product).doReturn(product)
+        return data
+    }
+
+    /** The SUCCESS branch, which no end-to-end test can reach: a valid token is single-use. */
+    @Test
+    fun `a granted redemption reaches JS with its subscription`() {
+        val json = deliveredJson(
+            PLYWebRedemptionResult.Success(
+                PLYWebRedemptionContext(fakeSubscription(StoreType.APPLE_APP_STORE)), false
+            )
+        )
+
+        assertTrue(json.getBoolean("isSuccess"))
+        assertFalse(json.getBoolean("replay"))
+        assertTrue(json.isNull("errorCode"))
+        assertTrue(json.isNull("errorMessage"))
+        val subscription = json.getJSONObject("context").getJSONObject("subscription")
+        assertEquals("subs-1", subscription.getString("id"))
+        assertEquals("premium", subscription.getJSONObject("product").getString("vendorId"))
+        assertEquals(0, subscription.getInt("subscriptionSource"))
+    }
+
+    /**
+     * The reason the Stripe source matters here: a Web2App redemption grants a subscription
+     * from exactly that source, and the bridge used to report it as `none`.
+     */
+    @Test
+    fun `a web checkout subscription reaches JS as webCheckoutStripe, not none`() {
+        val json = deliveredJson(
+            PLYWebRedemptionResult.Success(
+                PLYWebRedemptionContext(fakeSubscription(StoreType.WEB_CHECKOUT_STRIPE)), false
+            )
+        )
+
+        val subscription = json.getJSONObject("context").getJSONObject("subscription")
+        assertEquals("Stripe is 4", 4, subscription.getInt("subscriptionSource"))
+        assertNotEquals("and must not be `none`, which is 5", 5, subscription.getInt("subscriptionSource"))
+    }
+
+    // NOT ASSERTED HERE: that an absent purchaseToken arrives as a PRESENT JSON null on
+    // Android. It does at runtime, because Android's JSONObject(Map) wraps a null value and
+    // keeps the key -- but this module runs the reference org.json, which DROPS the entry,
+    // so the assertion would pin the wrong implementation. The bridge's own five-key body
+    // does not depend on that: it puts JSONObject.NULL explicitly, and that IS asserted.
+    // The nested subscription comes from the SDK's own toMap(), which the bridge only wraps.
 
     // endregion
 

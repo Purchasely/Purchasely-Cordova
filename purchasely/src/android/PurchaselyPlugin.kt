@@ -365,28 +365,22 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 allowCampaigns?.let { this.allowCampaigns(it) }
                 // Cold-start deeplink: replayed automatically once started.
                 deeplink?.let { this.handleDeeplink(Uri.parse(it)) }
-                // An absent key makes no call at all, so the current setting stands.
-                // Clear and Set are both real operations that must reach native.
-                when (proxyOption) {
-                    is PLYProxyOption.Absent -> {}
-                    is PLYProxyOption.Invalid -> {}
-                    is PLYProxyOption.Clear -> this.proxy(null)
-                    is PLYProxyOption.Set -> this.proxy(proxyOption.api)
-                }
-                anonymousUserId?.let { this.anonymousUserId(it, anonymousUserIdOverride) }
-                // Registered unconditionally: the native SDK has no runtime setter on purpose,
-                // because a redemption can settle during start() (a cold start that the
-                // `ply/redeem` link itself triggered, or a token a previous launch left pending).
-                // The listener sends nothing when `addWebRedemptionListener` recorded no
-                // callback, so this is behaviour-neutral by default.
-                this.webRedemptionListener(appHandlesRedemptionAlert, PLYWebRedemptionListener { result ->
-                    val pluginResult = PluginResult(
-                        PluginResult.Status.OK,
-                        webRedemptionResultToJson(result, Companion::transformSubscriptionToMap)
-                    )
-                    pluginResult.keepCallback = true
-                    webRedemptionCallback?.sendPluginResult(pluginResult)
-                })
+                // The three 6.1.0 options are applied through a seam so a unit test can
+                // verify WHICH builder call each resolver state produces. Without it,
+                // swapping the Clear and Set branches passed every test in the repository.
+                applyStartOptions(
+                    builder = this,
+                    proxyOption = proxyOption,
+                    anonymousUserId = anonymousUserId,
+                    anonymousUserIdOverride = anonymousUserIdOverride,
+                    appHandlesRedemptionAlert = appHandlesRedemptionAlert,
+                    // Registered unconditionally: the native SDK has no runtime setter on
+                    // purpose, because a redemption can settle during start(). It sends
+                    // nothing when addWebRedemptionListener recorded no callback.
+                    redemptionListener = PLYWebRedemptionListener { result ->
+                        deliverRedemption(result)
+                    },
+                )
             }
             .build()
 
@@ -507,6 +501,27 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         // Acknowledge the remove itself, so ITS callbackId is freed too. A void action that
         // never answers leaks its own entry exactly like the listener's.
         callbackContext.success()
+    }
+
+    /**
+     * Send one settled redemption to the JS listener.
+     *
+     * Everything the SDK hands over crosses here, so a test can fire a fabricated
+     * [PLYWebRedemptionResult] through the real delivery path and assert exactly what
+     * Cordova receives: the JSON body, and `keepCallback = true` so the stream stays open
+     * for the next redemption.
+     *
+     * A no-op when no listener is registered, which is why registering the SDK listener
+     * unconditionally at `start()` is behaviour-neutral.
+     */
+    internal fun deliverRedemption(result: PLYWebRedemptionResult) {
+        val callback = webRedemptionCallback ?: return
+        val pluginResult = PluginResult(
+            PluginResult.Status.OK,
+            webRedemptionResultToJson(result, Companion::transformSubscriptionToMap)
+        )
+        pluginResult.keepCallback = true
+        callback.sendPluginResult(pluginResult)
     }
 
     /**
@@ -1656,6 +1671,35 @@ internal fun subscriptionSourceFor(storeType: StoreType?): Int? = when (storeTyp
     StoreType.WEB_CHECKOUT_STRIPE -> StoreType.WEB_CHECKOUT_STRIPE.ordinal
     StoreType.NONE -> StoreType.NONE.ordinal
     null -> null
+}
+
+/**
+ * Apply the three 6.1.0 start options to a [Purchasely.Builder].
+ *
+ * Extracted so a unit test can assert WHICH builder call each resolver state produces. The
+ * resolvers were covered on their own, but the branch consuming them was not: swapping the
+ * `Clear` and `Set` cases, or inverting the override flag, passed every test in the
+ * repository. That branch is the whole point of the release.
+ *
+ * `Absent` and `Invalid` make NO call, so the SDK keeps whatever it already has. `Clear`
+ * calls `proxy(null)`, which is a real native operation and not the same as making no call.
+ */
+internal fun applyStartOptions(
+    builder: Purchasely.Builder,
+    proxyOption: PLYProxyOption,
+    anonymousUserId: UUID?,
+    anonymousUserIdOverride: Boolean,
+    appHandlesRedemptionAlert: Boolean,
+    redemptionListener: PLYWebRedemptionListener,
+) {
+    when (proxyOption) {
+        is PLYProxyOption.Absent -> {}
+        is PLYProxyOption.Invalid -> {}
+        is PLYProxyOption.Clear -> builder.proxy(null)
+        is PLYProxyOption.Set -> builder.proxy(proxyOption.api)
+    }
+    anonymousUserId?.let { builder.anonymousUserId(it, anonymousUserIdOverride) }
+    builder.webRedemptionListener(appHandlesRedemptionAlert, redemptionListener)
 }
 
 /**
