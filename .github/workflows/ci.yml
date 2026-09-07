@@ -422,8 +422,15 @@ jobs:
 
       # No Gradle wrapper is committed for this module, so the action provisions Gradle
       # rather than the repository carrying a wrapper jar.
+      #
+      # PINNED. Without gradle-version the job takes whatever Gradle the runner image
+      # ships, and AGP 8.10.1 does not support Gradle 9 -- a runner image bump would break
+      # this job with no change to the repository. Bump this with the AGP version in
+      # purchasely/android-tests/build.gradle.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.2"
 
       # verifyTestsRan depends on testDebugUnitTest and then fails unless the run
       # actually produced tests. Without it a green job cannot be told apart from one

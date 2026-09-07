@@ -18,7 +18,7 @@ Cordova imperative API. They are **not** part of the PR-gating `ci.yml`; they ru
 |-------|------|------|-------|
 | bridge | `specs/bridge.e2e.js` | **hard** | anonymous id, allProducts, fetchPresentationForPlacement, synchronize completion, user-attribute round-trip (string/int/boolean), userSubscriptions |
 | dismiss | `specs/dismiss.e2e.js` | best-effort | present placement or default presentation + programmatic close → dismiss outcome + `closeReason` (needs a paywall to render) |
-| start options 6.1.0 | `specs/start-options-6-1-0.e2e.js` | **hard** (redemption outcome best-effort) | the 6.1.0 surface exists on the object Cordova clobbered on-device; `proxy`'s three wire states (url / present null / absent key) asserted against each other after a real JSON round trip; `anonymousUserId` + its override flag on the wire and a canonical id back from native; the builder listener subscribing before the native `start`; a `ply/redeem` deeplink settling through native into the JS listener |
+| start options 6.1.0 | `specs/start-options-6-1-0.e2e.js` | **hard**, except the redemption outcome (see below) | the 6.1.0 surface exists on the object Cordova clobbered on-device; `proxy`'s three states (url / present null / absent key) asserted against each other after a real JSON round trip; `anonymousUserId` + its override flag in the built payload, and a canonical id back from native; a `ply/redeem` deeplink settling through native into the JS listener |
 
 The `proxy` assertions cover the **built payload** and its JSON round trip inside the real
 WebView, not the `cordova.exec` hand-off. That hand-off, and the chain-time subscription
@@ -31,9 +31,13 @@ target (`purchasely/example-capacitor`) and the Android unit-test module
 Nothing asserts that the SDK's resolved API host changed: that is SDK-internal state this
 harness cannot observe.
 
-The redemption outcome needs the real backend reachable from the runner. When no outcome
-arrives the spec logs `[redemption] KNOWN:` and returns rather than asserting on something
-that cannot arrive — the same policy the store-dependent bridge assertions use.
+**The redemption outcome is NOT hard-gated, despite the spec being registered as `hard`.**
+It needs the real backend reachable from the runner, so when no outcome arrives the spec
+logs `[redemption] KNOWN:` and returns instead of asserting on something that cannot
+arrive — the same policy the store-dependent bridge assertions use. The other ten
+assertions in the file are genuinely hard-gated. Read a green run's log for
+`[redemption] KNOWN` before treating the redemption path as verified: absent means it
+really settled and the assertions ran.
 
 ## The suite must run the build you just made
 
