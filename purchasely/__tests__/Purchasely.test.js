@@ -80,12 +80,35 @@ describe('Purchasely', () => {
     });
 
     describe('SubscriptionSource', () => {
+      // The values ARE the native raw values, verified against the shipped 6.1.0
+      // artifacts: iOS PLYSubscriptionSource (stripe = 4, none = 5) and Android StoreType
+      // ordinals (WEB_CHECKOUT_STRIPE = 4, NONE = 5). Both platforms agree.
+      //
+      // This object used to say none: 4 with no Stripe member, which was correct before
+      // the natives inserted Stripe at 4 and pushed NONE to 5 (Android ~5.5.0). A Web2App
+      // subscription therefore reported `none`, and a sourceless one reported a value with
+      // no name here. A Web2App redemption grants a subscription from exactly that source.
       it('should have correct subscription source values', () => {
         expect(Purchasely.SubscriptionSource.appleAppStore).toBe(0);
         expect(Purchasely.SubscriptionSource.googlePlayStore).toBe(1);
         expect(Purchasely.SubscriptionSource.amazonAppstore).toBe(2);
         expect(Purchasely.SubscriptionSource.huaweiAppGallery).toBe(3);
-        expect(Purchasely.SubscriptionSource.none).toBe(4);
+        expect(Purchasely.SubscriptionSource.webCheckoutStripe).toBe(4);
+        expect(Purchasely.SubscriptionSource.none).toBe(5);
+      });
+
+      it('exposes web checkout, and keeps it distinct from none', () => {
+        expect(Purchasely.SubscriptionSource.webCheckoutStripe).toBeDefined();
+        // Asserted against each other: either alone passes while the two are swapped.
+        expect(Purchasely.SubscriptionSource.webCheckoutStripe)
+          .not.toBe(Purchasely.SubscriptionSource.none);
+      });
+
+      // No duplicates and no gaps, so every native value has exactly one name here.
+      it('covers 0..5 with no duplicate value', () => {
+        const values = Object.values(Purchasely.SubscriptionSource);
+        expect(values.slice().sort()).toEqual([0, 1, 2, 3, 4, 5]);
+        expect(new Set(values).size).toBe(values.length);
       });
     });
 
@@ -253,7 +276,7 @@ describe('Purchasely', () => {
           expect.any(Function),
           'Purchasely',
           'start',
-          [{ apiKey: 'API_KEY', sdkVersion: '6.0.1' }]
+          [{ apiKey: 'API_KEY', sdkVersion: '6.1.0' }]
         );
       } finally {
         metadata['cordova-plugin-purchasely'] = original;
@@ -321,6 +344,296 @@ describe('Purchasely', () => {
       );
     });
 
+    describe('the 6.1.0 modifiers', () => {
+      it('forwards anonymousUserId with the default override=false', () => {
+        Purchasely.builder('API_KEY')
+          .anonymousUserId('3f2504e0-4f89-11d3-9a0c-0305e82c3301')
+          .start(jest.fn(), jest.fn());
+
+        expect(mockExec.mock.calls[0][4]).toEqual([
+          {
+            apiKey: 'API_KEY',
+            anonymousUserId: '3f2504e0-4f89-11d3-9a0c-0305e82c3301',
+            anonymousUserIdOverride: false,
+            sdkVersion: '5.6.2'
+          }
+        ]);
+      });
+
+      it('forwards override=true when asked', () => {
+        Purchasely.builder('API_KEY')
+          .anonymousUserId('3f2504e0-4f89-11d3-9a0c-0305e82c3301', true)
+          .start(jest.fn(), jest.fn());
+
+        expect(mockExec.mock.calls[0][4][0].anonymousUserIdOverride).toBe(true);
+      });
+
+      // JS does not validate the string: each native bridge parses it into a UUID and
+      // refuses a bad value with an error log, and start() still succeeds.
+      it('forwards a value that is not a UUID unchanged', () => {
+        Purchasely.builder('API_KEY').anonymousUserId('not-a-uuid').start(jest.fn(), jest.fn());
+
+        expect(mockExec.mock.calls[0][4][0].anonymousUserId).toBe('not-a-uuid');
+      });
+
+      // --- proxy: three states that must stay distinguishable end to end -------------
+      //
+      // Both natives treat null as "clear the proxy and return to api.purchasely.io",
+      // which is a supported operation, not an error. So the payload must carry three
+      // shapes: a value, a PRESENT null, and an ABSENT key. Collapsing absent into null
+      // turns every start into an implicit clear; collapsing null into absent makes a
+      // clear silently do nothing. That second one is the bug the React Native bridge
+      // shipped with, and the one the Cordova bridge had before this change.
+
+      it('proxy(url): the option reaches native with the url', () => {
+        Purchasely.builder('API_KEY').proxy('https://svc.purchasely.io').start(jest.fn(), jest.fn());
+
+        expect(mockExec.mock.calls[0][4][0].proxy).toBe('https://svc.purchasely.io');
+      });
+
+      it('proxy(null): the option reaches native AS null, with the key PRESENT', () => {
+        Purchasely.builder('API_KEY').proxy(null).start(jest.fn(), jest.fn());
+
+        const opts = mockExec.mock.calls[0][4][0];
+        // Both halves matter. `toBeNull` alone would also pass for an absent key, since
+        // reading a missing property yields undefined... which is why the key presence is
+        // asserted separately.
+        expect(Object.prototype.hasOwnProperty.call(opts, 'proxy')).toBe(true);
+        expect(opts.proxy).toBeNull();
+      });
+
+      it('proxy never called: the key is ABSENT from the option map', () => {
+        Purchasely.builder('API_KEY').start(jest.fn(), jest.fn());
+
+        const opts = mockExec.mock.calls[0][4][0];
+        expect(Object.prototype.hasOwnProperty.call(opts, 'proxy')).toBe(false);
+      });
+
+      // The two "no proxy" intents must not produce the same payload. Asserted against
+      // each other, because each one alone can pass while the distinction is lost.
+      it('never-called and cleared produce DIFFERENT payloads', () => {
+        Purchasely.builder('API_KEY').start(jest.fn(), jest.fn());
+        const neverCalled = mockExec.mock.calls[0][4][0];
+
+        mockExec.mockClear();
+        Purchasely.builder('API_KEY').proxy(null).start(jest.fn(), jest.fn());
+        const cleared = mockExec.mock.calls[0][4][0];
+
+        expect(cleared).not.toEqual(neverCalled);
+        expect(Object.keys(cleared)).toContain('proxy');
+        expect(Object.keys(neverCalled)).not.toContain('proxy');
+      });
+
+      // The payload is what crosses the bridge, so it must survive JSON. An undefined
+      // value would be dropped by JSON.stringify and arrive indistinguishable from an
+      // absent key; a null survives as JSON null, which is NSNull on iOS and
+      // JSONObject.NULL on Android.
+      it('a cleared proxy survives JSON serialisation as null, not as a dropped key', () => {
+        Purchasely.builder('API_KEY').proxy(null).start(jest.fn(), jest.fn());
+        const wire = JSON.parse(JSON.stringify(mockExec.mock.calls[0][4][0]));
+
+        expect(Object.prototype.hasOwnProperty.call(wire, 'proxy')).toBe(true);
+        expect(wire.proxy).toBeNull();
+      });
+
+      it('the last proxy call wins: set then clear ends CLEARED', () => {
+        Purchasely.builder('API_KEY')
+          .proxy('https://svc.purchasely.io')
+          .proxy(null)
+          .start(jest.fn(), jest.fn());
+
+        const opts = mockExec.mock.calls[0][4][0];
+        expect(Object.prototype.hasOwnProperty.call(opts, 'proxy')).toBe(true);
+        expect(opts.proxy).toBeNull();
+      });
+
+      it('the last proxy call wins: clear then set ends SET', () => {
+        Purchasely.builder('API_KEY')
+          .proxy(null)
+          .proxy('https://svc.purchasely.io')
+          .start(jest.fn(), jest.fn());
+
+        expect(mockExec.mock.calls[0][4][0].proxy).toBe('https://svc.purchasely.io');
+      });
+
+      // The no-argument native modifiers disagree: iOS proxy() routes through
+      // Purchasely's own proxy, Android proxy() clears. A Cordova shorthand would mean
+      // two different things, so the modifier refuses and leaves the option absent.
+      it('proxy() with no argument is refused and leaves the key absent', () => {
+        const logged = jest.spyOn(console, 'log').mockImplementation(() => {});
+        try {
+          Purchasely.builder('API_KEY').proxy().start(jest.fn(), jest.fn());
+
+          const opts = mockExec.mock.calls[0][4][0];
+          expect(Object.prototype.hasOwnProperty.call(opts, 'proxy')).toBe(false);
+          expect(logged).toHaveBeenCalledWith(expect.stringContaining('proxy() requires an argument'));
+        } finally {
+          logged.mockRestore();
+        }
+      });
+
+      // The two public entry points must agree on the same input. JSON.stringify drops an
+      // undefined-valued key, so `start({ proxy: undefined })` reaches native as ABSENT.
+      // The builder must therefore treat an explicit undefined as "not set" too. Mapping
+      // it to null would make `builder(k).proxy(config.proxy)` CLEAR the proxy whenever
+      // config.proxy has not loaded yet, which is the opposite of leaving it alone.
+      it('proxy(undefined) leaves the key ABSENT, exactly as start({proxy: undefined}) does', () => {
+        const logged = jest.spyOn(console, 'log').mockImplementation(() => {});
+        try {
+          Purchasely.builder('API_KEY').proxy(undefined).start(jest.fn(), jest.fn());
+          const viaBuilder = mockExec.mock.calls[0][4][0];
+
+          mockExec.mockClear();
+          Purchasely.start({ apiKey: 'API_KEY', proxy: undefined }, jest.fn(), jest.fn());
+          const viaOptions = JSON.parse(JSON.stringify(mockExec.mock.calls[0][4][0]));
+
+          expect(Object.prototype.hasOwnProperty.call(viaBuilder, 'proxy')).toBe(false);
+          expect(Object.prototype.hasOwnProperty.call(viaOptions, 'proxy')).toBe(false);
+          // The point of the test: the two paths must not disagree.
+          expect(Object.keys(viaBuilder).sort()).toEqual(Object.keys(viaOptions).sort());
+          expect(logged).toHaveBeenCalledWith(expect.stringContaining('proxy() requires an argument'));
+        } finally {
+          logged.mockRestore();
+        }
+      });
+
+      // JS does not validate the URL: each native converts it and the SDK refuses a
+      // non-https value, a value with no host, and a query, a fragment or credentials.
+      it('does not validate the scheme in JS', () => {
+        Purchasely.builder('API_KEY').proxy('http://insecure.example').start(jest.fn(), jest.fn());
+
+        expect(mockExec.mock.calls[0][4][0].proxy).toBe('http://insecure.example');
+      });
+
+      it('forwards appHandlesRedemptionAlert, true and false alike', () => {
+        Purchasely.builder('API_KEY').appHandlesRedemptionAlert(true).start(jest.fn(), jest.fn());
+        expect(mockExec.mock.calls[0][4][0].appHandlesRedemptionAlert).toBe(true);
+
+        mockExec.mockClear();
+        Purchasely.builder('API_KEY').appHandlesRedemptionAlert(false).start(jest.fn(), jest.fn());
+        expect(mockExec.mock.calls[0][4][0].appHandlesRedemptionAlert).toBe(false);
+      });
+
+      // An omitted modifier must stay absent, so each native SDK keeps its own default
+      // instead of receiving a bridge-invented one.
+      it('omits every 6.1.0 key when no modifier is called', () => {
+        Purchasely.builder('API_KEY').start(jest.fn(), jest.fn());
+
+        // toEqual treats an absent key and an explicit undefined alike, so the key set is
+        // asserted directly: an implicit `proxy: null` would be a silent clear.
+        const opts = mockExec.mock.calls[0][4][0];
+        expect(Object.keys(opts).sort()).toEqual(['apiKey', 'sdkVersion']);
+      });
+
+      // --- webRedemptionListener on the chain ----------------------------------------
+
+      // The reason the listener belongs on the chain. A redemption can settle DURING
+      // start(), from a cold start the `ply/redeem` link itself triggered or from a token
+      // a previous launch left pending. Subscribing at CHAIN time makes the ordering
+      // structurally impossible to get wrong. Asserted on the exec order, not on a
+      // comment.
+      it('webRedemptionListener subscribes BEFORE the native start call', () => {
+        const onRedemption = jest.fn();
+
+        Purchasely.builder('API_KEY').webRedemptionListener(onRedemption).start(jest.fn(), jest.fn());
+
+        const actions = mockExec.mock.calls.map((call) => call[3]);
+        expect(actions).toEqual(['addWebRedemptionListener', 'start']);
+        expect(actions.indexOf('addWebRedemptionListener')).toBeLessThan(actions.indexOf('start'));
+      });
+
+      // The leak the deferral exists to prevent: a builder that is configured and then
+      // abandoned must leave NOTHING registered natively. The native slot would otherwise
+      // hold the callback until onReset or an activity teardown, and any later start()
+      // would route redemptions to it.
+      it('webRedemptionListener subscribes NOTHING until start() is called', () => {
+        const onRedemption = jest.fn();
+
+        Purchasely.builder('API_KEY').webRedemptionListener(onRedemption);
+
+        const actions = mockExec.mock.calls.map((call) => call[3]);
+        expect(actions).not.toContain('addWebRedemptionListener');
+        expect(mockExec).not.toHaveBeenCalled();
+      });
+
+      // Calling the modifier twice must still leave exactly one subscription.
+      it('webRedemptionListener subscribes once, with the last callback, when set twice', () => {
+        const first = jest.fn();
+        const second = jest.fn();
+
+        Purchasely.builder('API_KEY')
+          .webRedemptionListener(first)
+          .webRedemptionListener(second)
+          .start(jest.fn(), jest.fn());
+
+        const subscribes = mockExec.mock.calls.filter((c) => c[3] === 'addWebRedemptionListener');
+        expect(subscribes).toHaveLength(1);
+        expect(subscribes[0][0]).toBe(second);
+      });
+
+      it('webRedemptionListener registers the callback that receives the outcome', () => {
+        const onRedemption = jest.fn();
+        Purchasely.builder('API_KEY').webRedemptionListener(onRedemption).start(jest.fn(), jest.fn());
+
+        // The subscribe call carries the caller's callback as its success handler, so a
+        // native outcome reaches the app's function and not a wrapper that drops it.
+        expect(mockExec.mock.calls[0][0]).toBe(onRedemption);
+
+        const outcome = { isSuccess: true, context: null, replay: false, errorCode: null, errorMessage: null };
+        mockExec.mock.calls[0][0](outcome);
+        expect(onRedemption).toHaveBeenCalledWith(outcome);
+      });
+
+      it('the optional second argument sets appHandlesRedemptionAlert', () => {
+        Purchasely.builder('API_KEY')
+          .webRedemptionListener(jest.fn(), true)
+          .start(jest.fn(), jest.fn());
+
+        expect(mockExec.mock.calls[1][4][0].appHandlesRedemptionAlert).toBe(true);
+      });
+
+      it('the optional second argument forwards an explicit false', () => {
+        Purchasely.builder('API_KEY')
+          .webRedemptionListener(jest.fn(), false)
+          .start(jest.fn(), jest.fn());
+
+        expect(mockExec.mock.calls[1][4][0].appHandlesRedemptionAlert).toBe(false);
+      });
+
+      // Omitting it must set NOTHING, so the native default stands rather than a
+      // bridge-invented one.
+      it('omitting the second argument leaves appHandlesRedemptionAlert absent', () => {
+        Purchasely.builder('API_KEY')
+          .webRedemptionListener(jest.fn())
+          .start(jest.fn(), jest.fn());
+
+        const opts = mockExec.mock.calls[1][4][0];
+        expect(Object.prototype.hasOwnProperty.call(opts, 'appHandlesRedemptionAlert')).toBe(false);
+      });
+
+      it('carries every modifier in one start() call', () => {
+        Purchasely.builder('API_KEY')
+          .allowDeeplink(false)
+          .anonymousUserId('3f2504e0-4f89-11d3-9a0c-0305e82c3301', true)
+          .proxy('https://svc.purchasely.io')
+          .appHandlesRedemptionAlert(true)
+          .start(jest.fn(), jest.fn());
+
+        expect(mockExec).toHaveBeenCalledTimes(1);
+        expect(mockExec.mock.calls[0][4]).toEqual([
+          {
+            apiKey: 'API_KEY',
+            allowDeeplink: false,
+            anonymousUserId: '3f2504e0-4f89-11d3-9a0c-0305e82c3301',
+            anonymousUserIdOverride: true,
+            proxy: 'https://svc.purchasely.io',
+            appHandlesRedemptionAlert: true,
+            sdkVersion: '5.6.2'
+          }
+        ]);
+      });
+    });
+
     it('start() with no callbacks returns a Promise resolving the isConfigured value', async () => {
       const startPromise = Purchasely.builder('API_KEY').start();
 
@@ -362,6 +675,35 @@ describe('Purchasely', () => {
       Purchasely.addEventsListener(success, error);
 
       expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'addEventsListener', []);
+    });
+  });
+
+  describe('addWebRedemptionListener / removeWebRedemptionListener (6.1.0)', () => {
+    it('registers the callback on the addWebRedemptionListener action', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.addWebRedemptionListener(success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        success,
+        error,
+        'Purchasely',
+        'addWebRedemptionListener',
+        []
+      );
+    });
+
+    it('clears the callback on removeWebRedemptionListener', () => {
+      Purchasely.removeWebRedemptionListener();
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'removeWebRedemptionListener',
+        []
+      );
     });
   });
 

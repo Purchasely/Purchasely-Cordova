@@ -40,13 +40,69 @@ function onDeviceReady() {
 	console.log('Running cordova-' + cordova.platformId + '@' + cordova.version);
 	document.getElementById('deviceready').classList.add('ready');
 
+	// 6.1.0, Web2App redemption. Add the listener BEFORE start(): a redemption can
+	// settle during start(), from a cold start that the `ply/redeem` link itself
+	// triggered, or from a token a previous launch left pending. A listener added after
+	// start() misses exactly that case.
+	//
+	// A redemption deeplink is not subject to allowDeeplink: the native SDK intercepts
+	// `ply/redeem` before the routing branch that gate sits behind.
+	Purchasely.addWebRedemptionListener((result) => {
+		// E2E marker. The suite drives a `ply/redeem` deeplink and needs the settled
+		// outcome; there is no other signal, since the SDK reports it only here.
+		window.__plyRedemption = result;
+		if (result.isSuccess) {
+			console.log('Redemption granted. replay=' + result.replay
+				+ ' subscription=' + (result.context && result.context.subscription
+					? result.context.subscription.plan.vendorId : null));
+		} else {
+			// The code is safe to log. errorMessage is NOT, ON EITHER PLATFORM: an
+			// expired link puts the backend's masked email hint in it, and a console
+			// line reaches `adb logcat` and the Xcode console, which support runs
+			// capture. Route the message to the UI instead, and log the code alone.
+			// Do not make this a platform check: Android appends the hint too.
+			console.log('Redemption failed. code=' + result.errorCode);
+			if (result.errorMessage) alert(result.errorMessage);
+		}
+	});
+
 	Purchasely.start(
 		{
 			apiKey: 'fcb39be4-2ba4-4db7-bde3-2a5a1e20745d',
 			stores: [Purchasely.Store.google],
 			storeKit1: false,
 			logLevel: Purchasely.LogLevel.DEBUG,
-			runningMode: Purchasely.RunningMode.full
+			runningMode: Purchasely.RunningMode.full,
+			// 6.1.0. true = the SDK shows NO popin and calls the listener as soon as the
+			// redemption settles; this app then renders its own result, which it does in
+			// the listener above. false is the native default: the SDK shows its own
+			// popin and calls the listener only once the user DISMISSES it.
+			//
+			// true here on purpose. Under `false` the callback is gated on a UI dismissal,
+			// and the native doc is explicit that the alert is held until an activity
+			// reaches the foreground and re-shown if its activity is destroyed. On a
+			// loaded CI emulator that stalled the E2E redemption assertion, which skipped
+			// with alertDismissed=false while the same run passed on iOS. `true` takes the
+			// UI out of the loop and leaves only the backend call, and it is also the mode
+			// an app that owns its post-redemption experience will use.
+			appHandlesRedemptionAlert: true
+			// 6.1.0. The anonymous user id this device reports. The bridge parses the
+			// string into a native UUID and refuses a value that is not canonical. The
+			// SDK stores it uppercase, and applies it only when the device holds no
+			// anonymous id yet, unless anonymousUserIdOverride is true.
+			//
+			// Kept inactive here on purpose: a hardcoded id would pin every install of
+			// this demo app to one anonymous user, and the E2E suite asserts on the
+			// generated id.
+			// anonymousUserId: '3f2504e0-4f89-11d3-9a0c-0305e82c3301',
+			//
+			// 6.1.0. Route the API traffic through a proxy for a region where
+			// api.purchasely.io is unreachable. Only an https base URL is accepted.
+			// Purchasely operates one at https://svc.purchasely.io.
+			//
+			// Kept inactive here on purpose: this demo app must keep talking to
+			// production.
+			// proxy: 'https://svc.purchasely.io'
 		},
 		(isConfigured) => {
 			// E2E readiness marker. The suite needs to know when start() has actually

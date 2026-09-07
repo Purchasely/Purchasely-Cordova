@@ -136,6 +136,23 @@ jobs:
           npm install "$RUNNER_TEMP"/purchasely-cordova-plugin-purchasely-*.tgz
           npx cap add ios --packagemanager ${{ matrix.manager }}
 
+      # Record what this run actually resolved, on success as well as on failure.
+      #
+      # The Capacitor packages above are installed by RANGE (@8), and @capacitor/ios is
+      # what generates the Podfile carrying `-ObjC` — the flag that forces CDVPurchasely
+      # out of the CordovaPluginsStatic static library, since Cordova only ever reaches it
+      # through NSClassFromString. A run of this job failed the linkage assertion and then
+      # passed on a rerun of the identical commit, and the versions were nowhere in the
+      # log, so the cause could not be pinned. Print them.
+      - name: Record the resolved toolchain
+        working-directory: ${{ runner.temp }}/capacitor-ci
+        run: |
+          node -e "for (const p of ['@capacitor/core','@capacitor/ios','@capacitor/cli']) console.log(p, require(p + '/package.json').version)"
+          echo "CocoaPods: $(pod --version 2>/dev/null || echo 'n/a')"
+          echo "Xcode: $(xcodebuild -version | tr '\n' ' ')"
+          echo "Effective OTHER_LDFLAGS:"
+          grep -rh "OTHER_LDFLAGS" "ios/App/Pods/Target Support Files/Pods-App/"*.xcconfig 2>/dev/null || echo "  (no Pods config; SPM path)"
+
       - name: Build the simulator app
         working-directory: ${{ runner.temp }}/capacitor-ci/ios/App
         run: |
@@ -168,9 +185,46 @@ jobs:
           # One nm per file on purpose: piping a batched nm into grep under `pipefail`
           # reports failure as soon as nm chokes on a non-Mach-O file (a PNG, Info.plist),
           # which reads as "symbol absent" even when it is present.
+          # Resolve nm through the selected toolchain, and prove the SEARCH works before
+          # trusting a negative result.
+          #
+          # This assertion has failed twice while its own diagnostic listed nothing at all,
+          # with `-ObjC` present in OTHER_LDFLAGS, Purchasely.framework embedded, and the
+          # same Xcode 16.4, CocoaPods 1.17.0 and Capacitor 8.5.1 as a run that passed. The
+          # cause is still UNKNOWN. Two hypotheses were checked against the logs and both
+          # were wrong: a missing `-ObjC` (it is there) and an Xcode difference (identical).
+          #
+          # So the job's job is to produce evidence, not to guess. With `2>/dev/null` on
+          # every nm call a broken search was indistinguishable from an absent symbol.
+          NM="$(xcrun --find nm 2>/dev/null || command -v nm)"
+          if [ -z "$NM" ]; then
+            echo "::error::no usable nm; cannot check linkage."
+            exit 1
+          fi
+          echo "Using nm: $NM"
+
+          # Control: nm must produce output for a binary that certainly has symbols. This
+          # deliberately does NOT assert WHICH symbols. An earlier attempt required a
+          # `_OBJC_CLASS_$_PLY` match inside Purchasely.framework and would have failed
+          # every run: Purchasely is Swift, so its ObjC-visible classes carry a per-
+          # component length prefix, e.g. `_OBJC_CLASS_$__TtC10Purchasely10PLYProduct`.
+          # That same naming is why the diagnostic below uses a permissive pattern.
+          SDK_BIN="$APP/Frameworks/Purchasely.framework/Purchasely"
+          if [ -f "$SDK_BIN" ]; then
+            CONTROL=$("$NM" -a "$SDK_BIN" 2>&1 | wc -l | tr -d ' ')
+            echo "Control: nm produced $CONTROL line(s) for Purchasely.framework"
+            if [ "$CONTROL" -lt 100 ]; then
+              echo "::error::The symbol search is broken: nm produced almost nothing for Purchasely.framework. A negative result below would say nothing about the plugin."
+              "$NM" -a "$SDK_BIN" 2>&1 | head -5
+              exit 1
+            fi
+          else
+            echo "::warning::$SDK_BIN missing, so the control could not run."
+          fi
+
           FOUND=0
           while IFS= read -r f; do
-            if nm -a "$f" 2>/dev/null | grep -q '_OBJC_CLASS_\$_CDVPurchasely'; then
+            if "$NM" -a "$f" 2>/dev/null | grep -q '_OBJC_CLASS_\$_CDVPurchasely'; then
               echo "CDVPurchasely found in ${f#"$APP"/}"
               FOUND=1
               break
@@ -186,11 +240,36 @@ jobs:
             # cost a full round trip the last time this fired.
             echo "Mach-O files and their CDV/Purchasely classes:"
             while IFS= read -r f; do
-              syms=$(nm -a "$f" 2>/dev/null | grep -oE '_OBJC_CLASS_\$_(CDV|PLY)[A-Za-z]*' | sort -u | tr '\n' ' ')
+              # Permissive on purpose, and verified against a real Purchasely.framework:
+              # Swift mangles ObjC-visible classes with a per-component length prefix, so
+              # PLYProduct appears as `_OBJC_CLASS_$__TtC10Purchasely10PLYProduct`. Two
+              # tighter patterns matched 0 of 179 class symbols; this one matches 62.
+              # `|| true` is load-bearing. The step runs under `set -euo pipefail`, so a
+              # grep that matches nothing returns 1, the pipeline returns 1, and the
+              # command substitution kills the whole step. That is why this diagnostic
+              # printed ZERO rows on every failure it was supposed to explain: it aborted
+              # on the first file without a match, before reaching the flags and the
+              # product inventory below.
+              syms=$("$NM" -a "$f" 2>&1 | grep -oE '_OBJC_CLASS_\$_.*(CDV|PLY)[A-Za-z]*' | sort -u | tr '\n' ' ' || true)
               if [ -n "$syms" ]; then echo "  ${f#"$APP"/}: $syms"; fi
             done < <(find "$APP" -type f)
             echo "Linker flags in effect:"
             grep -rh "OTHER_LDFLAGS" ../../ios/App/Pods/Target\ Support\ Files/Pods-App/*.xcconfig 2>/dev/null | head -3 || true
+            # The datum that distinguishes the two possible causes, and the one missing
+            # both times this fired:
+            #   present here but not in the app -> the link dropped it
+            #   absent here                     -> the plugin source was never compiled,
+            #                                      i.e. cap sync did not pick it up
+            # Separates "the link dropped it" from "it was never compiled". CocoaPods
+            # builds CordovaPluginsStatic; the SPM leg builds a PurchaselyCordovaPlugin
+            # package target instead, so both names are searched.
+            echo "CDVPurchasely in the built plugin products:"
+            while IFS= read -r lib; do
+              n=$("$NM" -a "$lib" 2>&1 | grep -c '_OBJC_CLASS_\$_CDVPurchasely' || true)
+              echo "  ${lib##*/Build/}: $n"
+            done < <(find build \( -name "*CordovaPluginsStatic*" -o -name "*PurchaselyCordovaPlugin*" \) -type f 2>/dev/null | head -8)
+            echo "Compiled plugin objects:"
+            find build -name "CDVPurchasely*.o" 2>/dev/null | head -5 || true
             exit 1
           fi
 
@@ -203,6 +282,23 @@ jobs:
           fi
 
           echo "OK: CDVPurchasely linked and Purchasely.framework embedded (${{ matrix.manager }})"
+
+      # A rerun RESETS the failed job's log, so re-running before downloading it destroys
+      # the evidence -- which is exactly what happened when this assertion last fired.
+      # Artifacts survive a rerun, so keep the generated project config here instead.
+      - name: Upload the generated iOS project config on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capacitor-${{ matrix.manager }}-ios-config
+          path: |
+            ${{ runner.temp }}/capacitor-ci/package.json
+            ${{ runner.temp }}/capacitor-ci/package-lock.json
+            ${{ runner.temp }}/capacitor-ci/ios/App/Podfile
+            ${{ runner.temp }}/capacitor-ci/ios/App/Podfile.lock
+            ${{ runner.temp }}/capacitor-ci/ios/App/Package.swift
+            ${{ runner.temp }}/capacitor-ci/ios/App/Pods/Target Support Files/Pods-App/
+          if-no-files-found: warn
 
   capacitor-ios-tests:
     name: Capacitor iOS Native Tests
@@ -311,6 +407,55 @@ jobs:
         working-directory: purchasely/example
         run: cordova build android
 
+  android-unit-tests:
+    name: Android Bridge Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Unit coverage for purchasely/src/android/PurchaselyPlugin.kt. `build-android` only
+    # proves the bridge COMPILES; these assert what it actually does with the start
+    # options and with a redemption result. The module compiles the shipped plugin source
+    # as its own main source set, so a refactor that breaks the bridge breaks this job too.
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # No Gradle wrapper is committed for this module, so the action provisions Gradle
+      # rather than the repository carrying a wrapper jar.
+      #
+      # PINNED. Without gradle-version the job takes whatever Gradle the runner image
+      # ships, and AGP 8.10.1 does not support Gradle 9 -- a runner image bump would break
+      # this job with no change to the repository. Bump this with the AGP version in
+      # purchasely/android-tests/build.gradle.
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.2"
+
+      # verifyTestsRan depends on testDebugUnitTest and then fails unless the run
+      # actually produced tests. Without it a green job cannot be told apart from one
+      # that ran zero tests: Gradle marks a test task with no sources NO-SOURCE, skips
+      # it, and still succeeds.
+      - name: Run the Android bridge unit tests
+        working-directory: purchasely/android-tests
+        run: gradle verifyTestsRan --console=plain
+
+      - name: Upload the test report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-unit-test-report
+          path: purchasely/android-tests/build/reports/tests/
+
   validate-versions:
     name: Validate Version Consistency
     runs-on: ubuntu-latest
@@ -318,6 +463,26 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+
+      # The Capacitor CLI REWRITES purchasely/Package.swift in place on every `cap sync`,
+      # and npm installs a `file:` dependency as a symlink, so a sync in a local sample
+      # edits the repository copy rather than a copy of it. That happened during this
+      # release: the packed tarball carried a Package.swift depending on
+      # capacitor-swift-pm instead of cordova-ios, which fails every Cordova iOS 8
+      # consumer with "multiple packages declare targets with a conflicting name:
+      # 'Cordova'". The file's own comment asks a human to check `git status`, which is
+      # exactly the kind of instruction that gets skipped, so it is asserted here.
+      - name: Check Package.swift was not rewritten by a Capacitor sync
+        run: |
+          if grep -q "capacitor-swift-pm" purchasely/Package.swift; then
+            echo "::error file=purchasely/Package.swift::Package.swift depends on capacitor-swift-pm. A local 'cap sync' rewrote it; restore it with 'git checkout -- purchasely/Package.swift'."
+            exit 1
+          fi
+          if ! grep -q "apache/cordova-ios.git" purchasely/Package.swift; then
+            echo "::error file=purchasely/Package.swift::Package.swift no longer depends on apache/cordova-ios."
+            exit 1
+          fi
+          echo "✅ Package.swift depends on apache/cordova-ios"
 
       - name: Check version consistency
         run: |
@@ -332,6 +497,7 @@ jobs:
           LOCK_PKG_VERSION=$(jq -r '.packages[""].version' purchasely/package-lock.json)
           EXAMPLE_LOCK_PLUGIN_VERSION=$(jq -r '.packages[".."].version' purchasely/example/package-lock.json)
           EXAMPLE_LOCK_GOOGLE_VERSION=$(jq -r '.packages["../../purchasely-google"].version' purchasely/example/package-lock.json)
+          CAPACITOR_LOCK_PLUGIN_VERSION=$(jq -r '.packages[".."].version' purchasely/example-capacitor/package-lock.json)
 
           echo "purchasely/plugin.xml: $PLUGIN_XML_VERSION"
           echo "purchasely/package.json: $PACKAGE_JSON_VERSION"
@@ -343,6 +509,7 @@ jobs:
           echo "purchasely/package-lock.json (packages['']): $LOCK_PKG_VERSION"
           echo "purchasely/example/package-lock.json (packages['..']): $EXAMPLE_LOCK_PLUGIN_VERSION"
           echo "purchasely/example/package-lock.json (packages['../../purchasely-google']): $EXAMPLE_LOCK_GOOGLE_VERSION"
+          echo "purchasely/example-capacitor/package-lock.json (packages['..']): $CAPACITOR_LOCK_PLUGIN_VERSION"
 
           fail=0
           check() {
@@ -360,6 +527,10 @@ jobs:
           check "purchasely/package-lock.json (packages[''])" "$LOCK_PKG_VERSION"
           check "purchasely/example/package-lock.json (packages['..'])" "$EXAMPLE_LOCK_PLUGIN_VERSION"
           check "purchasely/example/package-lock.json (packages['../../purchasely-google'])" "$EXAMPLE_LOCK_GOOGLE_VERSION"
+          # The Capacitor sample's lockfile was missed by the 6.0.1 release and went
+          # stale at 6.0.0. `npm ci` tolerates a stale version on a `link` entry, so
+          # nothing else catches it. Reported by Greptile on #73.
+          check "purchasely/example-capacitor/package-lock.json (packages['..'])" "$CAPACITOR_LOCK_PLUGIN_VERSION"
 
           if [ $fail -ne 0 ]; then exit 1; fi
           echo "✅ All versions are consistent: $PLUGIN_XML_VERSION"

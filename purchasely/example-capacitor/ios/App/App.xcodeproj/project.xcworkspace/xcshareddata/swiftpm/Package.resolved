@@ -1,5 +1,5 @@
 {
-  "originHash" : "f21dc33b5a52e8b278691dccd3c62ad2257b1619b8f5da8208bf5d97a6572df4",
+  "originHash" : "3ba524fa908060899aaca520137f31eac361658009348131cd74de4f144ab7a1",
   "pins" : [
     {
       "identity" : "capacitor-swift-pm",
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Purchasely/Purchasely-iOS.git",
       "state" : {
-        "revision" : "ee04d65d87055778a91cb27ffc95b45476c93d5a",
-        "version" : "6.0.0"
+        "revision" : "840dfcef030ad49517c69803aa57e6129a169269",
+        "version" : "6.1.0"
       }
     }
   ],

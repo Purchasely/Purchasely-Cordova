@@ -29,6 +29,82 @@
     self.pendingInterceptCompletions = [NSMutableDictionary new];
 }
 
++ (CDVPurchaselyProxyOption)proxyOptionFor:(id _Nullable)value url:(NSURL * _Nullable * _Nullable)outUrl {
+    if (outUrl != NULL) {
+        *outUrl = nil;
+    }
+    // An absent key and an explicit null are different operations. Check NSNull FIRST:
+    // it is a real object, so an `isKindOfClass:[NSString class]` test would fall through
+    // to the absent branch and turn a requested clear into a silent no-op.
+    if (value == nil) {
+        return CDVPurchaselyProxyOptionAbsent;
+    }
+    if (value == [NSNull null]) {
+        return CDVPurchaselyProxyOptionClear;
+    }
+    if (![value isKindOfClass:[NSString class]]) {
+        return CDVPurchaselyProxyOptionInvalid;
+    }
+    // Do not validate the scheme, the host, a query, a fragment or credentials here. The
+    // native SDK refuses those with an error log and keeps the production host, and it
+    // drops a trailing slash. The bridge only rejects what will not convert at all.
+    NSURL *url = [NSURL URLWithString:(NSString *)value];
+    if (url == nil) {
+        return CDVPurchaselyProxyOptionInvalid;
+    }
+    if (outUrl != NULL) {
+        *outUrl = url;
+    }
+    return CDVPurchaselyProxyOptionSet;
+}
+
++ (NSDictionary<NSString *, id> * _Nonnull)webRedemptionBodyWithSuccess:(BOOL)isSuccess
+                                                             hasContext:(BOOL)hasContext
+                                                           subscription:(NSDictionary * _Nullable)subscription
+                                                                 replay:(BOOL)replay
+                                                              errorCode:(NSString * _Nullable)errorCode
+                                                           errorMessage:(NSString * _Nullable)errorMessage {
+    // Every key is always present, on both branches, so a JS listener reads one shape
+    // whether the redemption was granted or refused. Absence is NSNull, never a missing
+    // key: a missing key reaches JS as `undefined` instead of `null`.
+    id context = [NSNull null];
+    if (hasContext) {
+        context = @{ @"subscription": subscription ?: [NSNull null] };
+    }
+    return @{
+        @"isSuccess":    @(isSuccess),
+        @"context":      context,
+        @"replay":       @(replay),
+        @"errorCode":    errorCode ?: [NSNull null],
+        @"errorMessage": errorMessage ?: [NSNull null]
+    };
+}
+
++ (NSUUID * _Nullable)canonicalUUIDFromString:(id _Nullable)value {
+    if (![value isKindOfClass:[NSString class]]) {
+        return nil;
+    }
+    return [[NSUUID alloc] initWithUUIDString:(NSString *)value];
+}
+
+/// Cordova calls this when the WebView navigates, which invalidates every callbackId the
+/// previous page handed us. Without it the stored commands stay live and every listener
+/// callback is sent to a dead callbackId after a reload.
+///
+/// The redemption case is the one that matters most: `webRedemptionDelegate:` is set on the
+/// builder at `start:`, and the SDK holds the delegate weakly, so this object keeps
+/// receiving outcomes for as long as the plugin lives.
+/// `webRedemptionCompletedWithResult:` reads `webRedemptionCommand` at fire time, so a
+/// reloaded page can re-register and keep working; clearing here makes the window in
+/// between a clean no-op rather than a send on a dead callbackId.
+- (void)onReset {
+    self.eventCommand = nil;
+    self.attributeCommand = nil;
+    self.webRedemptionCommand = nil;
+    self.purchasedCommand = nil;
+    [super onReset];
+}
+
 - (void)start:(CDVInvokedUrlCommand*)command {
     // v6: a single options dictionary (see the JS↔native contract), no longer positional args.
     NSDictionary *opts = [command argumentAtIndex:0];
@@ -90,6 +166,68 @@
     if ([allowCampaigns isKindOfClass:[NSNumber class]]) {
         builder = [builder allowCampaigns:allowCampaigns.boolValue];
     }
+
+    // Both bridges report a refused-and-skipped option at the SAME severity, and
+    // deliberately with a plain log line on both: NSLog here, Log.e on Android. Neither
+    // renders UI. Do not reach for anything that puts an overlay or an alert in front of
+    // the host app: start() continues, the option was simply ignored, and a third-party
+    // SDK has no business interrupting someone else's app over an option it chose to skip.
+
+    // v6.1.0: JS has no UUID type, so the id crosses the bridge as a string and is parsed
+    // here. The native builder takes an NSUUID, which is where the guarantee used to live;
+    // a string-typed bridge is the only place left to catch a bad value. Refuse it loudly
+    // and skip the option. The SDK still starts, matching how native treats an unusable
+    // proxy url.
+    id anonymousUserId = opts[@"anonymousUserId"];
+    if ([anonymousUserId isKindOfClass:[NSString class]]) {
+        NSUUID *parsed = [CDVPurchasely canonicalUUIDFromString:anonymousUserId];
+        if (parsed == nil) {
+            // The value is NOT logged. A mis-wired field lands here just as easily as a
+            // typo -- an email, an appUserId -- and a device log is captured during
+            // support. The length is enough to tell a truncated id from a wrong field.
+            NSLog(@"[Purchasely] `anonymousUserId` must be a canonical UUID string, for example "
+                   "\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\". Received a %lu-character value. "
+                   "The anonymous user id is not applied.",
+                  (unsigned long)((NSString *)anonymousUserId).length);
+        } else {
+            NSNumber *override = opts[@"anonymousUserIdOverride"];
+            BOOL shouldOverride = [override isKindOfClass:[NSNumber class]] ? override.boolValue : NO;
+            builder = [builder appAnonymousUserId:parsed override:shouldOverride];
+        }
+    }
+
+    // v6.1.0: three states, and they are not interchangeable. An absent key makes no
+    // native call and leaves the current setting untouched; an explicit null clears the
+    // proxy and returns to api.purchasely.io, which is a supported operation and not an
+    // error; a string routes the API host. A value NSURL cannot convert skips the
+    // modifier, because `proxyWithApi:nil` means CLEAR, not "ignore this value", so
+    // passing nil would silently disable a proxy the app asked for.
+    NSURL *proxyUrl = nil;
+    switch ([CDVPurchasely proxyOptionFor:opts[@"proxy"] url:&proxyUrl]) {
+        case CDVPurchaselyProxyOptionAbsent:
+            break;
+        case CDVPurchaselyProxyOptionClear:
+            builder = [builder proxyWithApi:nil];
+            break;
+        case CDVPurchaselyProxyOptionSet:
+            builder = [builder proxyWithApi:proxyUrl];
+            break;
+        case CDVPurchaselyProxyOptionInvalid:
+            NSLog(@"[Purchasely] `proxy` must be an https base URL, for example "
+                   "\"https://svc.purchasely.io\", or null to clear the proxy. Received "
+                   "\"%@\". The proxy is not applied.", opts[@"proxy"]);
+            break;
+    }
+
+    // v6.1.0: registered unconditionally. The native SDK has no runtime setter on purpose,
+    // because a redemption can settle during `start()` (a cold start that the `ply/redeem`
+    // link itself triggered, or a token a previous launch left pending). The delegate
+    // callback returns early when `addWebRedemptionListener` recorded no command, so this
+    // is behaviour-neutral by default.
+    NSNumber *handlesRedemptionAlert = opts[@"appHandlesRedemptionAlert"];
+    builder = [builder webRedemptionDelegate:self
+                   appHandlesRedemptionAlert:[handlesRedemptionAlert isKindOfClass:[NSNumber class]]
+                                             ? handlesRedemptionAlert.boolValue : NO];
 
     // Cold-start deeplink URL captured at launch (handled automatically once start completes).
     NSString *deeplink = opts[@"deeplink"];
@@ -525,6 +663,41 @@
     // v6 `setEventDelegate:` is _Nonnull (no native unregister). The delegate stays
     // registered; clearing eventCommand makes `eventTriggered:` a no-op.
     self.eventCommand = nil;
+}
+
+/// End a kept-alive Cordova callback stream, freeing its JavaScript closure.
+///
+/// Every result this bridge sends a listener carries `keepCallback:YES`, so dropping the
+/// native command alone leaks the JS closure until the WebView reloads. NO_RESULT with
+/// `keepCallback:NO` is cordova.js's own documented way out: it "is used to remove a
+/// callback from the list without calling the callbacks".
+- (void)releaseCallbackStream:(CDVInvokedUrlCommand * _Nullable)command {
+    if (command == nil) {
+        return;
+    }
+    CDVPluginResult *terminal = [CDVPluginResult resultWithStatus:CDVCommandStatus_NO_RESULT];
+    [terminal setKeepCallbackAsBool:NO];
+    [self.commandDelegate sendPluginResult:terminal callbackId:command.callbackId];
+}
+
+// v6.1.0. The PLYWebRedemptionDelegate is registered on the builder chain in `start:` (the
+// native SDK has no runtime setter, because a redemption can settle during start()), so
+// this action only records the command to route the outcome to. Call it BEFORE start().
+- (void)addWebRedemptionListener:(CDVInvokedUrlCommand*)command {
+    // Close the previous stream before replacing it, or its JS closure stays in
+    // cordova.callbacks forever.
+    [self releaseCallbackStream:self.webRedemptionCommand];
+    self.webRedemptionCommand = command;
+}
+
+- (void)removeWebRedemptionListener:(CDVInvokedUrlCommand*)command {
+    // The delegate stays registered. Clearing the command makes
+    // `webRedemptionCompletedWithResult:` a no-op.
+    [self releaseCallbackStream:self.webRedemptionCommand];
+    self.webRedemptionCommand = nil;
+    // Acknowledge the remove itself, so ITS callbackId is freed too. A void action that
+    // never answers leaks its own entry exactly like the listener's.
+    [self successFor:command resultBool:YES];
 }
 
 - (void)removeUserAttributeListener:(CDVInvokedUrlCommand*)command {

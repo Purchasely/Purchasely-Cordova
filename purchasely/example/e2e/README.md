@@ -18,6 +18,82 @@ Cordova imperative API. They are **not** part of the PR-gating `ci.yml`; they ru
 |-------|------|------|-------|
 | bridge | `specs/bridge.e2e.js` | **hard** | anonymous id, allProducts, fetchPresentationForPlacement, synchronize completion, user-attribute round-trip (string/int/boolean), userSubscriptions |
 | dismiss | `specs/dismiss.e2e.js` | best-effort | present placement or default presentation + programmatic close → dismiss outcome + `closeReason` (needs a paywall to render) |
+| start options 6.1.0 | `specs/start-options-6-1-0.e2e.js` | **hard**, except the redemption outcome (see below) | the 6.1.0 surface exists on the object Cordova clobbered on-device; `proxy`'s three states (url / present null / absent key) asserted against each other after a real JSON round trip; `anonymousUserId` + its override flag in the built payload, and a canonical id back from native; a `ply/redeem` deeplink settling through native into the JS listener |
+
+The `proxy` assertions cover the **built payload** and its JSON round trip inside the real
+WebView, not the `cordova.exec` hand-off. That hand-off, and the chain-time subscription
+order, are asserted in the Jest suite where `cordova/exec` is a mock — they cannot be
+observed on-device, because the plugin captures `require('cordova/exec')` at module load
+and the global cannot be hooked afterwards. The native resolvers are covered by the XCTest
+target (`purchasely/example-capacitor`) and the Android unit-test module
+(`purchasely/android-tests`).
+
+Nothing asserts that the SDK's resolved API host changed: that is SDK-internal state this
+harness cannot observe.
+
+**The redemption outcome is NOT hard-gated, despite the spec being registered as `hard`.**
+It needs the real backend reachable from the runner, so when no outcome arrives the spec
+logs `[redemption] KNOWN:` and returns instead of asserting on something that cannot
+arrive — the same policy the store-dependent bridge assertions use. The other ten
+assertions in the file are genuinely hard-gated. Read a green run's log for
+`[redemption] KNOWN` before treating the redemption path as verified: absent means it
+really settled and the assertions ran.
+
+The sample deliberately starts with `appHandlesRedemptionAlert: true` so the SDK popin is
+**not** in the loop. Under the native default (`false`) the listener is called only once the
+user dismisses that popin, and the native doc is explicit that the alert is held until an
+activity reaches the foreground and re-shown if its activity is destroyed. On a loaded
+emulator that stalled this assertion — it skipped with `alertDismissed=false` on Android
+while the same commit settled on iOS. With `true` only the backend call remains.
+
+### Why not a fake backend
+
+The obvious next step is to point the SDK at a local stub with 6.1.0's own `proxy` option
+and get a deterministic success, failure and replay. Two things block it today, both
+verified in the native sources rather than assumed:
+
+- `proxy` accepts **https only** (`PLYProxyApiUrl.kt:24`, `parsed.scheme != "https"` →
+  rejected). A stub server therefore needs TLS plus a CA the emulator and the simulator
+  trust — a `network_security_config.xml` for the debug build on Android, and
+  `simctl keychain add-root-cert` on iOS.
+- `proxy` has **no runtime setter**, by design: assigning the environment rebuilds the
+  Retrofit clients, which read their base URL only at build time. So the sample would have
+  to *start* with the proxy, which would take the real backend away from every other spec
+  in this suite. That needs a second app configuration, not a flag.
+
+Worth doing, because it is the only way to reach the **success** and **replay** branches
+end to end — an invalid token can only ever produce a failure. It is a separate piece of
+work, not a tail-end addition.
+
+## The suite must run the build you just made
+
+Both wdio configs set `appium:enforceAppInstall: true`. Do not remove it.
+
+Appium otherwise compares the installed package's version against the artifact and, when
+they match, does a **fast reset** (clear app data) instead of reinstalling. The Android AVD
+is restored from a cache, so the app is already present at the same `versionCode` from an
+earlier run, and the emulator then serves the **previous build's** bundled plugin JS. A
+`cordova build` never bumps the version, so the comparison always matches.
+
+This silently invalidated the suite: `start-options-6-1-0` was the first spec to exercise
+newly added JS, and every one of its 6.1.0 lookups came back `undefined` against code that
+was verifiably present in the APK. The older suites never noticed, because the stale build
+already contained everything they assert. Proven in `appium-android.log`:
+
+```
+[AndroidUiautomator2Driver] Performing fast reset on 'com.purchasely.demo'
+```
+
+## Adding a spec
+
+`tools/ci_run_e2e.sh` and `tools/ci_run_e2e_ios.sh` name every spec **explicitly** and pass
+`--spec`, so wdio's own `specs: ['./specs/**/*.e2e.js']` glob does **not** apply in CI. A
+new spec file that is not added to both scripts never runs there, while the job still
+reports green. `start-options-6-1-0.e2e.js` shipped that way on its first push.
+
+Both scripts now assert that every `./specs/*.e2e.js` on disk has a `run_suite` line, and
+fail with `::error::spec file(s) not registered` otherwise. So add the spec, add its
+`run_suite` line with a hard or soft gate, and the guard keeps the two in step.
 
 Best-effort suites emit `::warning::` on failure and do not fail the job (native/paywall
 rendering is flaky in CI — same policy as the Flutter suite). Each suite retries up to 3×.

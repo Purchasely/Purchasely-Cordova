@@ -19,6 +19,10 @@ exports.config = Object.assign({}, config, {
     platformName: 'iOS',
     'appium:automationName': 'XCUITest',
     'appium:app': APP,
+    // Force a reinstall on every session, for the same reason as the Android config:
+    // XCUITest also skips reinstalling a bundle it considers unchanged, so the simulator
+    // can serve a previous build's bundled plugin JS. See wdio.android.conf.js.
+    'appium:enforceAppInstall': true,
     // The Cordova sample's id. Both the app path and the id are overridable so this config
     // can drive another host's .app unchanged. No workflow does that today: the Capacitor
     // leg is blocked because Appium cannot attach to the Capacitor web view, and the

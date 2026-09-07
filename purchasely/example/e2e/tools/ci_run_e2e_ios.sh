@@ -9,7 +9,36 @@ set -uo pipefail
 
 UDID="${1:-booted}"
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
+# Absolute path to this script, resolved BEFORE any cd. CI invokes it by a path
+# relative to the repository root, so after `cd "$HERE"` a bare $0 points at nothing and
+# every grep against it fails silently.
+SELF="$HERE/tools/$(basename "$0")"
 LOGDIR="$HERE/ci-logs"
+
+# Every spec file on disk must have a run_suite line below.
+#
+# These scripts name each spec EXPLICITLY and pass --spec, so wdio's own
+# `specs: ['./specs/**/*.e2e.js']` glob does not apply here. A new spec that is not listed
+# never runs in CI while the job still reports green, which is what happened to
+# start-options-6-1-0 on its first push.
+#
+# Runs before Appium starts, so a config mistake fails in a second instead of after a
+# driver install. Paths are absolute and compared against $SELF, not $0: CI invokes this
+# script by a path relative to the repository root, so a bare $0 stops resolving after the
+# `cd "$HERE"` further down and every grep against it fails silently.
+missing=""
+for f in "$HERE"/specs/*.e2e.js; do
+  [ -e "$f" ] || continue
+  rel="./specs/$(basename "$f")"
+  grep -q "run_suite \"$rel\"" "$SELF" || missing="$missing $rel"
+done
+if [ -n "$missing" ]; then
+  echo "::error::spec file(s) not registered in $(basename "$SELF"):$missing"
+  echo "Add a run_suite line for each, choosing a hard or soft gate."
+  exit 1
+fi
+echo "== All $(ls -1 "$HERE"/specs/*.e2e.js | wc -l | tr -d ' ') spec file(s) are registered =="
+
 mkdir -p "$LOGDIR"
 export PURCHASELY_E2E_UDID="$UDID"
 
@@ -51,7 +80,13 @@ run_suite() { # $1 = spec, $2 = hard|soft
 
 cd "$HERE"
 rc=0
+
 run_suite "./specs/bridge.e2e.js"          hard || rc=1
+# NOTE: these scripts name every spec EXPLICITLY and pass --spec, so wdio's
+# `specs: ['./specs/**/*.e2e.js']` glob does NOT apply here. A new spec file that is not
+# added to this list silently never runs in CI, which is exactly what happened to
+# start-options-6-1-0 on its first push.
+run_suite "./specs/start-options-6-1-0.e2e.js" hard || rc=1
 run_suite "./specs/preload-display.e2e.js" hard || rc=1
 run_suite "./specs/dismiss.e2e.js"         soft || true
 run_suite "./specs/interceptor.e2e.js"     soft || true

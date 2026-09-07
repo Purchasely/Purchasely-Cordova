@@ -59,11 +59,25 @@ function presentationDispatcher(success, callbacks) {
 //   allowDeeplink   (bool, optional)
 //   allowCampaigns  (bool, optional)
 //   deeplink        (string, optional — cold-start deeplink URL)
+//
+// Purchasely 6.1.0 adds four options:
+//   anonymousUserId         (string, optional — a canonical UUID string; a bad value is
+//                            logged and skipped, start() still succeeds)
+//   anonymousUserIdOverride (bool, optional — false; true SPLITS the user history)
+//   proxy                   (string|null, optional — Android+iOS. THREE STATES:
+//                              'https://…'  routes the API host
+//                              null         CLEARS it, back to api.purchasely.io
+//                              key absent   leaves the current setting untouched
+//                            A clear is a supported native operation, not an error.)
+//   appHandlesRedemptionAlert (bool, optional — false keeps the SDK popin, true hands the
+//                            result screen to the app. See addWebRedemptionListener.)
+//
+// README.md "What is new in 6.1.0" is the reference for all four.
 exports.start = function (options, success, error) {
     var opts = options || {};
     var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
     if(!cordovaSdkVersion) {
-        cordovaSdkVersion = "6.0.1";
+        cordovaSdkVersion = "6.1.0";
     }
     opts.sdkVersion = cordovaSdkVersion;
     exec(success, error, 'Purchasely', 'start', [opts]);
@@ -89,7 +103,76 @@ PLYStartBuilder.prototype.storekitVersion = function (value) { this._options.sto
 PLYStartBuilder.prototype.storeKit1 = function (value) { this._options.storeKit1 = value; return this; };
 PLYStartBuilder.prototype.deeplink = function (value) { this._options.deeplink = value; return this; };
 
+// Purchasely 6.1.0. `id` must be a canonical UUID string; `override` defaults to false.
+// See the exports.start option block for the full contract.
+PLYStartBuilder.prototype.anonymousUserId = function (id, override) {
+    this._options.anonymousUserId = id;
+    this._options.anonymousUserIdOverride = override === undefined ? false : override;
+    return this;
+};
+
+// Purchasely 6.1.0. Pass an https base URL to route the API host, or null to CLEAR a
+// proxy and return to api.purchasely.io. Both differ from never calling the modifier,
+// which leaves the current setting untouched. See the exports.start option block.
+//
+// An argument is required. `proxy()` with none is refused, because the no-argument native
+// modifiers disagree across platforms: iOS `proxy()` routes through Purchasely's own
+// proxy at svc.purchasely.io, while Android `proxy()` clears. A Cordova shorthand would
+// therefore mean two different things on the two platforms.
+//
+// `undefined` is never stored: JSON.stringify drops an undefined-valued key, which would
+// make an explicit clear indistinguishable from an absent option on both natives.
+PLYStartBuilder.prototype.proxy = function (api) {
+    // An explicit `undefined` is treated exactly like no argument at all, and NOT as null.
+    // The two public entry points have to agree on the same input: JSON.stringify drops an
+    // undefined-valued key, so `start({ proxy: undefined })` reaches native as Absent.
+    // Mapping it to null here would make `builder(k).proxy(config.proxy)` CLEAR the proxy
+    // whenever config.proxy has not loaded yet, which is the opposite of leaving it alone.
+    if (arguments.length === 0 || api === undefined) {
+        defaultError('[Purchasely] proxy() requires an argument: an https base URL, or ' +
+            'null to clear the proxy. The proxy option is not applied.');
+        return this;
+    }
+    this._options.proxy = api;
+    return this;
+};
+
+// Purchasely 6.1.0. false (the default) keeps the SDK's own redemption popin.
+PLYStartBuilder.prototype.appHandlesRedemptionAlert = function (handles) {
+    this._options.appHandlesRedemptionAlert = handles;
+    return this;
+};
+
+// Purchasely 6.1.0: the PRIMARY way to receive Web2App redemption outcomes.
+//
+//   Purchasely.builder(apiKey).webRedemptionListener(onRedemption, true).start()
+//
+// The callback never crosses the bridge: each native registers ITSELF as the delegate at
+// start() and forwards outcomes as a Cordova callback stream, so this is a JS concern only.
+//
+// STORED HERE, SUBSCRIBED IN start(), just before the native call. Do not move it back:
+// subscribing at chain time leaks a live callback from a builder that is never started. A
+// redemption can only settle once the SDK runs, so subscribing here still covers one that
+// settles DURING start(), which is the case the feature exists for.
+//
+// 2nd argument = appHandlesRedemptionAlert; omitting it keeps the native default. Callback
+// first, matching iOS -- the natives disagree on order (Android takes the flag first).
+PLYStartBuilder.prototype.webRedemptionListener = function (callback, appHandlesRedemptionAlert) {
+    // Kept off _options on purpose: that object is the exec payload, and a callback has no
+    // business being serialized into it.
+    this._webRedemptionCallback = callback;
+    if (appHandlesRedemptionAlert !== undefined) {
+        this._options.appHandlesRedemptionAlert = appHandlesRedemptionAlert;
+    }
+    return this;
+};
+
 PLYStartBuilder.prototype.start = function (success, error) {
+    // Subscribe immediately before the native start call, never earlier. See
+    // webRedemptionListener above for why this is deferred to here.
+    if (this._webRedemptionCallback) {
+        exports.addWebRedemptionListener(this._webRedemptionCallback);
+    }
     if (success) {
         exports.start(this._options, success, error);
         return undefined;
@@ -116,6 +199,37 @@ exports.addEventListener = function (success, error) {
 // @deprecated use addEventListener instead.
 exports.addEventsListener = function (success, error) {
     exec(success, error, 'Purchasely', 'addEventsListener', []);
+};
+
+// Purchasely 6.1.0: the outcome of a Web2App redemption ({scheme}://ply/redeem/{token}).
+//
+// SECONDARY PATH, for replacing the listener while the SDK already runs. Prefer
+// builder(apiKey).webRedemptionListener(cb). Both share ONE native slot: last caller wins.
+//
+// success receives { isSuccess, context, replay, errorCode, errorMessage }:
+//   isSuccess     Bool.
+//   context       { subscription } or null, and `subscription` is separately nullable.
+//                 Same shape as userSubscriptions(), so purchaseToken, nextRenewalDate and
+//                 cancelledDate may be absent -- Android sends an explicit null, iOS omits
+//                 the key. A truthiness check covers both; `!== undefined` does not.
+//   replay        Bool. The SERVER says the token was redeemed before. False on failure.
+//   errorCode     'EXPIRED_REDEMPTION_TOKEN' | 'INVALID_REDEMPTION_TOKEN' | null.
+//   errorMessage  Human-readable, English, or null. Never contains the token.
+//
+// Called on the main thread, exactly once per settled redemption.
+//
+// PRIVACY, BOTH PLATFORMS: errorMessage for an expired link can carry a MASKED EMAIL
+// ADDRESS. Show it to the user; never log it or send it to analytics or a crash reporter.
+// The rule is unconditional -- do NOT gate it on a platform check. The REDEMPTION_FAILED
+// event drops the hint, so that channel is safe.
+exports.addWebRedemptionListener = function (success, error) {
+    exec(success, error, 'Purchasely', 'addWebRedemptionListener', []);
+};
+
+// Purchasely 6.1.0: stop receiving redemption outcomes. The native delegate stays
+// registered (it is fixed at start()); clearing the callback makes it a no-op.
+exports.removeWebRedemptionListener = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'removeWebRedemptionListener', []);
 };
 
 exports.addUserAttributeListener = function(success, error) {
@@ -508,6 +622,11 @@ exports.userDidConsumeSubscriptionContent = function () {
 
 // PAR-29: invalidateCache forces a fresh fetch instead of returning the cached list
 // (native default false on both platforms).
+// A subscription's purchaseToken, nextRenewalDate and cancelledDate can all be ABSENT, and
+// the two platforms report absence differently: Android sends the key with an explicit
+// null, iOS omits it entirely (and never emits purchaseToken at all, because the native
+// PLYSubscription has no such property). Handle both -- a truthiness check covers them,
+// `!== undefined` does not. Same shape as the web redemption context's `subscription`.
 exports.userSubscriptions = function (success, error, invalidateCache) {
     exec(success, defaultError, 'Purchasely', 'userSubscriptions', [!!invalidateCache]);
 };
@@ -731,12 +850,23 @@ exports.PurchaseResult = {
 	RESTORED: 2
 }
 
+// Values are the NATIVE raw values, verified against the shipped 6.1.0 artifacts:
+// iOS PLYSubscriptionSource (stripe = 4, none = 5) and Android StoreType ordinals
+// (WEB_CHECKOUT_STRIPE = 4, NONE = 5). Both platforms agree, so there is no
+// per-platform mapping here and no renumbering hazard.
+//
+// `webCheckoutStripe` was missing and `none` was 4, which was correct before the native
+// SDKs inserted the Stripe case at 4 (Android ~5.5.0) and pushed NONE to 5. A Web2App
+// subscription therefore reported `none`, and a genuinely sourceless one reported a value
+// this object had no name for. A Web2App redemption grants a subscription from exactly
+// that source, so `context.subscription` is the payload most likely to carry it.
 exports.SubscriptionSource = {
     appleAppStore: 0,
     googlePlayStore: 1,
     amazonAppstore: 2,
     huaweiAppGallery: 3,
-    none: 4
+    webCheckoutStripe: 4,
+    none: 5
 }
 
 exports.PlanType = {

@@ -16,6 +16,7 @@ import io.purchasely.ext.PLYEvent
 import io.purchasely.ext.PLYInterceptResult
 import io.purchasely.ext.PLYInterceptorInfo
 import io.purchasely.ext.PLYRunningMode
+import io.purchasely.ext.PLYWebRedemptionListener
 import io.purchasely.ext.PurchaseListener
 import io.purchasely.ext.Purchasely
 import io.purchasely.ext.State
@@ -33,6 +34,7 @@ import io.purchasely.models.PLYPlan
 import io.purchasely.models.PLYPresentationPlan
 import io.purchasely.models.PLYProduct
 import io.purchasely.models.PLYSubscriptionData
+import io.purchasely.models.PLYWebRedemptionResult
 import io.purchasely.views.presentation.PLYThemeMode
 import io.purchasely.views.presentation.models.PLYDimensionType
 import io.purchasely.views.presentation.models.PLYTransition
@@ -53,6 +55,9 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.util.UUID
+import java.net.URI
+import java.net.URISyntaxException
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -87,7 +92,41 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
 
     override fun onDestroy() {
         job.cancel()
+        clearCallbackContexts()
         super.onDestroy()
+    }
+
+    /**
+     * Cordova calls this when the WebView navigates, which invalidates every callbackId the
+     * previous page handed us.
+     */
+    override fun onReset() {
+        clearCallbackContexts()
+        super.onReset()
+    }
+
+    /**
+     * Drop every stored [CallbackContext].
+     *
+     * These live on the companion object, so they are STATIC: they outlive both the plugin
+     * instance and the WebView. Neither teardown path cleared them before, which left two
+     * problems. Each stale context holds a reference to the dead CordovaWebView, so the
+     * whole view tree leaked. And the native SDK listeners registered at `start()` outlive
+     * the activity, so an event arriving after a teardown was sent into a dead bridge
+     * instead of being dropped.
+     *
+     * The redemption case is the one that matters most. `webRedemptionListener` is set on
+     * the builder, and `Purchasely.Builder.build()` REASSIGNS the SDK's static listener on
+     * every call, so a page reload that starts again replaces the lambda rather than
+     * stacking one. Until it does, the lambda from the previous plugin instance is still
+     * live and reads `webRedemptionCallback` lazily, at fire time. Clearing here is what
+     * makes that window a clean no-op rather than a send into a dead callbackId.
+     */
+    private fun clearCallbackContexts() {
+        defaultCallback = null
+        eventsCallback = null
+        attributesCallback = null
+        webRedemptionCallback = null
     }
 
     override fun execute(
@@ -103,6 +142,8 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 "addUserAttributeListener" -> addUserAttributesListener(callbackContext)
                 "removeUserAttributeListener" -> removeUserAttributesListener()
                 "removeEventsListener" -> removeEventsListener()
+                "addWebRedemptionListener" -> addWebRedemptionListener(callbackContext)
+                "removeWebRedemptionListener" -> removeWebRedemptionListener(callbackContext)
                 "getAnonymousUserId" -> getAnonymousUserId(callbackContext)
                 "isAnonymous" -> isAnonymous(callbackContext)
                 "userLogin" -> userLogin(getStringFromJson(args.getString(0)), callbackContext)
@@ -281,6 +322,37 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         val allowCampaigns = if (options.has("allowCampaigns")) options.optBoolean("allowCampaigns") else null
         val deeplink = getStringFromJson(options.optString("deeplink"))
         val sdkVersion = getStringFromJson(options.optString("sdkVersion"))
+        // Both bridges report a refused-and-skipped option at the SAME severity, and
+        // deliberately with a plain log line on both: Log.e here, NSLog on iOS. Neither
+        // renders UI. Do not reach for anything that puts an overlay or a dialog in front
+        // of the host app: start() continues, the option was simply ignored, and a
+        // third-party SDK has no business interrupting someone else's app over an option
+        // it chose to skip.
+        // v6.1.0: three states, and they are not interchangeable. See [resolveProxyOption].
+        val proxyOption = resolveProxyOption(options)
+        if (proxyOption is PLYProxyOption.Invalid) {
+            Log.e("Purchasely", "`proxy` must be an https base URL, for example " +
+                "\"https://svc.purchasely.io\", or null to clear the proxy. Received a " +
+                "${proxyOption.rawValue?.length ?: 0}-character value. The proxy is not applied.")
+        }
+        val appHandlesRedemptionAlert = options.optBoolean("appHandlesRedemptionAlert", false)
+
+        // v6.1.0: JS has no UUID type, so the id crosses the bridge as a string and is parsed
+        // here. The native builder takes a UUID?, which is where the guarantee used to live; a
+        // string-typed bridge is the only place left to catch a bad value. Refuse it loudly and
+        // skip the option. The SDK still starts, matching how native treats an unusable proxy url.
+        val anonymousUserIdString = getStringFromJson(options.optString("anonymousUserId"))
+        val anonymousUserId = parseCanonicalUuid(anonymousUserIdString)
+        if (anonymousUserIdString != null && anonymousUserId == null) {
+            // The value is NOT logged. A mis-wired field lands here just as easily as a
+            // typo -- an email, an appUserId -- and logcat is collected during support. The
+            // length still distinguishes a truncated id from a wrong field. Matches iOS.
+            Log.e("Purchasely", "`anonymousUserId` must be a canonical UUID string, for example " +
+                "\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\". Received a " +
+                "${anonymousUserIdString.length}-character value. " +
+                "The anonymous user id is not applied.")
+        }
+        val anonymousUserIdOverride = options.optBoolean("anonymousUserIdOverride", false)
 
         Purchasely.Builder(cordova.context)
             .apiKey(apiKey)
@@ -293,6 +365,22 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 allowCampaigns?.let { this.allowCampaigns(it) }
                 // Cold-start deeplink: replayed automatically once started.
                 deeplink?.let { this.handleDeeplink(Uri.parse(it)) }
+                // The three 6.1.0 options are applied through a seam so a unit test can
+                // verify WHICH builder call each resolver state produces. Without it,
+                // swapping the Clear and Set branches passed every test in the repository.
+                applyStartOptions(
+                    builder = this,
+                    proxyOption = proxyOption,
+                    anonymousUserId = anonymousUserId,
+                    anonymousUserIdOverride = anonymousUserIdOverride,
+                    appHandlesRedemptionAlert = appHandlesRedemptionAlert,
+                    // Registered unconditionally: the native SDK has no runtime setter on
+                    // purpose, because a redemption can settle during start(). It sends
+                    // nothing when addWebRedemptionListener recorded no callback.
+                    redemptionListener = PLYWebRedemptionListener { result ->
+                        deliverRedemption(result)
+                    },
+                )
             }
             .build()
 
@@ -390,6 +478,65 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
     private fun removeEventsListener() {
         eventsCallback = null
         Purchasely.eventListener = null
+    }
+
+    /**
+     * v6.1.0. Record the callback the redemption outcome is routed to.
+     *
+     * The native [PLYWebRedemptionListener] is registered on the builder chain in [start] (the
+     * SDK has no runtime setter, because a redemption can settle during `start()`), so this
+     * action only records where to send the outcome. JS must call it BEFORE `start()`.
+     */
+    private fun addWebRedemptionListener(callbackContext: CallbackContext) {
+        // Close the previous stream before replacing it, or its JS closure stays in
+        // cordova.callbacks forever. See [releaseCallbackStream].
+        releaseCallbackStream(webRedemptionCallback)
+        webRedemptionCallback = callbackContext
+    }
+
+    private fun removeWebRedemptionListener(callbackContext: CallbackContext) {
+        // The native listener stays registered; clearing the callback makes it a no-op.
+        releaseCallbackStream(webRedemptionCallback)
+        webRedemptionCallback = null
+        // Acknowledge the remove itself, so ITS callbackId is freed too. A void action that
+        // never answers leaks its own entry exactly like the listener's.
+        callbackContext.success()
+    }
+
+    /**
+     * Send one settled redemption to the JS listener.
+     *
+     * Everything the SDK hands over crosses here, so a test can fire a fabricated
+     * [PLYWebRedemptionResult] through the real delivery path and assert exactly what
+     * Cordova receives: the JSON body, and `keepCallback = true` so the stream stays open
+     * for the next redemption.
+     *
+     * A no-op when no listener is registered, which is why registering the SDK listener
+     * unconditionally at `start()` is behaviour-neutral.
+     */
+    internal fun deliverRedemption(result: PLYWebRedemptionResult) {
+        val callback = webRedemptionCallback ?: return
+        val pluginResult = PluginResult(
+            PluginResult.Status.OK,
+            webRedemptionResultToJson(result, Companion::transformSubscriptionToMap)
+        )
+        pluginResult.keepCallback = true
+        callback.sendPluginResult(pluginResult)
+    }
+
+    /**
+     * End a kept-alive Cordova callback stream, freeing its JavaScript closure.
+     *
+     * Every result the bridge sends a listener carries `keepCallback = true`, so dropping
+     * the native reference alone leaks the JS closure until the WebView reloads. NO_RESULT
+     * with `keepCallback = false` is cordova.js's own documented way out: it "is used to
+     * remove a callback from the list without calling the callbacks".
+     */
+    private fun releaseCallbackStream(callback: CallbackContext?) {
+        if (callback == null) return
+        val terminal = PluginResult(PluginResult.Status.NO_RESULT)
+        terminal.keepCallback = false
+        callback.sendPluginResult(terminal)
     }
 
     private fun getAnonymousUserId(callbackContext: CallbackContext) {
@@ -808,45 +955,10 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         }
     }
 
-    // Hardening for the upcoming rc.4 native release: PLYPlan.toMap()'s raw "type" entry is
-    // moving from an ordinal (Int) to the DistributionType name (String). transformPlanToMap
-    // already overwrites "type" explicitly wherever it's used, but allProducts/
-    // productWithIdentifier/the subscription's nested "product" field pass product.toMap()
-    // straight through -- normalize those raw plan entries so the JS PlanType contract
-    // (an ordinal) stays stable across both native formats. Both formats resolve to the same
-    // ordinal since DistributionType's declared order already matches Purchasely.PlanType.
-    private fun normalizePlanTypeOrdinal(raw: Any?): Int? = when (raw) {
-        is Number -> raw.toInt()
-        is String -> runCatching { DistributionType.valueOf(raw).ordinal }.getOrNull()
-        else -> null
-    }
-
-    private fun normalizeProductPlans(map: Map<String, Any?>): Map<String, Any?> {
-        val plans = map["plans"] as? List<*> ?: return map
-        val normalized = plans.map { plan ->
-            val planMap = plan as? Map<*, *> ?: return@map plan
-            HashMap(planMap).apply { this["type"] = normalizePlanTypeOrdinal(this["type"]) }
-        }
-        return HashMap(map).apply { this["plans"] = normalized }
-    }
-
     private fun transformSubscriptionsToJson(list: List<PLYSubscriptionData>): JSONArray {
         val result = JSONArray()
         for (data in list) {
-            val map = HashMap(data.data.toMap())
-            map["plan"] = transformPlanToMap(data.plan)
-            map["product"] = normalizeProductPlans(data.product.toMap())
-            map["subscriptionSource"] = when (data.data.storeType) {
-                StoreType.GOOGLE_PLAY_STORE -> StoreType.GOOGLE_PLAY_STORE.ordinal
-                StoreType.AMAZON_APP_STORE -> StoreType.AMAZON_APP_STORE.ordinal
-                StoreType.HUAWEI_APP_GALLERY -> StoreType.HUAWEI_APP_GALLERY.ordinal
-                StoreType.APPLE_APP_STORE -> StoreType.APPLE_APP_STORE.ordinal
-                // CDV-W-15: NONE/WEB_CHECKOUT_STRIPE have no JS SubscriptionSource case of
-                // their own; both map to `none` (4), matching iOS's PLYSubscriptionSource.None.
-                StoreType.NONE, StoreType.WEB_CHECKOUT_STRIPE -> 4
-                else -> null
-            }
-            result.put(JSONObject(map))
+            result.put(JSONObject(transformSubscriptionToMap(data)))
         }
         return result
     }
@@ -1374,6 +1486,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         var defaultCallback: CallbackContext? = null
         var eventsCallback: CallbackContext? = null
         var attributesCallback: CallbackContext? = null
+        var webRedemptionCallback: CallbackContext? = null
 
         // Serializes a v6 PLYPresentationOutcome to the wire contract. `result` is kept as an
         // int (PurchaseResult 0/1/2) for back-compat with the pre-6.0 JS layer.
@@ -1424,6 +1537,47 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 "basePlanId" to plan.basePlanId,
                 "offerId" to plan.storeOfferId
             )
+        }
+
+        // These three live in the companion, not on the instance, so that
+        // `Companion::transformSubscriptionToMap` is an UNBOUND reference. The SDK keeps
+        // the redemption listener in a static (Purchasely.webRedemptionListener), so a
+        // bound reference would keep the plugin, its Activity and its WebView reachable
+        // for as long as that static holds the lambda. None of them touches instance state.
+        // Hardening for the upcoming rc.4 native release: PLYPlan.toMap()'s raw "type" entry is
+        // moving from an ordinal (Int) to the DistributionType name (String). transformPlanToMap
+        // already overwrites "type" explicitly wherever it's used, but allProducts/
+        // productWithIdentifier/the subscription's nested "product" field pass product.toMap()
+        // straight through -- normalize those raw plan entries so the JS PlanType contract
+        // (an ordinal) stays stable across both native formats. Both formats resolve to the same
+        // ordinal since DistributionType's declared order already matches Purchasely.PlanType.
+        private fun normalizePlanTypeOrdinal(raw: Any?): Int? = when (raw) {
+            is Number -> raw.toInt()
+            is String -> runCatching { DistributionType.valueOf(raw).ordinal }.getOrNull()
+            else -> null
+        }
+
+        private fun normalizeProductPlans(map: Map<String, Any?>): Map<String, Any?> {
+            val plans = map["plans"] as? List<*> ?: return map
+            val normalized = plans.map { plan ->
+                val planMap = plan as? Map<*, *> ?: return@map plan
+                HashMap(planMap).apply { this["type"] = normalizePlanTypeOrdinal(this["type"]) }
+            }
+            return HashMap(map).apply { this["plans"] = normalized }
+        }
+
+        /**
+         * Map one [PLYSubscriptionData] to the JS subscription shape.
+         *
+         * Shared by `userSubscriptions`, `userSubscriptionsHistory` and the web redemption
+         * listener, whose `context.subscription` is the same type, so the three report one shape.
+         */
+        internal fun transformSubscriptionToMap(data: PLYSubscriptionData): Map<String, Any?> {
+            return HashMap(data.data.toMap()).apply {
+                this["plan"] = transformPlanToMap(data.plan)
+                this["product"] = normalizeProductPlans(data.product.toMap())
+                this["subscriptionSource"] = subscriptionSourceFor(data.data.storeType)
+            }
         }
 
         private fun transformPlanToMap(plan: PLYPlan?): Map<String?, Any?> {
@@ -1492,4 +1646,180 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
             BATCH_CUSTOM_USER_ID: 20,
          */
     }
+}
+
+/**
+ * Map a native [StoreType] to the `subscriptionSource` wire value.
+ *
+ * The ordinal IS the wire value, and it matches iOS's `PLYSubscriptionSource` one for one:
+ * apple 0, google 1, amazon 2, huawei 3, stripe 4, none 5. Verified against the shipped
+ * 6.1.0 artifacts on both platforms, so there is no per-platform translation here.
+ *
+ * Listed exhaustively on purpose, and `internal` so a unit test drives THIS function
+ * rather than re-deriving the mapping. The previous version named four stores and
+ * collapsed `NONE` and `WEB_CHECKOUT_STRIPE` into a hardcoded 4, on the stated but FALSE
+ * premise that iOS's `None` was 4. It is 5, and 4 is Stripe. So a Web2App subscription
+ * reported `none`, and a sourceless one reported Stripe's value. An `else` branch is what
+ * let that pass unnoticed; without one, a store type added by a future SDK fails the
+ * Kotlin build here instead of silently reporting the wrong source.
+ */
+internal fun subscriptionSourceFor(storeType: StoreType?): Int? = when (storeType) {
+    StoreType.APPLE_APP_STORE -> StoreType.APPLE_APP_STORE.ordinal
+    StoreType.GOOGLE_PLAY_STORE -> StoreType.GOOGLE_PLAY_STORE.ordinal
+    StoreType.AMAZON_APP_STORE -> StoreType.AMAZON_APP_STORE.ordinal
+    StoreType.HUAWEI_APP_GALLERY -> StoreType.HUAWEI_APP_GALLERY.ordinal
+    StoreType.WEB_CHECKOUT_STRIPE -> StoreType.WEB_CHECKOUT_STRIPE.ordinal
+    StoreType.NONE -> StoreType.NONE.ordinal
+    null -> null
+}
+
+/**
+ * Apply the three 6.1.0 start options to a [Purchasely.Builder].
+ *
+ * Extracted so a unit test can assert WHICH builder call each resolver state produces. The
+ * resolvers were covered on their own, but the branch consuming them was not: swapping the
+ * `Clear` and `Set` cases, or inverting the override flag, passed every test in the
+ * repository. That branch is the whole point of the release.
+ *
+ * `Absent` and `Invalid` make NO call, so the SDK keeps whatever it already has. `Clear`
+ * calls `proxy(null)`, which is a real native operation and not the same as making no call.
+ */
+internal fun applyStartOptions(
+    builder: Purchasely.Builder,
+    proxyOption: PLYProxyOption,
+    anonymousUserId: UUID?,
+    anonymousUserIdOverride: Boolean,
+    appHandlesRedemptionAlert: Boolean,
+    redemptionListener: PLYWebRedemptionListener,
+) {
+    when (proxyOption) {
+        is PLYProxyOption.Absent -> {}
+        is PLYProxyOption.Invalid -> {}
+        is PLYProxyOption.Clear -> builder.proxy(null)
+        is PLYProxyOption.Set -> builder.proxy(proxyOption.api)
+    }
+    anonymousUserId?.let { builder.anonymousUserId(it, anonymousUserIdOverride) }
+    builder.webRedemptionListener(appHandlesRedemptionAlert, redemptionListener)
+}
+
+/**
+ * How the `proxy` start option resolves. Purchasely 6.1.0.
+ *
+ * The three JS states are not interchangeable, and a fourth case exists for a value that
+ * will not convert to a URI. Collapsing [Absent] into [Clear] would turn every start into
+ * an implicit clear; collapsing [Clear] into [Absent] would make a clear silently do
+ * nothing.
+ */
+internal sealed class PLYProxyOption {
+    /** The key is absent. Make no native call: leave the current setting untouched. */
+    object Absent : PLYProxyOption()
+
+    /** The key is present and null. Call `proxy(null)` to clear the proxy. */
+    object Clear : PLYProxyOption()
+
+    /** The key holds a usable value. Call `proxy(api)`. */
+    data class Set(val api: String) : PLYProxyOption()
+
+    /** The key holds a value that will not convert. Log it and make no native call. */
+    data class Invalid(val rawValue: String?) : PLYProxyOption()
+}
+
+/**
+ * Resolve the `proxy` start option.
+ *
+ * Pure, and `internal` so a unit test drives the real bridge logic instead of a copy.
+ *
+ * `JSONObject.has` is what separates an absent key from an explicit null, and
+ * `JSONObject.isNull` separates the null from a value. `optString` cannot do this on its
+ * own: it renders `JSONObject.NULL` as the STRING `"null"`, which is exactly how a clear
+ * used to be swallowed into the absent branch.
+ *
+ * The scheme, the host, and the absence of a query, a fragment and credentials are the
+ * native SDK's business: it refuses a bad value with an error log and keeps the production
+ * host, and it drops a trailing slash. This only rejects what will not convert at all,
+ * which keeps the accepted set the same as the iOS bridge's `NSURL` conversion.
+ */
+internal fun resolveProxyOption(options: JSONObject): PLYProxyOption {
+    if (!options.has("proxy")) return PLYProxyOption.Absent
+    if (options.isNull("proxy")) return PLYProxyOption.Clear
+
+    val raw = options.opt("proxy")
+    if (raw !is String) return PLYProxyOption.Invalid(raw?.toString())
+    // A blank value is refused HERE, to match iOS: `[NSURL URLWithString:@""]` is nil, so
+    // the iOS bridge resolves Invalid and never calls native. Leaving it to the SDK would
+    // make the two platforms accept different sets of strings for the same option.
+    if (raw.isBlank()) return PLYProxyOption.Invalid(raw)
+    return try {
+        URI(raw)
+        PLYProxyOption.Set(raw)
+    } catch (e: URISyntaxException) {
+        PLYProxyOption.Invalid(raw)
+    }
+}
+
+/**
+ * Flatten a [PLYWebRedemptionResult] to the 5-key shape the JS listener receives.
+ * See `addWebRedemptionListener` in www/Purchasely.js for the shape itself.
+ *
+ * [subscriptionToMap] is injected so a unit test can drive this without constructing an SDK
+ * [PLYSubscriptionData]. Production passes the plugin's own `transformSubscriptionToMap`.
+ *
+ * EVERY NULL IS PUT AS [JSONObject.NULL] EXPLICITLY, and the object is built here rather
+ * than returned as a `Map` for the caller to wrap. `JSONObject(Map)` disagrees across
+ * implementations: Android's wraps a null and keeps the key, the reference `org.json` DROPS
+ * the entry — which would reach JS as `undefined` instead of `null`.
+ */
+internal fun webRedemptionResultToJson(
+    result: PLYWebRedemptionResult,
+    subscriptionToMap: (PLYSubscriptionData) -> Map<String, Any?>,
+): JSONObject {
+    val json = JSONObject()
+    when (result) {
+        is PLYWebRedemptionResult.Success -> {
+            json.put("isSuccess", true)
+            val context = result.context
+            if (context == null) {
+                json.put("context", JSONObject.NULL)
+            } else {
+                val subscription = context.subscription
+                json.put("context", JSONObject().put(
+                    "subscription",
+                    if (subscription == null) JSONObject.NULL
+                    else JSONObject(subscriptionToMap(subscription))
+                ))
+            }
+            json.put("replay", result.replay)
+            json.put("errorCode", JSONObject.NULL)
+            json.put("errorMessage", JSONObject.NULL)
+        }
+        is PLYWebRedemptionResult.Failure -> {
+            json.put("isSuccess", false)
+            json.put("context", JSONObject.NULL)
+            // A failure still reports replay, so the shape never changes between branches.
+            json.put("replay", false)
+            json.put("errorCode", result.errorCode ?: JSONObject.NULL)
+            json.put("errorMessage", result.errorMessage ?: JSONObject.NULL)
+        }
+    }
+    return json
+}
+
+/**
+ * Parse a canonical UUID string, or return null.
+ *
+ * JS has no UUID type, so an anonymous user id crosses the bridge as a string.
+ * `UUID.fromString` is lenient and accepts a short form such as `"1-2-3-4-5"` that the iOS
+ * `NSUUID` parser refuses. The round-trip check makes both platforms agree on what
+ * "canonical" means, so one id string is accepted, or refused, on both.
+ *
+ * `internal` so a unit test drives it without an Android logger. The caller logs a refusal.
+ */
+internal fun parseCanonicalUuid(value: String?): UUID? {
+    if (value == null) return null
+    val parsed = try {
+        UUID.fromString(value)
+    } catch (e: IllegalArgumentException) {
+        return null
+    }
+    return if (parsed.toString().equals(value, ignoreCase = true)) parsed else null
 }

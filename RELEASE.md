@@ -28,6 +28,8 @@ Update **all** of the following files:
 | `purchasely/package.json` | `version` field |
 | `purchasely/package-lock.json` | top-level `version` and `packages[""].version` |
 | `purchasely/example/package-lock.json` | `packages[".."].version` and `packages["../../purchasely-google"].version` |
+| `purchasely/example-capacitor/package-lock.json` | `packages[".."].version` |
+| `purchasely-google/package-lock.json` | top-level `version` and `packages[""].version` |
 | `purchasely/www/Purchasely.js` | `cordovaSdkVersion` fallback string |
 | `purchasely/__tests__/Purchasely.test.js` | the expected `sdkVersion` in the `start` test, which asserts that fallback |
 | `purchasely-google/plugin.xml` | `version` attribute in `<plugin>` tag |

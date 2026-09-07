@@ -1,0 +1,115 @@
+plugins {
+    id 'com.android.library' version '8.10.1'
+    id 'org.jetbrains.kotlin.android' version '2.3.21'
+}
+
+android {
+    namespace 'cordova.plugin.purchasely.tests'
+    // Matches the compileSdk the example app builds the plugin against
+    // (purchasely/example/platforms/android/cdv-gradle-config.json).
+    compileSdk 36
+
+    defaultConfig {
+        minSdk 23
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        // Compile the SHIPPED plugin source, not a copy. A refactor that breaks the
+        // bridge therefore breaks this build too.
+        main {
+            java.srcDirs = ['../src/android']
+            manifest.srcFile 'src/main/AndroidManifest.xml'
+        }
+        test {
+            java.srcDirs = ['src/test/java']
+        }
+    }
+
+    testOptions {
+        unitTests {
+            // The bridge only touches android.util.Log from the paths under test, and a
+            // no-op Log is the right behaviour for a unit test. Without this, every
+            // android.* call throws "not mocked".
+            returnDefaultValues = true
+        }
+    }
+}
+
+// Make the CI log self-auditing. Gradle's plain console prints nothing on a passing test
+// task, so a green job is otherwise indistinguishable from one that ran ZERO tests.
+tasks.withType(Test).configureEach {
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat 'full'
+    }
+    afterSuite { descriptor, result ->
+        if (descriptor.parent != null) return
+        println "Android bridge unit tests: ${result.testCount} run, " +
+            "${result.failedTestCount} failed, ${result.skippedTestCount} skipped"
+    }
+}
+
+// Fail when nothing ran.
+//
+// This CANNOT live in the test task itself. With no test sources Gradle marks the task
+// NO-SOURCE and skips it, so `afterSuite` and `doLast` never run and the build still goes
+// green -- verified by pointing the test source set at an empty directory, which passed
+// against an afterSuite guard. This task reads the result XML instead, so a skipped test
+// task fails it for want of any report at all.
+tasks.register('verifyTestsRan') {
+    description = 'Runs the unit tests, then fails unless they actually executed.'
+    // dependsOn, not just ordering: without it Gradle is free to run this BEFORE the test
+    // task and pass on a stale report from a previous run, which is what happened the
+    // first time this guard was written. CI runs this task alone.
+    dependsOn 'testDebugUnitTest'
+    doLast {
+        def resultsDir = layout.buildDirectory.dir('test-results/testDebugUnitTest').get().asFile
+        def reports = resultsDir.exists() ? resultsDir.listFiles({ f -> f.name.endsWith('.xml') } as FileFilter) : null
+        if (!reports) {
+            throw new GradleException(
+                "No test report in ${resultsDir}. The test task ran no tests, which a " +
+                'passing build would otherwise hide.')
+        }
+        def total = reports.sum { new groovy.xml.XmlSlurper().parse(it).@tests.text() as int }
+        println "verifyTestsRan: ${total} test(s) reported across ${reports.length} suite file(s)"
+        if (total == 0) {
+            throw new GradleException('Test reports exist but contain zero tests.')
+        }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
+dependencies {
+    // Cordova's own framework, which supplies CordovaPlugin, CallbackContext and
+    // PluginResult. Kept at the version the example app pins, so this module compiles the
+    // plugin against the same API surface the host app does.
+    compileOnly 'org.apache.cordova:framework:15.1.0'
+    testImplementation 'org.apache.cordova:framework:15.1.0'
+
+    // The native SDK under bridge. Must match plugin.xml's <framework src="io.purchasely:core">.
+    compileOnly 'io.purchasely:core:6.1.0'
+    testImplementation 'io.purchasely:core:6.1.0'
+
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.2'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.mockito:mockito-core:5.11.0'
+    testImplementation 'org.mockito.kotlin:mockito-kotlin:5.2.1'
+    // A REAL org.json. The android.jar on a unit-test classpath ships org.json as stubs
+    // that throw, and `returnDefaultValues` would make JSONObject silently answer null
+    // for everything, which would make resolveProxyOption's three states untestable. A
+    // testImplementation dependency precedes the mockable android jar on the classpath,
+    // so this one wins.
+    testImplementation 'org.json:json:20240303'
+}
