@@ -224,7 +224,21 @@ jobs:
 
           FOUND=0
           while IFS= read -r f; do
-            if "$NM" -a "$f" 2>/dev/null | grep -q '_OBJC_CLASS_\$_CDVPurchasely'; then
+            # `grep`, not `grep -q`, and the output redirected instead.
+            #
+            # Under `set -euo pipefail`, `grep -q` exits at the FIRST match and closes the
+            # pipe while nm is still writing. nm dies on SIGPIPE (141), pipefail reports
+            # that as the pipeline's status, and the `if` reads false even though grep
+            # matched. The assertion then blames the plugin for a symbol that is present.
+            #
+            # This is what made the job flake: 3 failures in ~20 runs, on BOTH matrix legs,
+            # including a re-run of an identical commit that then passed. Measured on the
+            # real App.app in CI, the shipped form gave 23 false negatives per 100 on the
+            # Cocoapods leg and 16 on SPM; the drained form gave 0 on both.
+            #
+            # Do not "simplify" this back to -q, and do not drop pipefail: other pipelines
+            # in this step rely on it.
+            if "$NM" -a "$f" 2>/dev/null | grep '_OBJC_CLASS_\$_CDVPurchasely' >/dev/null; then
               echo "CDVPurchasely found in ${f#"$APP"/}"
               FOUND=1
               break
