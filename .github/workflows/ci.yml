@@ -244,7 +244,13 @@ jobs:
               # Swift mangles ObjC-visible classes with a per-component length prefix, so
               # PLYProduct appears as `_OBJC_CLASS_$__TtC10Purchasely10PLYProduct`. Two
               # tighter patterns matched 0 of 179 class symbols; this one matches 62.
-              syms=$("$NM" -a "$f" 2>&1 | grep -oE '_OBJC_CLASS_\$_.*(CDV|PLY)[A-Za-z]*' | sort -u | tr '\n' ' ')
+              # `|| true` is load-bearing. The step runs under `set -euo pipefail`, so a
+              # grep that matches nothing returns 1, the pipeline returns 1, and the
+              # command substitution kills the whole step. That is why this diagnostic
+              # printed ZERO rows on every failure it was supposed to explain: it aborted
+              # on the first file without a match, before reaching the flags and the
+              # product inventory below.
+              syms=$("$NM" -a "$f" 2>&1 | grep -oE '_OBJC_CLASS_\$_.*(CDV|PLY)[A-Za-z]*' | sort -u | tr '\n' ' ' || true)
               if [ -n "$syms" ]; then echo "  ${f#"$APP"/}: $syms"; fi
             done < <(find "$APP" -type f)
             echo "Linker flags in effect:"
@@ -254,11 +260,14 @@ jobs:
             #   present here but not in the app -> the link dropped it
             #   absent here                     -> the plugin source was never compiled,
             #                                      i.e. cap sync did not pick it up
-            echo "CDVPurchasely in the built CordovaPluginsStatic products:"
+            # Separates "the link dropped it" from "it was never compiled". CocoaPods
+            # builds CordovaPluginsStatic; the SPM leg builds a PurchaselyCordovaPlugin
+            # package target instead, so both names are searched.
+            echo "CDVPurchasely in the built plugin products:"
             while IFS= read -r lib; do
               n=$("$NM" -a "$lib" 2>&1 | grep -c '_OBJC_CLASS_\$_CDVPurchasely' || true)
               echo "  ${lib##*/Build/}: $n"
-            done < <(find build -name "*CordovaPluginsStatic*" -type f 2>/dev/null | head -5)
+            done < <(find build \( -name "*CordovaPluginsStatic*" -o -name "*PurchaselyCordovaPlugin*" \) -type f 2>/dev/null | head -8)
             echo "Compiled plugin objects:"
             find build -name "CDVPurchasely*.o" 2>/dev/null | head -5 || true
             exit 1
