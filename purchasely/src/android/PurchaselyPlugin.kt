@@ -512,15 +512,10 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
     /**
      * End a kept-alive Cordova callback stream, freeing its JavaScript closure.
      *
-     * A listener registered with `exec(success, error, ...)` gets an entry in
-     * `cordova.callbacks`, and every result the bridge sends carries `keepCallback = true`
-     * so the stream stays open. Dropping the native reference alone therefore leaks the JS
-     * side: the closure, and whatever component state it captured, stays reachable until
-     * the WebView reloads. Replacing a listener leaks the one it replaced.
-     *
-     * A NO_RESULT with `keepCallback = false` is the documented way out. cordova.js says so
-     * in its own words: NO_RESULT "is used to remove a callback from the list without
-     * calling the callbacks". Neither success nor error fires, and the entry is deleted.
+     * Every result the bridge sends a listener carries `keepCallback = true`, so dropping
+     * the native reference alone leaks the JS closure until the WebView reloads. NO_RESULT
+     * with `keepCallback = false` is cordova.js's own documented way out: it "is used to
+     * remove a callback from the list without calling the callbacks".
      */
     private fun releaseCallbackStream(callback: CallbackContext?) {
         if (callback == null) return
@@ -1720,29 +1715,15 @@ internal fun resolveProxyOption(options: JSONObject): PLYProxyOption {
 
 /**
  * Flatten a [PLYWebRedemptionResult] to the 5-key shape the JS listener receives.
+ * See `addWebRedemptionListener` in www/Purchasely.js for the shape itself.
  *
- * The sealed Kotlin result and the flat iOS `PLYWebRedemptionResult` object both map to the
- * same 5 keys, so one JS listener drives both platforms. A `Failure` still reports
- * `replay = false` and a null `context`, so every key is present on both branches and the
- * JS shape never changes.
- *
- * `context` and `context.subscription` stay separately nullable. A success can carry no
- * context at all, and a present context can carry no subscription: the receipt validated
- * and entitlements refreshed, but the response carried none or the products behind it are
- * not loaded yet. Both remain a success.
- *
- * [subscriptionToMap] is injected rather than called directly so a unit test can drive this
- * without constructing an SDK [PLYSubscriptionData]. Production passes the plugin's own
- * `transformSubscriptionToMap`, so `userSubscriptions`, `userSubscriptionsHistory` and the
- * redemption context all report one subscription shape.
+ * [subscriptionToMap] is injected so a unit test can drive this without constructing an SDK
+ * [PLYSubscriptionData]. Production passes the plugin's own `transformSubscriptionToMap`.
  *
  * EVERY NULL IS PUT AS [JSONObject.NULL] EXPLICITLY, and the object is built here rather
- * than handed back as a `Map` for the caller to wrap. `JSONObject(Map)` does not agree
- * across implementations on what a null value means: Android's wraps it as JSON null and
- * keeps the key, while the reference `org.json` DROPS the entry. A dropped key would reach
- * JS as `undefined` instead of `null`, and it would silently change which of the five
- * fields the listener can rely on. Building it explicitly makes the wire shape identical
- * on both, and makes it assertable in a unit test.
+ * than returned as a `Map` for the caller to wrap. `JSONObject(Map)` disagrees across
+ * implementations: Android's wraps a null and keeps the key, the reference `org.json` DROPS
+ * the entry — which would reach JS as `undefined` instead of `null`.
  */
 internal fun webRedemptionResultToJson(
     result: PLYWebRedemptionResult,

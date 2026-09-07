@@ -61,44 +61,18 @@ function presentationDispatcher(success, callbacks) {
 //   deeplink        (string, optional — cold-start deeplink URL)
 //
 // Purchasely 6.1.0 adds four options:
-//   anonymousUserId         (string, optional — a canonical UUID string, see below)
-//   anonymousUserIdOverride (bool, optional — defaults to false)
-//   proxy                   (string|null, optional — an https base URL, or null to clear)
-//   appHandlesRedemptionAlert (bool, optional — defaults to the native false)
+//   anonymousUserId         (string, optional — a canonical UUID string; a bad value is
+//                            logged and skipped, start() still succeeds)
+//   anonymousUserIdOverride (bool, optional — false; true SPLITS the user history)
+//   proxy                   (string|null, optional — Android+iOS. THREE STATES:
+//                              'https://…'  routes the API host
+//                              null         CLEARS it, back to api.purchasely.io
+//                              key absent   leaves the current setting untouched
+//                            A clear is a supported native operation, not an error.)
+//   appHandlesRedemptionAlert (bool, optional — false keeps the SDK popin, true hands the
+//                            result screen to the app. See addWebRedemptionListener.)
 //
-// `anonymousUserId` is the anonymous user id the SDK reports for this device. JavaScript
-// has no UUID type, so the id crosses as a string and each native bridge parses it. A
-// value that is not a canonical UUID is refused with an error log and the option is
-// skipped; start() still succeeds. The SDK stores the id uppercase, and applies it only
-// when the device holds no anonymous id yet, unless `anonymousUserIdOverride` is true.
-// An override splits the user history: the backend keeps every event and every purchase
-// under the previous id.
-//
-// `proxy` routes the Purchasely API traffic through a proxy instead of api.purchasely.io,
-// for a region where that host is unreachable, such as mainland China. Only the API host
-// changes: the paywall host and the tracking host stay on production. Purchasely operates
-// a proxy at https://svc.purchasely.io; you can also host your own. It is a start-time
-// option on both platforms: neither native SDK has a runtime setter for it.
-//
-// THE OPTION HAS THREE STATES, AND THEY ARE NOT INTERCHANGEABLE:
-//
-//   proxy: 'https://svc.purchasely.io'   routes the API host
-//   proxy: null                          CLEARS the proxy, back to api.purchasely.io
-//   the key is absent                    leaves the current setting untouched
-//
-// A clear is a supported operation on both natives, not an error case. So the key must be
-// PRESENT and null to clear, and ABSENT to leave the setting alone. Sending null for an
-// absent option would turn every start into an implicit clear; dropping a null would make
-// a clear silently do nothing.
-//
-// The value must be an https base URL with a host, and it must carry no query, no
-// fragment and no credentials. Each native SDK refuses any other value with an error log,
-// keeps the production host, and drops a trailing slash, so the bridge does not re-check
-// those. The bridge only rejects a string that will not convert to a URL at all.
-//
-// `appHandlesRedemptionAlert` decides who shows the outcome of a Web2App redemption.
-// false (the default) keeps the SDK popin. true shows nothing, so the app renders its own
-// result screen. See addWebRedemptionListener.
+// README.md "What is new in 6.1.0" is the reference for all four.
 exports.start = function (options, success, error) {
     var opts = options || {};
     var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
@@ -171,35 +145,18 @@ PLYStartBuilder.prototype.appHandlesRedemptionAlert = function (handles) {
 
 // Purchasely 6.1.0: the PRIMARY way to receive Web2App redemption outcomes.
 //
-//   Purchasely.builder(apiKey)
-//       .webRedemptionListener(onRedemption, true)  // 2nd argument optional
-//       .start()
+//   Purchasely.builder(apiKey).webRedemptionListener(onRedemption, true).start()
 //
-// The callback never crosses the bridge. Each native bridge registers ITSELF as the
-// delegate (iOS) or listener (Android) during start, unconditionally, and forwards every
-// outcome as a Cordova callback stream. So this modifier is purely a JS concern: it
-// records the callback and subscribes it locally.
+// The callback never crosses the bridge: each native registers ITSELF as the delegate at
+// start() and forwards outcomes as a Cordova callback stream, so this is a JS concern only.
 //
-// STORED HERE, SUBSCRIBED IN start(), immediately before the native call.
+// STORED HERE, SUBSCRIBED IN start(), just before the native call. Do not move it back:
+// subscribing at chain time leaks a live callback from a builder that is never started. A
+// redemption can only settle once the SDK runs, so subscribing here still covers one that
+// settles DURING start(), which is the case the feature exists for.
 //
-// Subscribing on the spot would leak a live callback from a builder that is never started:
-// the native slot would hold it until onReset or an activity teardown, and any later
-// start() would route redemptions to it. Deferring costs nothing, because a redemption can
-// only settle once the SDK is running, so subscribing just before the native start call
-// still guarantees the listener exists for a redemption that settles DURING start() -- a
-// cold start that the `ply/redeem` link itself triggered, or a token a previous launch left
-// pending. That is the case the feature exists for, and it stays covered.
-//
-// Matches the React Native builder, which reached the same conclusion in review.
-//
-// The optional second argument is shorthand for the appHandlesRedemptionAlert option.
-// Omitting it sets nothing, so the native default (false, the SDK shows its own popin)
-// stands. It mirrors the native shapes, which disagree on argument order:
-//   iOS     webRedemptionDelegate(_ value:, appHandlesRedemptionAlert: Bool = false)
-//   Android webRedemptionListener(appHandlesRedemptionAlert: Boolean, listener:)
-// Cordova follows the iOS order, callback first, because the callback is the subject.
-//
-// See Purchasely.addWebRedemptionListener for the result shape and for the runtime path.
+// 2nd argument = appHandlesRedemptionAlert; omitting it keeps the native default. Callback
+// first, matching iOS -- the natives disagree on order (Android takes the flag first).
 PLYStartBuilder.prototype.webRedemptionListener = function (callback, appHandlesRedemptionAlert) {
     // Kept off _options on purpose: that object is the exec payload, and a callback has no
     // business being serialized into it.
@@ -246,55 +203,25 @@ exports.addEventsListener = function (success, error) {
 
 // Purchasely 6.1.0: the outcome of a Web2App redemption ({scheme}://ply/redeem/{token}).
 //
-// SECONDARY PATH. Prefer Purchasely.builder(apiKey).webRedemptionListener(cb), which
-// subscribes just before the native start call and therefore cannot miss a redemption that
-// settles during start(). Use this pair for the runtime case only: an app that must REPLACE
-// the listener while the SDK already runs.
-//
-// Both paths share ONE native slot, so the last caller wins. Mixing them replaces rather
-// than adds.
-//
-// TRADE-OFF of the runtime path: a redemption can settle during start(), from a cold
-// start that the `ply/redeem` link itself triggered, or from a token a previous launch
-// left pending. A listener added after start() misses exactly that case. Cordova
-// dispatches exec calls in order, so calling this before start() is also safe; the
-// builder modifier just makes the ordering impossible to get wrong.
+// SECONDARY PATH, for replacing the listener while the SDK already runs. Prefer
+// builder(apiKey).webRedemptionListener(cb). Both share ONE native slot: last caller wins.
 //
 // success receives { isSuccess, context, replay, errorCode, errorMessage }:
-//   isSuccess     Bool. true for a granted redemption, false for a failed one.
-//   context       { subscription } or null. `subscription` is separately nullable: a
-//                 success can carry no context at all, and a present context can carry no
-//                 subscription. The subscription has the same shape userSubscriptions()
-//                 reports, which means purchaseToken, nextRenewalDate and cancelledDate
-//                 may be ABSENT, and the two platforms differ on how: Android sends the
-//                 key with an explicit null, iOS omits it. Handle both -- a truthiness
-//                 check covers them, `!== undefined` does not.
-//   replay        Bool. true when the SERVER reports the token was redeemed before. It is
-//                 a verdict about the token, not an observation of the user: the SDK keeps
-//                 no cache and calls the server on every attempt. Always false on failure.
-//   errorCode     'EXPIRED_REDEMPTION_TOKEN' | 'INVALID_REDEMPTION_TOKEN' | null. A
-//                 failure that never reached the server carries no code.
-//   errorMessage  Human-readable reason, in English, or null. It never contains the token.
+//   isSuccess     Bool.
+//   context       { subscription } or null, and `subscription` is separately nullable.
+//                 Same shape as userSubscriptions(), so purchaseToken, nextRenewalDate and
+//                 cancelledDate may be absent -- Android sends an explicit null, iOS omits
+//                 the key. A truthiness check covers both; `!== undefined` does not.
+//   replay        Bool. The SERVER says the token was redeemed before. False on failure.
+//   errorCode     'EXPIRED_REDEMPTION_TOKEN' | 'INVALID_REDEMPTION_TOKEN' | null.
+//   errorMessage  Human-readable, English, or null. Never contains the token.
 //
-// The native SDK calls the listener on the main thread, exactly once per settled
-// redemption, on success and on failure alike. `appHandlesRedemptionAlert` (see
-// exports.start) decides WHEN: false (the default) calls it after the user acknowledges
-// the SDK popin, true calls it as soon as the redemption settles.
+// Called on the main thread, exactly once per settled redemption.
 //
-// A redemption deeplink is NOT subject to allowDeeplink: the native SDK intercepts
-// `ply/redeem` before the routing branch that gate sits behind.
-//
-// PRIVACY, ON BOTH PLATFORMS. errorMessage for an expired link can carry a MASKED EMAIL
-// ADDRESS, so the app can tell the user where the fresh link went. Show that text to the
-// user. Do NOT send it to an analytics stack, to a crash reporter, or to a log.
-//
-// The rule is unconditional. DO NOT gate it on a platform check. Both native SDKs append
-// the hint in their expired-link branch: Android in RedemptionOutcome.Expired.toResult(),
-// whose own comment reads "masked email = PII", and iOS in its matching branch. Verified
-// against the released 6.1.0 sources of both.
-//
-// The REDEMPTION_FAILED event does drop the hint, on both platforms, so the analytics
-// channel is safe. This listener is the only place it appears.
+// PRIVACY, BOTH PLATFORMS: errorMessage for an expired link can carry a MASKED EMAIL
+// ADDRESS. Show it to the user; never log it or send it to analytics or a crash reporter.
+// The rule is unconditional -- do NOT gate it on a platform check. The REDEMPTION_FAILED
+// event drops the hint, so that channel is safe.
 exports.addWebRedemptionListener = function (success, error) {
     exec(success, error, 'Purchasely', 'addWebRedemptionListener', []);
 };

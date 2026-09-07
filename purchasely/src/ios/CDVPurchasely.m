@@ -667,15 +667,10 @@
 
 /// End a kept-alive Cordova callback stream, freeing its JavaScript closure.
 ///
-/// A listener registered with `exec(success, error, ...)` gets an entry in
-/// `cordova.callbacks`, and every result this bridge sends carries `keepCallback:YES` so the
-/// stream stays open. Dropping the native command alone therefore leaks the JS side: the
-/// closure, and whatever component state it captured, stays reachable until the WebView
-/// reloads. Replacing a listener leaks the one it replaced.
-///
-/// A NO_RESULT with `keepCallback:NO` is the documented way out. cordova.js says so in its
-/// own words: NO_RESULT "is used to remove a callback from the list without calling the
-/// callbacks". Neither success nor error fires, and the entry is deleted.
+/// Every result this bridge sends a listener carries `keepCallback:YES`, so dropping the
+/// native command alone leaks the JS closure until the WebView reloads. NO_RESULT with
+/// `keepCallback:NO` is cordova.js's own documented way out: it "is used to remove a
+/// callback from the list without calling the callbacks".
 - (void)releaseCallbackStream:(CDVInvokedUrlCommand * _Nullable)command {
     if (command == nil) {
         return;
