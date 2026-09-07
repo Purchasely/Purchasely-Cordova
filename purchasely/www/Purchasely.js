@@ -63,7 +63,7 @@ function presentationDispatcher(success, callbacks) {
 // Purchasely 6.1.0 adds four options:
 //   anonymousUserId         (string, optional — a canonical UUID string, see below)
 //   anonymousUserIdOverride (bool, optional — defaults to false)
-//   proxy                   (string, optional — an https base URL)
+//   proxy                   (string|null, optional — an https base URL, or null to clear)
 //   appHandlesRedemptionAlert (bool, optional — defaults to the native false)
 //
 // `anonymousUserId` is the anonymous user id the SDK reports for this device. JavaScript
@@ -77,11 +77,24 @@ function presentationDispatcher(success, callbacks) {
 // `proxy` routes the Purchasely API traffic through a proxy instead of api.purchasely.io,
 // for a region where that host is unreachable, such as mainland China. Only the API host
 // changes: the paywall host and the tracking host stay on production. Purchasely operates
-// a proxy at https://svc.purchasely.io; you can also host your own. The value must be an
-// https base URL with a host, and it must carry no query, no fragment and no credentials.
-// Each native SDK refuses any other value with an error log, keeps the production host,
-// and drops a trailing slash. It is a start-time option on both platforms: neither native
-// SDK has a runtime setter for it.
+// a proxy at https://svc.purchasely.io; you can also host your own. It is a start-time
+// option on both platforms: neither native SDK has a runtime setter for it.
+//
+// THE OPTION HAS THREE STATES, AND THEY ARE NOT INTERCHANGEABLE:
+//
+//   proxy: 'https://svc.purchasely.io'   routes the API host
+//   proxy: null                          CLEARS the proxy, back to api.purchasely.io
+//   the key is absent                    leaves the current setting untouched
+//
+// A clear is a supported operation on both natives, not an error case. So the key must be
+// PRESENT and null to clear, and ABSENT to leave the setting alone. Sending null for an
+// absent option would turn every start into an implicit clear; dropping a null would make
+// a clear silently do nothing.
+//
+// The value must be an https base URL with a host, and it must carry no query, no
+// fragment and no credentials. Each native SDK refuses any other value with an error log,
+// keeps the production host, and drops a trailing slash, so the bridge does not re-check
+// those. The bridge only rejects a string that will not convert to a URL at all.
 //
 // `appHandlesRedemptionAlert` decides who shows the outcome of a Web2App redemption.
 // false (the default) keeps the SDK popin. true shows nothing, so the app renders its own
@@ -124,12 +137,64 @@ PLYStartBuilder.prototype.anonymousUserId = function (id, override) {
     return this;
 };
 
-// Purchasely 6.1.0. See the exports.start option block for the full contract.
-PLYStartBuilder.prototype.proxy = function (api) { this._options.proxy = api; return this; };
+// Purchasely 6.1.0. Pass an https base URL to route the API host, or null to CLEAR a
+// proxy and return to api.purchasely.io. Both differ from never calling the modifier,
+// which leaves the current setting untouched. See the exports.start option block.
+//
+// An argument is required. `proxy()` with none is refused, because the no-argument native
+// modifiers disagree across platforms: iOS `proxy()` routes through Purchasely's own
+// proxy at svc.purchasely.io, while Android `proxy()` clears. A Cordova shorthand would
+// therefore mean two different things on the two platforms.
+//
+// `undefined` is never stored: JSON.stringify drops an undefined-valued key, which would
+// make an explicit clear indistinguishable from an absent option on both natives.
+PLYStartBuilder.prototype.proxy = function (api) {
+    if (arguments.length === 0) {
+        defaultError('[Purchasely] proxy() requires an argument: an https base URL, or ' +
+            'null to clear the proxy. The proxy option is not applied.');
+        return this;
+    }
+    this._options.proxy = api === undefined ? null : api;
+    return this;
+};
 
 // Purchasely 6.1.0. false (the default) keeps the SDK's own redemption popin.
 PLYStartBuilder.prototype.appHandlesRedemptionAlert = function (handles) {
     this._options.appHandlesRedemptionAlert = handles;
+    return this;
+};
+
+// Purchasely 6.1.0: the PRIMARY way to receive Web2App redemption outcomes.
+//
+//   Purchasely.builder(apiKey)
+//       .webRedemptionListener(onRedemption, true)  // 2nd argument optional
+//       .start()
+//
+// The callback never crosses the bridge. Each native bridge registers ITSELF as the
+// delegate (iOS) or listener (Android) during start, unconditionally, and forwards every
+// outcome as a Cordova callback stream. So this modifier is purely a JS concern: it
+// records the callback and subscribes it locally.
+//
+// IT SUBSCRIBES AT CHAIN TIME, NOT INSIDE start(). That is the whole point of putting the
+// listener on the chain. A redemption can settle DURING start(), from a cold start that
+// the `ply/redeem` link itself triggered, or from a token a previous launch left pending.
+// A listener registered after start() misses exactly the case the feature exists for.
+// Subscribing here makes that ordering structurally impossible to get wrong, instead of a
+// documentation warning an integrator can ignore.
+//
+// The optional second argument is shorthand for the appHandlesRedemptionAlert option.
+// Omitting it sets nothing, so the native default (false, the SDK shows its own popin)
+// stands. It mirrors the native shapes, which disagree on argument order:
+//   iOS     webRedemptionDelegate(_ value:, appHandlesRedemptionAlert: Bool = false)
+//   Android webRedemptionListener(appHandlesRedemptionAlert: Boolean, listener:)
+// Cordova follows the iOS order, callback first, because the callback is the subject.
+//
+// See Purchasely.addWebRedemptionListener for the result shape and for the runtime path.
+PLYStartBuilder.prototype.webRedemptionListener = function (callback, appHandlesRedemptionAlert) {
+    exports.addWebRedemptionListener(callback);
+    if (appHandlesRedemptionAlert !== undefined) {
+        this._options.appHandlesRedemptionAlert = appHandlesRedemptionAlert;
+    }
     return this;
 };
 
@@ -164,13 +229,16 @@ exports.addEventsListener = function (success, error) {
 
 // Purchasely 6.1.0: the outcome of a Web2App redemption ({scheme}://ply/redeem/{token}).
 //
-// CALL THIS BEFORE start(). Neither native SDK has a runtime setter for the redemption
-// delegate, because a redemption can settle during start() -- from a cold start that the
-// `ply/redeem` link itself triggered, or from a token a previous launch left pending. The
-// native bridges register the delegate on the builder chain and route it here, so this
-// action only records the callback to route to. Cordova dispatches exec calls in order,
-// so a call placed before start() is recorded before the SDK starts; a call placed after
-// start() misses exactly the case the listener is most needed for.
+// SECONDARY PATH. Prefer Purchasely.builder(apiKey).webRedemptionListener(cb), which
+// subscribes at chain time and therefore cannot miss a redemption that settles during
+// start(). Use this pair for the runtime case only: an app that must REPLACE the listener
+// while the SDK already runs.
+//
+// TRADE-OFF of the runtime path: a redemption can settle during start(), from a cold
+// start that the `ply/redeem` link itself triggered, or from a token a previous launch
+// left pending. A listener added after start() misses exactly that case. Cordova
+// dispatches exec calls in order, so calling this before start() is also safe; the
+// builder modifier just makes the ordering impossible to get wrong.
 //
 // success receives { isSuccess, context, replay, errorCode, errorMessage }:
 //   isSuccess     Bool. true for a granted redemption, false for a failed one.
