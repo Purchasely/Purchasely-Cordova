@@ -185,9 +185,46 @@ jobs:
           # One nm per file on purpose: piping a batched nm into grep under `pipefail`
           # reports failure as soon as nm chokes on a non-Mach-O file (a PNG, Info.plist),
           # which reads as "symbol absent" even when it is present.
+          # Resolve nm through the selected toolchain, and prove the SEARCH works before
+          # trusting a negative result.
+          #
+          # This assertion has failed twice while its own diagnostic listed nothing at all,
+          # with `-ObjC` present in OTHER_LDFLAGS, Purchasely.framework embedded, and the
+          # same Xcode 16.4, CocoaPods 1.17.0 and Capacitor 8.5.1 as a run that passed. The
+          # cause is still UNKNOWN. Two hypotheses were checked against the logs and both
+          # were wrong: a missing `-ObjC` (it is there) and an Xcode difference (identical).
+          #
+          # So the job's job is to produce evidence, not to guess. With `2>/dev/null` on
+          # every nm call a broken search was indistinguishable from an absent symbol.
+          NM="$(xcrun --find nm 2>/dev/null || command -v nm)"
+          if [ -z "$NM" ]; then
+            echo "::error::no usable nm; cannot check linkage."
+            exit 1
+          fi
+          echo "Using nm: $NM"
+
+          # Control: nm must produce output for a binary that certainly has symbols. This
+          # deliberately does NOT assert WHICH symbols. An earlier attempt required a
+          # `_OBJC_CLASS_$_PLY` match inside Purchasely.framework and would have failed
+          # every run: Purchasely is Swift, so its ObjC-visible classes carry a per-
+          # component length prefix, e.g. `_OBJC_CLASS_$__TtC10Purchasely10PLYProduct`.
+          # That same naming is why the diagnostic below uses a permissive pattern.
+          SDK_BIN="$APP/Frameworks/Purchasely.framework/Purchasely"
+          if [ -f "$SDK_BIN" ]; then
+            CONTROL=$("$NM" -a "$SDK_BIN" 2>&1 | wc -l | tr -d ' ')
+            echo "Control: nm produced $CONTROL line(s) for Purchasely.framework"
+            if [ "$CONTROL" -lt 100 ]; then
+              echo "::error::The symbol search is broken: nm produced almost nothing for Purchasely.framework. A negative result below would say nothing about the plugin."
+              "$NM" -a "$SDK_BIN" 2>&1 | head -5
+              exit 1
+            fi
+          else
+            echo "::warning::$SDK_BIN missing, so the control could not run."
+          fi
+
           FOUND=0
           while IFS= read -r f; do
-            if nm -a "$f" 2>/dev/null | grep -q '_OBJC_CLASS_\$_CDVPurchasely'; then
+            if "$NM" -a "$f" 2>/dev/null | grep -q '_OBJC_CLASS_\$_CDVPurchasely'; then
               echo "CDVPurchasely found in ${f#"$APP"/}"
               FOUND=1
               break
@@ -203,11 +240,27 @@ jobs:
             # cost a full round trip the last time this fired.
             echo "Mach-O files and their CDV/Purchasely classes:"
             while IFS= read -r f; do
-              syms=$(nm -a "$f" 2>/dev/null | grep -oE '_OBJC_CLASS_\$_(CDV|PLY)[A-Za-z]*' | sort -u | tr '\n' ' ')
+              # Permissive on purpose, and verified against a real Purchasely.framework:
+              # Swift mangles ObjC-visible classes with a per-component length prefix, so
+              # PLYProduct appears as `_OBJC_CLASS_$__TtC10Purchasely10PLYProduct`. Two
+              # tighter patterns matched 0 of 179 class symbols; this one matches 62.
+              syms=$("$NM" -a "$f" 2>&1 | grep -oE '_OBJC_CLASS_\$_.*(CDV|PLY)[A-Za-z]*' | sort -u | tr '\n' ' ')
               if [ -n "$syms" ]; then echo "  ${f#"$APP"/}: $syms"; fi
             done < <(find "$APP" -type f)
             echo "Linker flags in effect:"
             grep -rh "OTHER_LDFLAGS" ../../ios/App/Pods/Target\ Support\ Files/Pods-App/*.xcconfig 2>/dev/null | head -3 || true
+            # The datum that distinguishes the two possible causes, and the one missing
+            # both times this fired:
+            #   present here but not in the app -> the link dropped it
+            #   absent here                     -> the plugin source was never compiled,
+            #                                      i.e. cap sync did not pick it up
+            echo "CDVPurchasely in the built CordovaPluginsStatic products:"
+            while IFS= read -r lib; do
+              n=$("$NM" -a "$lib" 2>&1 | grep -c '_OBJC_CLASS_\$_CDVPurchasely' || true)
+              echo "  ${lib##*/Build/}: $n"
+            done < <(find build -name "*CordovaPluginsStatic*" -type f 2>/dev/null | head -5)
+            echo "Compiled plugin objects:"
+            find build -name "CDVPurchasely*.o" 2>/dev/null | head -5 || true
             exit 1
           fi
 
