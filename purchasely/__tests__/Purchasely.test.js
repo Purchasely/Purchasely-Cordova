@@ -472,6 +472,31 @@ describe('Purchasely', () => {
         }
       });
 
+      // The two public entry points must agree on the same input. JSON.stringify drops an
+      // undefined-valued key, so `start({ proxy: undefined })` reaches native as ABSENT.
+      // The builder must therefore treat an explicit undefined as "not set" too. Mapping
+      // it to null would make `builder(k).proxy(config.proxy)` CLEAR the proxy whenever
+      // config.proxy has not loaded yet, which is the opposite of leaving it alone.
+      it('proxy(undefined) leaves the key ABSENT, exactly as start({proxy: undefined}) does', () => {
+        const logged = jest.spyOn(console, 'log').mockImplementation(() => {});
+        try {
+          Purchasely.builder('API_KEY').proxy(undefined).start(jest.fn(), jest.fn());
+          const viaBuilder = mockExec.mock.calls[0][4][0];
+
+          mockExec.mockClear();
+          Purchasely.start({ apiKey: 'API_KEY', proxy: undefined }, jest.fn(), jest.fn());
+          const viaOptions = JSON.parse(JSON.stringify(mockExec.mock.calls[0][4][0]));
+
+          expect(Object.prototype.hasOwnProperty.call(viaBuilder, 'proxy')).toBe(false);
+          expect(Object.prototype.hasOwnProperty.call(viaOptions, 'proxy')).toBe(false);
+          // The point of the test: the two paths must not disagree.
+          expect(Object.keys(viaBuilder).sort()).toEqual(Object.keys(viaOptions).sort());
+          expect(logged).toHaveBeenCalledWith(expect.stringContaining('proxy() requires an argument'));
+        } finally {
+          logged.mockRestore();
+        }
+      });
+
       // JS does not validate the URL: each native converts it and the SDK refuses a
       // non-https value, a value with no host, and a query, a fragment or credentials.
       it('does not validate the scheme in JS', () => {
@@ -515,6 +540,35 @@ describe('Purchasely', () => {
         const actions = mockExec.mock.calls.map((call) => call[3]);
         expect(actions).toEqual(['addWebRedemptionListener', 'start']);
         expect(actions.indexOf('addWebRedemptionListener')).toBeLessThan(actions.indexOf('start'));
+      });
+
+      // The leak the deferral exists to prevent: a builder that is configured and then
+      // abandoned must leave NOTHING registered natively. The native slot would otherwise
+      // hold the callback until onReset or an activity teardown, and any later start()
+      // would route redemptions to it.
+      it('webRedemptionListener subscribes NOTHING until start() is called', () => {
+        const onRedemption = jest.fn();
+
+        Purchasely.builder('API_KEY').webRedemptionListener(onRedemption);
+
+        const actions = mockExec.mock.calls.map((call) => call[3]);
+        expect(actions).not.toContain('addWebRedemptionListener');
+        expect(mockExec).not.toHaveBeenCalled();
+      });
+
+      // Calling the modifier twice must still leave exactly one subscription.
+      it('webRedemptionListener subscribes once, with the last callback, when set twice', () => {
+        const first = jest.fn();
+        const second = jest.fn();
+
+        Purchasely.builder('API_KEY')
+          .webRedemptionListener(first)
+          .webRedemptionListener(second)
+          .start(jest.fn(), jest.fn());
+
+        const subscribes = mockExec.mock.calls.filter((c) => c[3] === 'addWebRedemptionListener');
+        expect(subscribes).toHaveLength(1);
+        expect(subscribes[0][0]).toBe(second);
       });
 
       it('webRedemptionListener registers the callback that receives the outcome', () => {

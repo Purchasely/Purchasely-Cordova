@@ -149,12 +149,17 @@ PLYStartBuilder.prototype.anonymousUserId = function (id, override) {
 // `undefined` is never stored: JSON.stringify drops an undefined-valued key, which would
 // make an explicit clear indistinguishable from an absent option on both natives.
 PLYStartBuilder.prototype.proxy = function (api) {
-    if (arguments.length === 0) {
+    // An explicit `undefined` is treated exactly like no argument at all, and NOT as null.
+    // The two public entry points have to agree on the same input: JSON.stringify drops an
+    // undefined-valued key, so `start({ proxy: undefined })` reaches native as Absent.
+    // Mapping it to null here would make `builder(k).proxy(config.proxy)` CLEAR the proxy
+    // whenever config.proxy has not loaded yet, which is the opposite of leaving it alone.
+    if (arguments.length === 0 || api === undefined) {
         defaultError('[Purchasely] proxy() requires an argument: an https base URL, or ' +
             'null to clear the proxy. The proxy option is not applied.');
         return this;
     }
-    this._options.proxy = api === undefined ? null : api;
+    this._options.proxy = api;
     return this;
 };
 
@@ -175,12 +180,17 @@ PLYStartBuilder.prototype.appHandlesRedemptionAlert = function (handles) {
 // outcome as a Cordova callback stream. So this modifier is purely a JS concern: it
 // records the callback and subscribes it locally.
 //
-// IT SUBSCRIBES AT CHAIN TIME, NOT INSIDE start(). That is the whole point of putting the
-// listener on the chain. A redemption can settle DURING start(), from a cold start that
-// the `ply/redeem` link itself triggered, or from a token a previous launch left pending.
-// A listener registered after start() misses exactly the case the feature exists for.
-// Subscribing here makes that ordering structurally impossible to get wrong, instead of a
-// documentation warning an integrator can ignore.
+// STORED HERE, SUBSCRIBED IN start(), immediately before the native call.
+//
+// Subscribing on the spot would leak a live callback from a builder that is never started:
+// the native slot would hold it until onReset or an activity teardown, and any later
+// start() would route redemptions to it. Deferring costs nothing, because a redemption can
+// only settle once the SDK is running, so subscribing just before the native start call
+// still guarantees the listener exists for a redemption that settles DURING start() -- a
+// cold start that the `ply/redeem` link itself triggered, or a token a previous launch left
+// pending. That is the case the feature exists for, and it stays covered.
+//
+// Matches the React Native builder, which reached the same conclusion in review.
 //
 // The optional second argument is shorthand for the appHandlesRedemptionAlert option.
 // Omitting it sets nothing, so the native default (false, the SDK shows its own popin)
@@ -191,7 +201,9 @@ PLYStartBuilder.prototype.appHandlesRedemptionAlert = function (handles) {
 //
 // See Purchasely.addWebRedemptionListener for the result shape and for the runtime path.
 PLYStartBuilder.prototype.webRedemptionListener = function (callback, appHandlesRedemptionAlert) {
-    exports.addWebRedemptionListener(callback);
+    // Kept off _options on purpose: that object is the exec payload, and a callback has no
+    // business being serialized into it.
+    this._webRedemptionCallback = callback;
     if (appHandlesRedemptionAlert !== undefined) {
         this._options.appHandlesRedemptionAlert = appHandlesRedemptionAlert;
     }
@@ -199,6 +211,11 @@ PLYStartBuilder.prototype.webRedemptionListener = function (callback, appHandles
 };
 
 PLYStartBuilder.prototype.start = function (success, error) {
+    // Subscribe immediately before the native start call, never earlier. See
+    // webRedemptionListener above for why this is deferred to here.
+    if (this._webRedemptionCallback) {
+        exports.addWebRedemptionListener(this._webRedemptionCallback);
+    }
     if (success) {
         exports.start(this._options, success, error);
         return undefined;
@@ -230,9 +247,12 @@ exports.addEventsListener = function (success, error) {
 // Purchasely 6.1.0: the outcome of a Web2App redemption ({scheme}://ply/redeem/{token}).
 //
 // SECONDARY PATH. Prefer Purchasely.builder(apiKey).webRedemptionListener(cb), which
-// subscribes at chain time and therefore cannot miss a redemption that settles during
-// start(). Use this pair for the runtime case only: an app that must REPLACE the listener
-// while the SDK already runs.
+// subscribes just before the native start call and therefore cannot miss a redemption that
+// settles during start(). Use this pair for the runtime case only: an app that must REPLACE
+// the listener while the SDK already runs.
+//
+// Both paths share ONE native slot, so the last caller wins. Mixing them replaces rather
+// than adds.
 //
 // TRADE-OFF of the runtime path: a redemption can settle during start(), from a cold
 // start that the `ply/redeem` link itself triggered, or from a token a previous launch
@@ -675,6 +695,11 @@ exports.userDidConsumeSubscriptionContent = function () {
 
 // PAR-29: invalidateCache forces a fresh fetch instead of returning the cached list
 // (native default false on both platforms).
+// A subscription's purchaseToken, nextRenewalDate and cancelledDate can all be ABSENT, and
+// the two platforms report absence differently: Android sends the key with an explicit
+// null, iOS omits it entirely (and never emits purchaseToken at all, because the native
+// PLYSubscription has no such property). Handle both -- a truthiness check covers them,
+// `!== undefined` does not. Same shape as the web redemption context's `subscription`.
 exports.userSubscriptions = function (success, error, invalidateCache) {
     exec(success, defaultError, 'Purchasely', 'userSubscriptions', [!!invalidateCache]);
 };
