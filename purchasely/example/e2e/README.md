@@ -30,6 +30,25 @@ The redemption outcome needs the real backend reachable from the runner. When no
 arrives the spec logs `[redemption] KNOWN:` and returns rather than asserting on something
 that cannot arrive — the same policy the store-dependent bridge assertions use.
 
+## The suite must run the build you just made
+
+Both wdio configs set `appium:enforceAppInstall: true`. Do not remove it.
+
+Appium otherwise compares the installed package's version against the artifact and, when
+they match, does a **fast reset** (clear app data) instead of reinstalling. The Android AVD
+is restored from a cache, so the app is already present at the same `versionCode` from an
+earlier run, and the emulator then serves the **previous build's** bundled plugin JS. A
+`cordova build` never bumps the version, so the comparison always matches.
+
+This silently invalidated the suite: `start-options-6-1-0` was the first spec to exercise
+newly added JS, and every one of its 6.1.0 lookups came back `undefined` against code that
+was verifiably present in the APK. The older suites never noticed, because the stale build
+already contained everything they assert. Proven in `appium-android.log`:
+
+```
+[AndroidUiautomator2Driver] Performing fast reset on 'com.purchasely.demo'
+```
+
 ## Adding a spec
 
 `tools/ci_run_e2e.sh` and `tools/ci_run_e2e_ios.sh` name every spec **explicitly** and pass
