@@ -29,7 +29,6 @@
 const {
   waitForPurchaselyReady,
   switchToWebview,
-  switchToNative,
   callBridge,
   pollGlobal,
 } = require('../helpers/driver');
@@ -206,22 +205,19 @@ describe('6.1.0 start options and the redemption listener', () => {
         window.Purchasely.handleDeeplink('purchaselydemo://ply/redeem/e2e-invalid-token');
       });
 
-      // The sample runs with appHandlesRedemptionAlert at its default (false), so the SDK
-      // shows its own popin FIRST and calls the listener once the user acknowledges it.
-      // Dismiss it natively, which is also what proves the popin path works.
-      await switchToNative();
-      const dismissed = await dismissRedemptionAlert();
-      await switchToWebview();
-
+      // The sample starts with appHandlesRedemptionAlert: true, so the SDK shows no popin
+      // and calls the listener as soon as the redemption settles. Under the native default
+      // (false) the callback is gated on a UI dismissal, which is what made this assertion
+      // skip on a loaded emulator. Only the backend call is left in the loop now.
       const outcome = await pollGlobal('__plyRedemption', 45000);
 
       if (!outcome || outcome.timedOut) {
-        // Consistent with the rest of this suite: a redemption needs the real backend and
-        // a reachable network from the runner. Surface it loudly rather than assert on an
+        // Consistent with the rest of this suite: a redemption still needs the real
+        // backend reachable from the runner. Surface it loudly rather than assert on an
         // outcome that cannot arrive, and rather than swallow it silently.
         console.log(
-          '[redemption] KNOWN: no outcome arrived within 45s (alertDismissed=' +
-            dismissed + '). Needs the real backend from the runner.'
+          '[redemption] KNOWN: no outcome arrived within 45s. The SDK popin is no longer ' +
+            'in the loop (appHandlesRedemptionAlert: true), so this is the backend call.'
         );
         return;
       }
@@ -254,38 +250,3 @@ describe('6.1.0 start options and the redemption listener', () => {
     });
   });
 });
-
-// Tap the SDK's redemption popin acknowledge button. Returns true if something was tapped.
-// Layouts and languages vary with the backend configuration, so a miss is reported rather
-// than failed: the caller treats it as "cannot conclude".
-async function dismissRedemptionAlert() {
-  const ACK = /^(ok|okay|close|got it|continue|fermer|d'accord|continuer)$/i;
-  const selector = browser.isAndroid ? '//*[@clickable="true"]' : '//XCUIElementTypeButton';
-
-  try {
-    await browser.waitUntil(async () => (await browser.$$(selector)).length > 0, {
-      timeout: 20000,
-      interval: 500,
-      timeoutMsg: 'no tappable element appeared',
-    });
-  } catch (e) {
-    return false;
-  }
-
-  for (const element of (await browser.$$(selector)).slice(0, 30)) {
-    let label = '';
-    try {
-      label = (await element.getText()) || (await element.getAttribute('content-desc')) || '';
-    } catch (e) {
-      continue;
-    }
-    if (!ACK.test(label.trim())) continue;
-    try {
-      await element.click();
-      return true;
-    } catch (e) {
-      continue;
-    }
-  }
-  return false;
-}

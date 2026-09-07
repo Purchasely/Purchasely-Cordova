@@ -73,9 +73,19 @@ function onDeviceReady() {
 			storeKit1: false,
 			logLevel: Purchasely.LogLevel.DEBUG,
 			runningMode: Purchasely.RunningMode.full,
-			// 6.1.0. Keep the SDK's own redemption popin (the default). Pass true to
-			// show your own result screen instead.
-			appHandlesRedemptionAlert: false
+			// 6.1.0. true = the SDK shows NO popin and calls the listener as soon as the
+			// redemption settles; this app then renders its own result, which it does in
+			// the listener above. false is the native default: the SDK shows its own
+			// popin and calls the listener only once the user DISMISSES it.
+			//
+			// true here on purpose. Under `false` the callback is gated on a UI dismissal,
+			// and the native doc is explicit that the alert is held until an activity
+			// reaches the foreground and re-shown if its activity is destroyed. On a
+			// loaded CI emulator that stalled the E2E redemption assertion, which skipped
+			// with alertDismissed=false while the same run passed on iOS. `true` takes the
+			// UI out of the loop and leaves only the backend call, and it is also the mode
+			// an app that owns its post-redemption experience will use.
+			appHandlesRedemptionAlert: true
 			// 6.1.0. The anonymous user id this device reports. The bridge parses the
 			// string into a native UUID and refuses a value that is not canonical. The
 			// SDK stores it uppercase, and applies it only when the device holds no

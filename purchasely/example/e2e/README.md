@@ -39,6 +39,32 @@ assertions in the file are genuinely hard-gated. Read a green run's log for
 `[redemption] KNOWN` before treating the redemption path as verified: absent means it
 really settled and the assertions ran.
 
+The sample deliberately starts with `appHandlesRedemptionAlert: true` so the SDK popin is
+**not** in the loop. Under the native default (`false`) the listener is called only once the
+user dismisses that popin, and the native doc is explicit that the alert is held until an
+activity reaches the foreground and re-shown if its activity is destroyed. On a loaded
+emulator that stalled this assertion — it skipped with `alertDismissed=false` on Android
+while the same commit settled on iOS. With `true` only the backend call remains.
+
+### Why not a fake backend
+
+The obvious next step is to point the SDK at a local stub with 6.1.0's own `proxy` option
+and get a deterministic success, failure and replay. Two things block it today, both
+verified in the native sources rather than assumed:
+
+- `proxy` accepts **https only** (`PLYProxyApiUrl.kt:24`, `parsed.scheme != "https"` →
+  rejected). A stub server therefore needs TLS plus a CA the emulator and the simulator
+  trust — a `network_security_config.xml` for the debug build on Android, and
+  `simctl keychain add-root-cert` on iOS.
+- `proxy` has **no runtime setter**, by design: assigning the environment rebuilds the
+  Retrofit clients, which read their base URL only at build time. So the sample would have
+  to *start* with the proxy, which would take the real backend away from every other spec
+  in this suite. That needs a second app configuration, not a flag.
+
+Worth doing, because it is the only way to reach the **success** and **replay** branches
+end to end — an invalid token can only ever produce a failure. It is a separate piece of
+work, not a tail-end addition.
+
 ## The suite must run the build you just made
 
 Both wdio configs set `appium:enforceAppInstall: true`. Do not remove it.
