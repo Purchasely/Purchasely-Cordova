@@ -338,7 +338,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 this.webRedemptionListener(appHandlesRedemptionAlert, PLYWebRedemptionListener { result ->
                     val pluginResult = PluginResult(
                         PluginResult.Status.OK,
-                        JSONObject(webRedemptionResultToMap(result))
+                        webRedemptionResultToJson(result, ::transformSubscriptionToMap)
                     )
                     pluginResult.keepCallback = true
                     webRedemptionCallback?.sendPluginResult(pluginResult)
@@ -457,42 +457,6 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         // The native listener stays registered; clearing the callback makes it a no-op.
         webRedemptionCallback = null
     }
-
-    /**
-     * Flatten a [PLYWebRedemptionResult] to the 5-key shape the JS listener receives.
-     *
-     * The sealed Kotlin result and the flat iOS `PLYWebRedemptionResult` object both map to the
-     * same 5 keys, so one JS listener drives both platforms. A `Failure` still reports
-     * `replay = false` and a null `context`, which keeps the JS shape stable.
-     *
-     * `context` and `context.subscription` stay separately nullable: a success can carry no
-     * context at all, and a present context can carry no subscription. JSONObject renders a
-     * null value as JSON null, which reaches JS as `null`.
-     */
-    internal fun webRedemptionResultToMap(result: PLYWebRedemptionResult): Map<String, Any?> =
-        when (result) {
-            is PLYWebRedemptionResult.Success -> mapOf(
-                "isSuccess" to true,
-                "context" to result.context?.let { context ->
-                    JSONObject(
-                        mapOf(
-                            "subscription" to context.subscription
-                                ?.let { JSONObject(transformSubscriptionToMap(it)) }
-                        )
-                    )
-                },
-                "replay" to result.replay,
-                "errorCode" to null,
-                "errorMessage" to null,
-            )
-            is PLYWebRedemptionResult.Failure -> mapOf(
-                "isSuccess" to false,
-                "context" to null,
-                "replay" to false,
-                "errorCode" to result.errorCode,
-                "errorMessage" to result.errorMessage,
-            )
-        }
 
     private fun getAnonymousUserId(callbackContext: CallbackContext) {
         callbackContext.success(Purchasely.anonymousUserId)
@@ -1656,6 +1620,67 @@ internal fun resolveProxyOption(options: JSONObject): PLYProxyOption {
     } catch (e: URISyntaxException) {
         PLYProxyOption.Invalid(raw)
     }
+}
+
+/**
+ * Flatten a [PLYWebRedemptionResult] to the 5-key shape the JS listener receives.
+ *
+ * The sealed Kotlin result and the flat iOS `PLYWebRedemptionResult` object both map to the
+ * same 5 keys, so one JS listener drives both platforms. A `Failure` still reports
+ * `replay = false` and a null `context`, so every key is present on both branches and the
+ * JS shape never changes.
+ *
+ * `context` and `context.subscription` stay separately nullable. A success can carry no
+ * context at all, and a present context can carry no subscription: the receipt validated
+ * and entitlements refreshed, but the response carried none or the products behind it are
+ * not loaded yet. Both remain a success.
+ *
+ * [subscriptionToMap] is injected rather than called directly so a unit test can drive this
+ * without constructing an SDK [PLYSubscriptionData]. Production passes the plugin's own
+ * `transformSubscriptionToMap`, so `userSubscriptions`, `userSubscriptionsHistory` and the
+ * redemption context all report one subscription shape.
+ *
+ * EVERY NULL IS PUT AS [JSONObject.NULL] EXPLICITLY, and the object is built here rather
+ * than handed back as a `Map` for the caller to wrap. `JSONObject(Map)` does not agree
+ * across implementations on what a null value means: Android's wraps it as JSON null and
+ * keeps the key, while the reference `org.json` DROPS the entry. A dropped key would reach
+ * JS as `undefined` instead of `null`, and it would silently change which of the five
+ * fields the listener can rely on. Building it explicitly makes the wire shape identical
+ * on both, and makes it assertable in a unit test.
+ */
+internal fun webRedemptionResultToJson(
+    result: PLYWebRedemptionResult,
+    subscriptionToMap: (PLYSubscriptionData) -> Map<String, Any?>,
+): JSONObject {
+    val json = JSONObject()
+    when (result) {
+        is PLYWebRedemptionResult.Success -> {
+            json.put("isSuccess", true)
+            val context = result.context
+            if (context == null) {
+                json.put("context", JSONObject.NULL)
+            } else {
+                val subscription = context.subscription
+                json.put("context", JSONObject().put(
+                    "subscription",
+                    if (subscription == null) JSONObject.NULL
+                    else JSONObject(subscriptionToMap(subscription))
+                ))
+            }
+            json.put("replay", result.replay)
+            json.put("errorCode", JSONObject.NULL)
+            json.put("errorMessage", JSONObject.NULL)
+        }
+        is PLYWebRedemptionResult.Failure -> {
+            json.put("isSuccess", false)
+            json.put("context", JSONObject.NULL)
+            // A failure still reports replay, so the shape never changes between branches.
+            json.put("replay", false)
+            json.put("errorCode", result.errorCode ?: JSONObject.NULL)
+            json.put("errorMessage", result.errorMessage ?: JSONObject.NULL)
+        }
+    }
+    return json
 }
 
 /**

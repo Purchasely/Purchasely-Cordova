@@ -1,0 +1,72 @@
+plugins {
+    id 'com.android.library' version '8.10.1'
+    id 'org.jetbrains.kotlin.android' version '2.3.21'
+}
+
+android {
+    namespace 'cordova.plugin.purchasely.tests'
+    // Matches the compileSdk the example app builds the plugin against
+    // (purchasely/example/platforms/android/cdv-gradle-config.json).
+    compileSdk 36
+
+    defaultConfig {
+        minSdk 23
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        // Compile the SHIPPED plugin source, not a copy. A refactor that breaks the
+        // bridge therefore breaks this build too.
+        main {
+            java.srcDirs = ['../src/android']
+            manifest.srcFile 'src/main/AndroidManifest.xml'
+        }
+        test {
+            java.srcDirs = ['src/test/java']
+        }
+    }
+
+    testOptions {
+        unitTests {
+            // The bridge only touches android.util.Log from the paths under test, and a
+            // no-op Log is the right behaviour for a unit test. Without this, every
+            // android.* call throws "not mocked".
+            returnDefaultValues = true
+        }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
+dependencies {
+    // Cordova's own framework, which supplies CordovaPlugin, CallbackContext and
+    // PluginResult. Kept at the version the example app pins, so this module compiles the
+    // plugin against the same API surface the host app does.
+    compileOnly 'org.apache.cordova:framework:15.1.0'
+    testImplementation 'org.apache.cordova:framework:15.1.0'
+
+    // The native SDK under bridge. Must match plugin.xml's <framework src="io.purchasely:core">.
+    compileOnly 'io.purchasely:core:6.1.0'
+    testImplementation 'io.purchasely:core:6.1.0'
+
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.2'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.mockito:mockito-core:5.11.0'
+    testImplementation 'org.mockito.kotlin:mockito-kotlin:5.2.1'
+    // A REAL org.json. The android.jar on a unit-test classpath ships org.json as stubs
+    // that throw, and `returnDefaultValues` would make JSONObject silently answer null
+    // for everything, which would make resolveProxyOption's three states untestable. A
+    // testImplementation dependency precedes the mockable android jar on the classpath,
+    // so this one wins.
+    testImplementation 'org.json:json:20240303'
+}

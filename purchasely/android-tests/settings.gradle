@@ -1,0 +1,27 @@
+// Unit-test harness for the Android bridge.
+//
+// This repository ships the Android plugin as a single source file that `cordova plugin
+// add` copies into the host app, so there is no Gradle module to attach tests to. This
+// project is that module: it compiles `../src/android` as its own main source set, so the
+// tests exercise the file that actually ships rather than a copy of it.
+//
+// It is test-only scaffolding. `purchasely/package.json` restricts the npm package to
+// src, www, plugin.xml and Package.swift, so nothing here reaches consumers, and
+// plugin.xml lists its source files explicitly, so nothing here reaches a host app.
+
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = 'purchasely-cordova-android-tests'

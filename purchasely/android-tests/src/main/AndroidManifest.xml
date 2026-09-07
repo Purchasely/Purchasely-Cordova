@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The plugin source directory has no manifest of its own, because `cordova plugin add`
+     merges the plugin into the host app's manifest. This module needs one to build. -->
+<manifest />
