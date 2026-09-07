@@ -1,11 +1,13 @@
 package cordova.plugin.purchasely
 
+import io.purchasely.ext.StoreType
 import io.purchasely.models.PLYSubscriptionData
 import io.purchasely.models.PLYWebRedemptionContext
 import io.purchasely.models.PLYWebRedemptionResult
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -199,6 +201,142 @@ class PurchaselyBridgeTest {
     @Test
     fun `parseCanonicalUuid returns null for a null value`() {
         assertNull(parseCanonicalUuid(null))
+    }
+
+    // endregion
+
+    // region subscription source
+
+    /**
+     * The wire value IS the native raw value, and both platforms agree.
+     *
+     * Verified against the shipped 6.1.0 artifacts: iOS `PLYSubscriptionSource` has
+     * `stripe = 4` and `none = 5`, and Android's `StoreType` ordinals match one for one.
+     *
+     * The bridge used to hardcode 4 for BOTH `NONE` and `WEB_CHECKOUT_STRIPE`, on the
+     * stated but false premise that iOS's `None` was 4. So a Web2App subscription reported
+     * `none`, and a sourceless one reported Stripe's value. A Web2App redemption grants a
+     * subscription from exactly that source, which is how the gap became reachable.
+     */
+    // These drive subscriptionSourceFor, the function transformSubscriptionToMap calls, so
+    // they cover the shipped mapping. An earlier version of this test asserted the
+    // StoreType ordinals and a locally re-declared `when` instead, and reintroducing the
+    // old collapsing mapping did NOT fail it: it was a tautology about the enum, not a
+    // test of the bridge.
+
+    @Test
+    fun `the mapping reports the wire value both platforms agree on`() {
+        assertEquals(0, subscriptionSourceFor(StoreType.APPLE_APP_STORE))
+        assertEquals(1, subscriptionSourceFor(StoreType.GOOGLE_PLAY_STORE))
+        assertEquals(2, subscriptionSourceFor(StoreType.AMAZON_APP_STORE))
+        assertEquals(3, subscriptionSourceFor(StoreType.HUAWEI_APP_GALLERY))
+        assertEquals(
+            "Stripe is 4, not `none`",
+            4, subscriptionSourceFor(StoreType.WEB_CHECKOUT_STRIPE)
+        )
+        assertEquals("`none` is 5, not 4", 5, subscriptionSourceFor(StoreType.NONE))
+    }
+
+    /**
+     * Web checkout must not collapse into `none`, and `none` must not take Stripe's value.
+     * Asserted against each other, because either alone passes while the two are swapped.
+     */
+    @Test
+    fun `web checkout and none map to distinct wire values`() {
+        assertNotEquals(
+            subscriptionSourceFor(StoreType.WEB_CHECKOUT_STRIPE),
+            subscriptionSourceFor(StoreType.NONE)
+        )
+    }
+
+    /**
+     * Every native store type maps to its own value, with no duplicate and no gap. This is
+     * what an `else -> null` branch destroyed: two different sources produced one wire
+     * value, and nothing noticed.
+     */
+    @Test
+    fun `every StoreType maps to a distinct value, and none of them collapse`() {
+        val mapped = StoreType.entries.map { subscriptionSourceFor(it) }
+
+        assertEquals("no store type may map to null", 0, mapped.count { it == null })
+        assertEquals("no two store types may share a wire value", mapped.size, mapped.toSet().size)
+        assertEquals(setOf(0, 1, 2, 3, 4, 5), mapped.toSet())
+        // The ordinal is the contract, so the mapping must be identity over it.
+        for (storeType in StoreType.entries) {
+            assertEquals(storeType.ordinal, subscriptionSourceFor(storeType))
+        }
+    }
+
+    @Test
+    fun `a null store type maps to null`() {
+        assertNull(subscriptionSourceFor(null))
+    }
+
+    // endregion
+
+    // region teardown: no stale callback contexts
+
+    /**
+     * The callbacks live on the companion object, so they are STATIC and outlive both the
+     * plugin instance and the WebView. Neither teardown path cleared them, which leaked the
+     * dead CordovaWebView through each stale context and sent post-teardown events into a
+     * dead bridge.
+     *
+     * `onDestroy` is the activity teardown; `onReset` is a WebView navigation, which
+     * invalidates every callbackId the previous page handed over.
+     */
+    @Test
+    fun `onDestroy clears every stored callback context`() {
+        val plugin = PurchaselyPlugin()
+        seedEveryCallbackContext()
+
+        plugin.onDestroy()
+
+        assertEveryCallbackContextCleared()
+    }
+
+    @Test
+    fun `onReset clears every stored callback context`() {
+        val plugin = PurchaselyPlugin()
+        seedEveryCallbackContext()
+
+        plugin.onReset()
+
+        assertEveryCallbackContextCleared()
+    }
+
+    /**
+     * The redemption handle is the one that matters most: `webRedemptionListener` is fixed
+     * on the builder at `start()` and `start()` cannot run twice, so the SDK keeps calling
+     * the first instance's lambda for the whole process lifetime. That lambda reads the
+     * static handle at fire time, so a reloaded page can re-register; this asserts the
+     * handle is genuinely gone in between rather than pointing at the dead page.
+     */
+    @Test
+    fun `the redemption handle specifically does not survive a teardown`() {
+        PurchaselyPlugin.webRedemptionCallback = mock()
+        assertNotNull(PurchaselyPlugin.webRedemptionCallback)
+
+        PurchaselyPlugin().onReset()
+
+        assertNull(
+            "a surviving handle sends the next redemption outcome into a dead bridge",
+            PurchaselyPlugin.webRedemptionCallback
+        )
+    }
+
+    private fun seedEveryCallbackContext() {
+        PurchaselyPlugin.defaultCallback = mock()
+        PurchaselyPlugin.eventsCallback = mock()
+        PurchaselyPlugin.attributesCallback = mock()
+        PurchaselyPlugin.webRedemptionCallback = mock()
+    }
+
+    private fun assertEveryCallbackContextCleared() {
+        assertNull(PurchaselyPlugin.defaultCallback)
+        assertNull(PurchaselyPlugin.eventsCallback)
+        assertNull(PurchaselyPlugin.attributesCallback)
+        assertNull(PurchaselyPlugin.webRedemptionCallback)
     }
 
     // endregion

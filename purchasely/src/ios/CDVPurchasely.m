@@ -65,6 +65,23 @@
     return [[NSUUID alloc] initWithUUIDString:(NSString *)value];
 }
 
+/// Cordova calls this when the WebView navigates, which invalidates every callbackId the
+/// previous page handed us. Without it the stored commands stay live and every listener
+/// callback is sent to a dead callbackId after a reload.
+///
+/// The redemption case is the one that matters most: `webRedemptionDelegate:` is fixed on
+/// the builder at `start:` and `start:` cannot run twice, so the SDK keeps calling this
+/// object for the whole process lifetime. `webRedemptionCompletedWithResult:` reads
+/// `webRedemptionCommand` at fire time, so a reloaded page can re-register and keep
+/// working; clearing here makes the window in between a clean no-op.
+- (void)onReset {
+    self.eventCommand = nil;
+    self.attributeCommand = nil;
+    self.webRedemptionCommand = nil;
+    self.purchasedCommand = nil;
+    [super onReset];
+}
+
 - (void)start:(CDVInvokedUrlCommand*)command {
     // v6: a single options dictionary (see the JS↔native contract), no longer positional args.
     NSDictionary *opts = [command argumentAtIndex:0];
@@ -126,6 +143,12 @@
     if ([allowCampaigns isKindOfClass:[NSNumber class]]) {
         builder = [builder allowCampaigns:allowCampaigns.boolValue];
     }
+
+    // Both bridges report a refused-and-skipped option at the SAME severity, and
+    // deliberately with a plain log line on both: NSLog here, Log.e on Android. Neither
+    // renders UI. Do not reach for anything that puts an overlay or an alert in front of
+    // the host app: start() continues, the option was simply ignored, and a third-party
+    // SDK has no business interrupting someone else's app over an option it chose to skip.
 
     // v6.1.0: JS has no UUID type, so the id crosses the bridge as a string and is parsed
     // here. The native builder takes an NSUUID, which is where the guarantee used to live;

@@ -92,7 +92,41 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
 
     override fun onDestroy() {
         job.cancel()
+        clearCallbackContexts()
         super.onDestroy()
+    }
+
+    /**
+     * Cordova calls this when the WebView navigates, which invalidates every callbackId the
+     * previous page handed us.
+     */
+    override fun onReset() {
+        clearCallbackContexts()
+        super.onReset()
+    }
+
+    /**
+     * Drop every stored [CallbackContext].
+     *
+     * These live on the companion object, so they are STATIC: they outlive both the plugin
+     * instance and the WebView. Neither teardown path cleared them before, which left two
+     * problems. Each stale context holds a reference to the dead CordovaWebView, so the
+     * whole view tree leaked. And the native SDK listeners registered at `start()` outlive
+     * the activity, so an event arriving after a teardown was sent into a dead bridge
+     * instead of being dropped.
+     *
+     * The redemption case is the one that matters most. `webRedemptionListener` is fixed on
+     * the builder at `start()` and `start()` cannot run twice, so the SDK keeps calling the
+     * lambda registered by the FIRST plugin instance for the whole process lifetime. That
+     * lambda reads `webRedemptionCallback` lazily, at fire time, which is what lets a
+     * reloaded page re-register and keep working. Clearing here is what makes the window in
+     * between a clean no-op rather than a send into a dead callbackId.
+     */
+    private fun clearCallbackContexts() {
+        defaultCallback = null
+        eventsCallback = null
+        attributesCallback = null
+        webRedemptionCallback = null
     }
 
     override fun execute(
@@ -288,6 +322,12 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         val allowCampaigns = if (options.has("allowCampaigns")) options.optBoolean("allowCampaigns") else null
         val deeplink = getStringFromJson(options.optString("deeplink"))
         val sdkVersion = getStringFromJson(options.optString("sdkVersion"))
+        // Both bridges report a refused-and-skipped option at the SAME severity, and
+        // deliberately with a plain log line on both: Log.e here, NSLog on iOS. Neither
+        // renders UI. Do not reach for anything that puts an overlay or a dialog in front
+        // of the host app: start() continues, the option was simply ignored, and a
+        // third-party SDK has no business interrupting someone else's app over an option
+        // it chose to skip.
         // v6.1.0: three states, and they are not interchangeable. See [resolveProxyOption].
         val proxyOption = resolveProxyOption(options)
         if (proxyOption is PLYProxyOption.Invalid) {
@@ -906,16 +946,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         return HashMap(data.data.toMap()).apply {
             this["plan"] = transformPlanToMap(data.plan)
             this["product"] = normalizeProductPlans(data.product.toMap())
-            this["subscriptionSource"] = when (data.data.storeType) {
-                StoreType.GOOGLE_PLAY_STORE -> StoreType.GOOGLE_PLAY_STORE.ordinal
-                StoreType.AMAZON_APP_STORE -> StoreType.AMAZON_APP_STORE.ordinal
-                StoreType.HUAWEI_APP_GALLERY -> StoreType.HUAWEI_APP_GALLERY.ordinal
-                StoreType.APPLE_APP_STORE -> StoreType.APPLE_APP_STORE.ordinal
-                // CDV-W-15: NONE/WEB_CHECKOUT_STRIPE have no JS SubscriptionSource case of
-                // their own; both map to `none` (4), matching iOS's PLYSubscriptionSource.None.
-                StoreType.NONE, StoreType.WEB_CHECKOUT_STRIPE -> 4
-                else -> null
-            }
+            this["subscriptionSource"] = subscriptionSourceFor(data.data.storeType)
         }
     }
 
@@ -1569,6 +1600,31 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
             BATCH_CUSTOM_USER_ID: 20,
          */
     }
+}
+
+/**
+ * Map a native [StoreType] to the `subscriptionSource` wire value.
+ *
+ * The ordinal IS the wire value, and it matches iOS's `PLYSubscriptionSource` one for one:
+ * apple 0, google 1, amazon 2, huawei 3, stripe 4, none 5. Verified against the shipped
+ * 6.1.0 artifacts on both platforms, so there is no per-platform translation here.
+ *
+ * Listed exhaustively on purpose, and `internal` so a unit test drives THIS function
+ * rather than re-deriving the mapping. The previous version named four stores and
+ * collapsed `NONE` and `WEB_CHECKOUT_STRIPE` into a hardcoded 4, on the stated but FALSE
+ * premise that iOS's `None` was 4. It is 5, and 4 is Stripe. So a Web2App subscription
+ * reported `none`, and a sourceless one reported Stripe's value. An `else` branch is what
+ * let that pass unnoticed; without one, a store type added by a future SDK fails the
+ * Kotlin build here instead of silently reporting the wrong source.
+ */
+internal fun subscriptionSourceFor(storeType: StoreType?): Int? = when (storeType) {
+    StoreType.APPLE_APP_STORE -> StoreType.APPLE_APP_STORE.ordinal
+    StoreType.GOOGLE_PLAY_STORE -> StoreType.GOOGLE_PLAY_STORE.ordinal
+    StoreType.AMAZON_APP_STORE -> StoreType.AMAZON_APP_STORE.ordinal
+    StoreType.HUAWEI_APP_GALLERY -> StoreType.HUAWEI_APP_GALLERY.ordinal
+    StoreType.WEB_CHECKOUT_STRIPE -> StoreType.WEB_CHECKOUT_STRIPE.ordinal
+    StoreType.NONE -> StoreType.NONE.ordinal
+    null -> null
 }
 
 /**

@@ -80,12 +80,35 @@ describe('Purchasely', () => {
     });
 
     describe('SubscriptionSource', () => {
+      // The values ARE the native raw values, verified against the shipped 6.1.0
+      // artifacts: iOS PLYSubscriptionSource (stripe = 4, none = 5) and Android StoreType
+      // ordinals (WEB_CHECKOUT_STRIPE = 4, NONE = 5). Both platforms agree.
+      //
+      // This object used to say none: 4 with no Stripe member, which was correct before
+      // the natives inserted Stripe at 4 and pushed NONE to 5 (Android ~5.5.0). A Web2App
+      // subscription therefore reported `none`, and a sourceless one reported a value with
+      // no name here. A Web2App redemption grants a subscription from exactly that source.
       it('should have correct subscription source values', () => {
         expect(Purchasely.SubscriptionSource.appleAppStore).toBe(0);
         expect(Purchasely.SubscriptionSource.googlePlayStore).toBe(1);
         expect(Purchasely.SubscriptionSource.amazonAppstore).toBe(2);
         expect(Purchasely.SubscriptionSource.huaweiAppGallery).toBe(3);
-        expect(Purchasely.SubscriptionSource.none).toBe(4);
+        expect(Purchasely.SubscriptionSource.webCheckoutStripe).toBe(4);
+        expect(Purchasely.SubscriptionSource.none).toBe(5);
+      });
+
+      it('exposes web checkout, and keeps it distinct from none', () => {
+        expect(Purchasely.SubscriptionSource.webCheckoutStripe).toBeDefined();
+        // Asserted against each other: either alone passes while the two are swapped.
+        expect(Purchasely.SubscriptionSource.webCheckoutStripe)
+          .not.toBe(Purchasely.SubscriptionSource.none);
+      });
+
+      // No duplicates and no gaps, so every native value has exactly one name here.
+      it('covers 0..5 with no duplicate value', () => {
+        const values = Object.values(Purchasely.SubscriptionSource);
+        expect(values.slice().sort()).toEqual([0, 1, 2, 3, 4, 5]);
+        expect(new Set(values).size).toBe(values.length);
       });
     });
 

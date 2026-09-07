@@ -246,4 +246,43 @@
     XCTAssertNil([CDVPurchasely canonicalUUIDFromString:[NSNull null]]);
     XCTAssertNil([CDVPurchasely canonicalUUIDFromString:@42]);
 }
+#pragma mark - teardown: no stale callback commands
+
+// Cordova calls -onReset when the WebView navigates, which invalidates every callbackId
+// the previous page handed over. Without clearing them the stored commands stay live and
+// every listener callback afterwards is sent to a dead callbackId.
+//
+// The redemption case is the one that matters most. `webRedemptionDelegate:` is fixed on
+// the builder at -start: and -start: cannot run twice, so the SDK keeps calling this
+// object for the whole process lifetime. -webRedemptionCompletedWithResult: reads
+// webRedemptionCommand at fire time, which is what lets a reloaded page re-register and
+// keep working; clearing is what makes the window in between a clean no-op.
+- (void)testOnResetClearsEveryStoredCommand {
+    CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+    plugin.eventCommand = (CDVInvokedUrlCommand *)[NSObject new];
+    plugin.attributeCommand = (CDVInvokedUrlCommand *)[NSObject new];
+    plugin.webRedemptionCommand = (CDVInvokedUrlCommand *)[NSObject new];
+    plugin.purchasedCommand = (CDVInvokedUrlCommand *)[NSObject new];
+
+    [plugin onReset];
+
+    XCTAssertNil(plugin.eventCommand);
+    XCTAssertNil(plugin.attributeCommand);
+    XCTAssertNil(plugin.webRedemptionCommand,
+                 @"a surviving handle sends the next redemption outcome to a dead callbackId");
+    XCTAssertNil(plugin.purchasedCommand);
+}
+
+// The delegate stays registered for the process lifetime, so the callback runs after a
+// reload too. With the command cleared it must be a no-op rather than a send on a dead id.
+- (void)testRedemptionOutcomeIsANoOpAfterAReset {
+    CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+    plugin.webRedemptionCommand = (CDVInvokedUrlCommand *)[NSObject new];
+
+    [plugin onReset];
+
+    id<PLYWebRedemptionDelegate> delegate = (id<PLYWebRedemptionDelegate>)plugin;
+    XCTAssertNoThrow([delegate webRedemptionCompletedWithResult:(PLYWebRedemptionResult * _Nonnull)nil],
+                     @"the redemption callback must return early once the command is cleared");
+}
 @end
