@@ -54,7 +54,7 @@ npx appium driver install xcuitest 2>/dev/null || true
 # duration on its own line in the CI log. Best-effort: if it fails, the session still builds
 # WDA the old way, only slower.
 echo "== Prebuilding WebDriverAgent =="
-node ./tools/prebuild_wda.js || echo "::warning::WDA prebuild failed; the first session will build it instead"
+node "$HERE/tools/prebuild_wda.js" || echo "::warning::WDA prebuild failed; the first session will build it instead"
 
 echo "== Starting Appium =="
 # Detach Appium's stdout/stderr (it logs to --log anyway) so it can't hold the runner's
