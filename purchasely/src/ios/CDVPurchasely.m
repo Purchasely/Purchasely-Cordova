@@ -665,17 +665,44 @@
     self.eventCommand = nil;
 }
 
+/// End a kept-alive Cordova callback stream, freeing its JavaScript closure.
+///
+/// A listener registered with `exec(success, error, ...)` gets an entry in
+/// `cordova.callbacks`, and every result this bridge sends carries `keepCallback:YES` so the
+/// stream stays open. Dropping the native command alone therefore leaks the JS side: the
+/// closure, and whatever component state it captured, stays reachable until the WebView
+/// reloads. Replacing a listener leaks the one it replaced.
+///
+/// A NO_RESULT with `keepCallback:NO` is the documented way out. cordova.js says so in its
+/// own words: NO_RESULT "is used to remove a callback from the list without calling the
+/// callbacks". Neither success nor error fires, and the entry is deleted.
+- (void)releaseCallbackStream:(CDVInvokedUrlCommand * _Nullable)command {
+    if (command == nil) {
+        return;
+    }
+    CDVPluginResult *terminal = [CDVPluginResult resultWithStatus:CDVCommandStatus_NO_RESULT];
+    [terminal setKeepCallbackAsBool:NO];
+    [self.commandDelegate sendPluginResult:terminal callbackId:command.callbackId];
+}
+
 // v6.1.0. The PLYWebRedemptionDelegate is registered on the builder chain in `start:` (the
 // native SDK has no runtime setter, because a redemption can settle during start()), so
 // this action only records the command to route the outcome to. Call it BEFORE start().
 - (void)addWebRedemptionListener:(CDVInvokedUrlCommand*)command {
+    // Close the previous stream before replacing it, or its JS closure stays in
+    // cordova.callbacks forever.
+    [self releaseCallbackStream:self.webRedemptionCommand];
     self.webRedemptionCommand = command;
 }
 
 - (void)removeWebRedemptionListener:(CDVInvokedUrlCommand*)command {
     // The delegate stays registered. Clearing the command makes
     // `webRedemptionCompletedWithResult:` a no-op.
+    [self releaseCallbackStream:self.webRedemptionCommand];
     self.webRedemptionCommand = nil;
+    // Acknowledge the remove itself, so ITS callbackId is freed too. A void action that
+    // never answers leaks its own entry exactly like the listener's.
+    [self successFor:command resultBool:YES];
 }
 
 - (void)removeUserAttributeListener:(CDVInvokedUrlCommand*)command {

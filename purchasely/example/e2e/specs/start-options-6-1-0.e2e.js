@@ -33,6 +33,30 @@ const {
   pollGlobal,
 } = require('../helpers/driver');
 
+// The API host a redemption talks to. A reachability probe against it is what separates
+// "the backend is down" from "our delivery is broken".
+const PURCHASELY_API = process.env.PURCHASELY_E2E_API || 'https://api.purchasely.io';
+
+// Is the API host reachable FROM THE DEVICE, independently of the SDK?
+//
+// Deliberately not an assertion about the redemption endpoint or its status code: any
+// answer at all, including a 4xx, proves the network path works. Only a transport failure
+// or a timeout counts as unreachable. `no-cors` keeps a cross-origin response from being
+// rejected before it is observed.
+async function probeApiHost() {
+  const result = await browser.executeAsync(function (url, done) {
+    var settled = false;
+    var finish = function (v) { if (!settled) { settled = true; done(v); } };
+    setTimeout(function () { finish(false); }, 8000);
+    try {
+      fetch(url, { method: 'GET', mode: 'no-cors', cache: 'no-store' })
+        .then(function () { finish(true); })
+        .catch(function () { finish(false); });
+    } catch (e) { finish(false); }
+  }, PURCHASELY_API);
+  return result === true;
+}
+
 // A canonical UUID, lowercase or uppercase. The SDK stores the anonymous id uppercase, and
 // both bridges refuse anything that is not this shape.
 const CANONICAL_UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -212,12 +236,26 @@ describe('6.1.0 start options and the redemption listener', () => {
       const outcome = await pollGlobal('__plyRedemption', 45000);
 
       if (!outcome || outcome.timedOut) {
-        // Consistent with the rest of this suite: a redemption still needs the real
-        // backend reachable from the runner. Surface it loudly rather than assert on an
-        // outcome that cannot arrive, and rather than swallow it silently.
+        // A missing outcome has two very different causes, and returning green on both
+        // made this assertion worthless: a broken delegate or a broken bridge looks exactly
+        // like a backend outage. So prove which one it is before deciding.
+        //
+        // The probe is independent of the SDK: a plain fetch to the API host from the same
+        // WebView, on the same network. If the host answers, the network is fine and a
+        // missing outcome is OUR defect -> fail. Only a genuinely unreachable host is
+        // allowed to skip, and it is reported as an outage rather than as a pass.
+        const reachable = await probeApiHost();
+        if (reachable) {
+          throw new Error(
+            'No redemption outcome arrived within 45s, and ' + PURCHASELY_API +
+            ' is reachable from the device. The SDK popin is not in the loop ' +
+            '(appHandlesRedemptionAlert: true), so this is a delivery defect: either the ' +
+            'native delegate was never registered, or the bridge is not forwarding to JS.'
+          );
+        }
         console.log(
-          '[redemption] KNOWN: no outcome arrived within 45s. The SDK popin is no longer ' +
-            'in the loop (appHandlesRedemptionAlert: true), so this is the backend call.'
+          '[redemption] INFRASTRUCTURE: no outcome within 45s AND ' + PURCHASELY_API +
+            ' is unreachable from the device. Treated as an outage, not a pass.'
         );
         return;
       }

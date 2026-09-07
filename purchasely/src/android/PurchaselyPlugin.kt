@@ -115,12 +115,12 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
      * the activity, so an event arriving after a teardown was sent into a dead bridge
      * instead of being dropped.
      *
-     * The redemption case is the one that matters most. `webRedemptionListener` is fixed on
-     * the builder at `start()` and `start()` cannot run twice, so the SDK keeps calling the
-     * lambda registered by the FIRST plugin instance for the whole process lifetime. That
-     * lambda reads `webRedemptionCallback` lazily, at fire time, which is what lets a
-     * reloaded page re-register and keep working. Clearing here is what makes the window in
-     * between a clean no-op rather than a send into a dead callbackId.
+     * The redemption case is the one that matters most. `webRedemptionListener` is set on
+     * the builder, and `Purchasely.Builder.build()` REASSIGNS the SDK's static listener on
+     * every call, so a page reload that starts again replaces the lambda rather than
+     * stacking one. Until it does, the lambda from the previous plugin instance is still
+     * live and reads `webRedemptionCallback` lazily, at fire time. Clearing here is what
+     * makes that window a clean no-op rather than a send into a dead callbackId.
      */
     private fun clearCallbackContexts() {
         defaultCallback = null
@@ -143,7 +143,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 "removeUserAttributeListener" -> removeUserAttributesListener()
                 "removeEventsListener" -> removeEventsListener()
                 "addWebRedemptionListener" -> addWebRedemptionListener(callbackContext)
-                "removeWebRedemptionListener" -> removeWebRedemptionListener()
+                "removeWebRedemptionListener" -> removeWebRedemptionListener(callbackContext)
                 "getAnonymousUserId" -> getAnonymousUserId(callbackContext)
                 "isAnonymous" -> isAnonymous(callbackContext)
                 "userLogin" -> userLogin(getStringFromJson(args.getString(0)), callbackContext)
@@ -332,8 +332,8 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         val proxyOption = resolveProxyOption(options)
         if (proxyOption is PLYProxyOption.Invalid) {
             Log.e("Purchasely", "`proxy` must be an https base URL, for example " +
-                "\"https://svc.purchasely.io\", or null to clear the proxy. Received " +
-                "\"${proxyOption.rawValue}\". The proxy is not applied.")
+                "\"https://svc.purchasely.io\", or null to clear the proxy. Received a " +
+                "${proxyOption.rawValue?.length ?: 0}-character value. The proxy is not applied.")
         }
         val appHandlesRedemptionAlert = options.optBoolean("appHandlesRedemptionAlert", false)
 
@@ -344,8 +344,12 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         val anonymousUserIdString = getStringFromJson(options.optString("anonymousUserId"))
         val anonymousUserId = parseCanonicalUuid(anonymousUserIdString)
         if (anonymousUserIdString != null && anonymousUserId == null) {
+            // The value is NOT logged. A mis-wired field lands here just as easily as a
+            // typo -- an email, an appUserId -- and logcat is collected during support. The
+            // length still distinguishes a truncated id from a wrong field. Matches iOS.
             Log.e("Purchasely", "`anonymousUserId` must be a canonical UUID string, for example " +
-                "\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\". Received \"$anonymousUserIdString\". " +
+                "\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\". Received a " +
+                "${anonymousUserIdString.length}-character value. " +
                 "The anonymous user id is not applied.")
         }
         val anonymousUserIdOverride = options.optBoolean("anonymousUserIdOverride", false)
@@ -490,12 +494,39 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
      * action only records where to send the outcome. JS must call it BEFORE `start()`.
      */
     private fun addWebRedemptionListener(callbackContext: CallbackContext) {
+        // Close the previous stream before replacing it, or its JS closure stays in
+        // cordova.callbacks forever. See [releaseCallbackStream].
+        releaseCallbackStream(webRedemptionCallback)
         webRedemptionCallback = callbackContext
     }
 
-    private fun removeWebRedemptionListener() {
+    private fun removeWebRedemptionListener(callbackContext: CallbackContext) {
         // The native listener stays registered; clearing the callback makes it a no-op.
+        releaseCallbackStream(webRedemptionCallback)
         webRedemptionCallback = null
+        // Acknowledge the remove itself, so ITS callbackId is freed too. A void action that
+        // never answers leaks its own entry exactly like the listener's.
+        callbackContext.success()
+    }
+
+    /**
+     * End a kept-alive Cordova callback stream, freeing its JavaScript closure.
+     *
+     * A listener registered with `exec(success, error, ...)` gets an entry in
+     * `cordova.callbacks`, and every result the bridge sends carries `keepCallback = true`
+     * so the stream stays open. Dropping the native reference alone therefore leaks the JS
+     * side: the closure, and whatever component state it captured, stays reachable until
+     * the WebView reloads. Replacing a listener leaks the one it replaced.
+     *
+     * A NO_RESULT with `keepCallback = false` is the documented way out. cordova.js says so
+     * in its own words: NO_RESULT "is used to remove a callback from the list without
+     * calling the callbacks". Neither success nor error fires, and the entry is deleted.
+     */
+    private fun releaseCallbackStream(callback: CallbackContext?) {
+        if (callback == null) return
+        val terminal = PluginResult(PluginResult.Status.NO_RESULT)
+        terminal.keepCallback = false
+        callback.sendPluginResult(terminal)
     }
 
     private fun getAnonymousUserId(callbackContext: CallbackContext) {

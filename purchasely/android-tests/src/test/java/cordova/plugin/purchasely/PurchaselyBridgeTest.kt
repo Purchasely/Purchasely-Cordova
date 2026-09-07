@@ -1,9 +1,12 @@
 package cordova.plugin.purchasely
 
+import org.apache.cordova.CallbackContext
+import org.apache.cordova.PluginResult
 import io.purchasely.ext.StoreType
 import io.purchasely.models.PLYSubscriptionData
 import io.purchasely.models.PLYWebRedemptionContext
 import io.purchasely.models.PLYWebRedemptionResult
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -12,7 +15,11 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.verify
 
 /**
  * Unit tests for the Android bridge's 6.1.0 surface.
@@ -329,6 +336,70 @@ class PurchaselyBridgeTest {
             "a surviving handle sends the next redemption outcome into a dead bridge",
             PurchaselyPlugin.webRedemptionCallback
         )
+    }
+
+    /**
+     * Replacing a listener must CLOSE the stream it replaces.
+     *
+     * A listener registered with `exec(success, error, ...)` owns an entry in
+     * `cordova.callbacks`, and every result the bridge sends carries `keepCallback = true`
+     * so the stream stays open. Dropping the native reference alone leaks the JS closure and
+     * whatever component state it captured, until the WebView reloads.
+     *
+     * A NO_RESULT with `keepCallback = false` is cordova.js's own documented way out: it
+     * "is used to remove a callback from the list without calling the callbacks".
+     */
+    @Test
+    fun `re-registering the redemption listener closes the stream it replaces`() {
+        val first = mock<CallbackContext>()
+        val second = mock<CallbackContext>()
+        val plugin = PurchaselyPlugin()
+
+        plugin.dispatch("addWebRedemptionListener", first)
+        plugin.dispatch("addWebRedemptionListener", second)
+
+        val terminal = argumentCaptor<PluginResult>()
+        verify(first).sendPluginResult(terminal.capture())
+        assertEquals(PluginResult.Status.NO_RESULT.ordinal, terminal.firstValue.status)
+        assertFalse("the stream must be closed, not kept", terminal.firstValue.keepCallback)
+        // The replacement is the live one and must not have been closed.
+        verify(second, never()).sendPluginResult(any())
+        assertEquals(second, PurchaselyPlugin.webRedemptionCallback)
+    }
+
+    @Test
+    fun `removing the redemption listener closes its stream and acknowledges the command`() {
+        val listener = mock<CallbackContext>()
+        val remove = mock<CallbackContext>()
+        val plugin = PurchaselyPlugin()
+
+        plugin.dispatch("addWebRedemptionListener", listener)
+        plugin.dispatch("removeWebRedemptionListener", remove)
+
+        val terminal = argumentCaptor<PluginResult>()
+        verify(listener).sendPluginResult(terminal.capture())
+        assertEquals(PluginResult.Status.NO_RESULT.ordinal, terminal.firstValue.status)
+        assertFalse(terminal.firstValue.keepCallback)
+        assertNull(PurchaselyPlugin.webRedemptionCallback)
+        // The remove action must answer, or ITS OWN callbackId leaks the same way.
+        verify(remove).success()
+    }
+
+    /** Nothing registered means nothing to close, and no crash. */
+    @Test
+    fun `removing with no listener registered still acknowledges`() {
+        val remove = mock<CallbackContext>()
+        PurchaselyPlugin.webRedemptionCallback = null
+
+        PurchaselyPlugin().dispatch("removeWebRedemptionListener", remove)
+
+        verify(remove).success()
+        assertNull(PurchaselyPlugin.webRedemptionCallback)
+    }
+
+    /** Drives the real `execute` dispatch, so a renamed action fails the test. */
+    private fun PurchaselyPlugin.dispatch(action: String, callback: CallbackContext) {
+        assertTrue("$action must be handled by execute()", execute(action, JSONArray(), callback))
     }
 
     private fun seedEveryCallbackContext() {

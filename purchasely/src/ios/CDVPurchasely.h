@@ -111,6 +111,7 @@ typedef NS_ENUM(NSInteger, CDVPurchaselyProxyOption) {
 - (void)userSubscriptionsHistory:(CDVInvokedUrlCommand*)command;
 - (void)addEventsListener:(CDVInvokedUrlCommand*)command;
 - (void)removeEventsListener:(CDVInvokedUrlCommand*)command;
+- (void)releaseCallbackStream:(CDVInvokedUrlCommand * _Nullable)command;
 - (void)addWebRedemptionListener:(CDVInvokedUrlCommand*)command;
 - (void)removeWebRedemptionListener:(CDVInvokedUrlCommand*)command;
 - (void)registerActionInterceptor:(CDVInvokedUrlCommand*)command;
