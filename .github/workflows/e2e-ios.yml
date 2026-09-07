@@ -83,6 +83,14 @@ jobs:
           echo "Booting simulator $UDID"
           xcrun simctl boot "$UDID" || true
           xcrun simctl bootstatus "$UDID" -b || true
+          # Start the Simulator UI as well, not just the headless device. XCUITest will not
+          # use a device whose UI is down: it logs "booted while its UI is not visible" and
+          # restarts it in the middle of the first session. In run 34144808577 that killed
+          # the first bridge attempt outright (3m18s) and stalled the second for four more
+          # minutes; the same line is in the baseline log. Starting it here means session 1
+          # finds "Both Simulator ... and the UI client are currently running".
+          open -a Simulator --args -CurrentDeviceUDID "$UDID" || true
+          for _ in $(seq 1 60); do pgrep -x Simulator >/dev/null && break; sleep 1; done
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
 
       - name: Run E2E suite on simulator
