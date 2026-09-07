@@ -59,11 +59,33 @@ function presentationDispatcher(success, callbacks) {
 //   allowDeeplink   (bool, optional)
 //   allowCampaigns  (bool, optional)
 //   deeplink        (string, optional — cold-start deeplink URL)
+//
+// Purchasely 6.1.0 adds four options:
+//   anonymousUserId         (string, optional — a canonical UUID string, see below)
+//   anonymousUserIdOverride (bool, optional — defaults to false)
+//   proxy                   (string, optional — Android only, an https base URL)
+//   appHandlesRedemptionAlert (bool, optional — defaults to the native false)
+//
+// `anonymousUserId` is the anonymous user id the SDK reports for this device. JavaScript
+// has no UUID type, so the id crosses as a string and each native bridge parses it. A
+// value that is not a canonical UUID is refused with an error log and the option is
+// skipped; start() still succeeds. The SDK stores the id uppercase, and applies it only
+// when the device holds no anonymous id yet, unless `anonymousUserIdOverride` is true.
+// An override splits the user history: the backend keeps every event and every purchase
+// under the previous id.
+//
+// `proxy` routes the Purchasely API traffic through a proxy instead of api.purchasely.io,
+// for a region where that host is unreachable. Only the API host changes: the paywall
+// host and the tracking host stay on production. Android only — the iOS bridge ignores it.
+//
+// `appHandlesRedemptionAlert` decides who shows the outcome of a Web2App redemption.
+// false (the default) keeps the SDK popin. true shows nothing, so the app renders its own
+// result screen. See addWebRedemptionListener.
 exports.start = function (options, success, error) {
     var opts = options || {};
     var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
     if(!cordovaSdkVersion) {
-        cordovaSdkVersion = "6.0.1";
+        cordovaSdkVersion = "6.1.0";
     }
     opts.sdkVersion = cordovaSdkVersion;
     exec(success, error, 'Purchasely', 'start', [opts]);
@@ -88,6 +110,23 @@ PLYStartBuilder.prototype.stores = function (value) { this._options.stores = val
 PLYStartBuilder.prototype.storekitVersion = function (value) { this._options.storekitVersion = value; return this; };
 PLYStartBuilder.prototype.storeKit1 = function (value) { this._options.storeKit1 = value; return this; };
 PLYStartBuilder.prototype.deeplink = function (value) { this._options.deeplink = value; return this; };
+
+// Purchasely 6.1.0. `id` must be a canonical UUID string; `override` defaults to false.
+// See the exports.start option block for the full contract.
+PLYStartBuilder.prototype.anonymousUserId = function (id, override) {
+    this._options.anonymousUserId = id;
+    this._options.anonymousUserIdOverride = override === undefined ? false : override;
+    return this;
+};
+
+// Purchasely 6.1.0. Android only; the iOS bridge ignores it.
+PLYStartBuilder.prototype.proxy = function (api) { this._options.proxy = api; return this; };
+
+// Purchasely 6.1.0. false (the default) keeps the SDK's own redemption popin.
+PLYStartBuilder.prototype.appHandlesRedemptionAlert = function (handles) {
+    this._options.appHandlesRedemptionAlert = handles;
+    return this;
+};
 
 PLYStartBuilder.prototype.start = function (success, error) {
     if (success) {
@@ -116,6 +155,51 @@ exports.addEventListener = function (success, error) {
 // @deprecated use addEventListener instead.
 exports.addEventsListener = function (success, error) {
     exec(success, error, 'Purchasely', 'addEventsListener', []);
+};
+
+// Purchasely 6.1.0: the outcome of a Web2App redemption ({scheme}://ply/redeem/{token}).
+//
+// CALL THIS BEFORE start(). Neither native SDK has a runtime setter for the redemption
+// delegate, because a redemption can settle during start() -- from a cold start that the
+// `ply/redeem` link itself triggered, or from a token a previous launch left pending. The
+// native bridges register the delegate on the builder chain and route it here, so this
+// action only records the callback to route to. Cordova dispatches exec calls in order,
+// so a call placed before start() is recorded before the SDK starts; a call placed after
+// start() misses exactly the case the listener is most needed for.
+//
+// success receives { isSuccess, context, replay, errorCode, errorMessage }:
+//   isSuccess     Bool. true for a granted redemption, false for a failed one.
+//   context       { subscription } or null. `subscription` is separately nullable: a
+//                 success can carry no context at all, and a present context can carry no
+//                 subscription. The subscription has the same shape userSubscriptions()
+//                 reports.
+//   replay        Bool. true when the SERVER reports the token was redeemed before. It is
+//                 a verdict about the token, not an observation of the user: the SDK keeps
+//                 no cache and calls the server on every attempt. Always false on failure.
+//   errorCode     'EXPIRED_REDEMPTION_TOKEN' | 'INVALID_REDEMPTION_TOKEN' | null. A
+//                 failure that never reached the server carries no code.
+//   errorMessage  Human-readable reason, in English, or null. It never contains the token.
+//
+// The native SDK calls the listener on the main thread, exactly once per settled
+// redemption, on success and on failure alike. `appHandlesRedemptionAlert` (see
+// exports.start) decides WHEN: false (the default) calls it after the user acknowledges
+// the SDK popin, true calls it as soon as the redemption settles.
+//
+// A redemption deeplink is NOT subject to allowDeeplink: the native SDK intercepts
+// `ply/redeem` before the routing branch that gate sits behind.
+//
+// ON iOS ONLY, errorMessage for an expired link can carry a masked email address, so the
+// app can tell the user where the fresh link went. Show that text to the user. Do not
+// send it to an analytics stack or to a crash reporter. The REDEMPTION_FAILED event drops
+// it on purpose.
+exports.addWebRedemptionListener = function (success, error) {
+    exec(success, error, 'Purchasely', 'addWebRedemptionListener', []);
+};
+
+// Purchasely 6.1.0: stop receiving redemption outcomes. The native delegate stays
+// registered (it is fixed at start()); clearing the callback makes it a no-op.
+exports.removeWebRedemptionListener = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'removeWebRedemptionListener', []);
 };
 
 exports.addUserAttributeListener = function(success, error) {
