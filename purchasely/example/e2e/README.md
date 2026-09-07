@@ -20,11 +20,16 @@ Cordova imperative API. They are **not** part of the PR-gating `ci.yml`; they ru
 | dismiss | `specs/dismiss.e2e.js` | best-effort | present placement or default presentation + programmatic close → dismiss outcome + `closeReason` (needs a paywall to render) |
 | start options 6.1.0 | `specs/start-options-6-1-0.e2e.js` | **hard** (redemption outcome best-effort) | the 6.1.0 surface exists on the object Cordova clobbered on-device; `proxy`'s three wire states (url / present null / absent key) asserted against each other after a real JSON round trip; `anonymousUserId` + its override flag on the wire and a canonical id back from native; the builder listener subscribing before the native `start`; a `ply/redeem` deeplink settling through native into the JS listener |
 
-The `proxy` assertions cover the **bridge contract** — what crosses `cordova.exec` into the
-native `start` action. They do not assert that the SDK's resolved API host changed: that is
-SDK-internal state this harness cannot observe. The native half of the contract is covered
-by the XCTest target (`purchasely/example-capacitor`) and the Android unit-test module
-(`purchasely/android-tests`), which drive the resolvers `start()` switches on.
+The `proxy` assertions cover the **built payload** and its JSON round trip inside the real
+WebView, not the `cordova.exec` hand-off. That hand-off, and the chain-time subscription
+order, are asserted in the Jest suite where `cordova/exec` is a mock — they cannot be
+observed on-device, because the plugin captures `require('cordova/exec')` at module load
+and the global cannot be hooked afterwards. The native resolvers are covered by the XCTest
+target (`purchasely/example-capacitor`) and the Android unit-test module
+(`purchasely/android-tests`).
+
+Nothing asserts that the SDK's resolved API host changed: that is SDK-internal state this
+harness cannot observe.
 
 The redemption outcome needs the real backend reachable from the runner. When no outcome
 arrives the spec logs `[redemption] KNOWN:` and returns rather than asserting on something

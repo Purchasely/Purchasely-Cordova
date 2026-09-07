@@ -9,12 +9,20 @@
 // `cordova.define`, or never gets clobbered onto `window` passes every Jest test and
 // fails here.
 //
-// For `proxy` they assert the BRIDGE CONTRACT: exactly what crosses `cordova.exec` into
-// the native `start` action. They do NOT assert that the native SDK's resolved API host
-// changed, because that is SDK-internal state no test harness here can observe. Saying
-// otherwise would be a false claim. The native side of the contract is covered by the
-// XCTest target and the Android unit-test module, which drive the resolvers `start()`
-// actually switches on.
+// The division of labour, stated precisely so nothing here is oversold:
+//
+//   HERE          the module loaded and exposes the 6.1.0 surface; the three proxy states
+//                 survive the WebView's own JSON.stringify; native returns a canonical
+//                 anonymous id; a real `ply/redeem` deeplink settles into the JS listener.
+//   Jest          the exec hand-off and the chain-time subscription ORDER, where
+//                 `cordova/exec` is a mock and the call sequence is observable. It cannot
+//                 be observed on-device: the plugin captured `require('cordova/exec')` at
+//                 module load, so the global cannot be hooked afterwards.
+//   XCTest and    the native resolvers `start()` switches on, for the proxy states and the
+//   android-tests canonical UUID contract.
+//
+// None of these assert that the SDK's RESOLVED API HOST changed. That is SDK-internal
+// state no harness here can observe, and claiming it would be false.
 //
 // The anonymous user id and the redemption listener DO go all the way to native and back.
 
@@ -30,39 +38,42 @@ const {
 // both bridges refuse anything that is not this shape.
 const CANONICAL_UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-// Capture the option map a builder chain sends into the native `start` action, WITHOUT
-// starting the SDK a second time. `cordova.exec` is swapped for a recorder around the
-// call, so the real plugin JS runs and the native side never sees it.
+// Build a chain and read the option map it accumulated, WITHOUT starting the SDK.
 //
-// A second real start() is not an option: the SDK is already configured by the sample's
-// own start(), and neither native SDK supports being reconfigured.
-async function captureStartOptions(chain) {
-  await browser.execute(function (chainSource) {
-    window.__plyCaptured = undefined;
-    var cordovaExec = window.cordova.exec;
-    window.cordova.exec = function (success, error, service, action, args) {
-      if (service === 'Purchasely' && action === 'start') {
-        // Round-trip through JSON: what the native side receives is the serialised form,
-        // so an undefined-valued key must be gone by the time it is recorded, exactly as
-        // it would be on the wire.
-        window.__plyCaptured = { wire: JSON.parse(JSON.stringify(args[0])) };
-        return;
-      }
-      return cordovaExec.apply(this, arguments);
-    };
+// WHY NOT INTERCEPT cordova.exec. The first version of this helper replaced
+// `window.cordova.exec` with a recorder and expected the chain's start() to hit it. That
+// cannot work: `www/Purchasely.js` does `var exec = require('cordova/exec')` at module
+// load, so it holds a direct reference to the module's function. Reassigning the property
+// on the `cordova` object leaves that reference untouched, the recorder never fired, and
+// eight tests failed with a 15s poll timeout. Nothing about the plugin was wrong.
+//
+// A second real start() is not an option either: the sample already configured the SDK and
+// neither native supports being reconfigured.
+//
+// So the exec hand-off and the call ORDER are asserted in the Jest suite, where
+// `cordova/exec` is a mock and can be observed properly. That is the right level for them.
+// What is asserted HERE is what only a device can show: the modifiers ran inside the real
+// `cordova.define` module, and their payload survives the WebView's own JSON.stringify —
+// which is where an `undefined` would collapse into an absent key.
+//
+// `_options` is private. It is read deliberately: it is the exact object the builder hands
+// to `exports.start`, and the alternative is unsupported.
+async function builtOptions(chain) {
+  const result = await browser.execute(function (chainSource) {
     try {
       /* eslint-disable no-eval */
-      eval(chainSource);
+      var builder = eval(chainSource);
+      // Round-trip through JSON: what crosses the bridge is the serialised form, so an
+      // undefined-valued key must already be gone here, exactly as it would be on the wire.
+      return { wire: JSON.parse(JSON.stringify(builder._options)) };
     } catch (e) {
-      window.__plyCaptured = { error: String(e) };
-    } finally {
-      window.cordova.exec = cordovaExec;
+      return { error: String(e) };
     }
   }, chain);
 
-  const captured = await pollGlobal('__plyCaptured', 15000);
-  if (captured && captured.error) throw new Error('chain threw: ' + captured.error);
-  return captured && captured.wire;
+  if (!result) throw new Error('the chain returned nothing');
+  if (result.error) throw new Error('chain threw: ' + result.error);
+  return result.wire;
 }
 
 describe('6.1.0 start options and the redemption listener', () => {
@@ -99,29 +110,25 @@ describe('6.1.0 start options and the redemption listener', () => {
     });
   });
 
-  describe('proxy: the three states, on the wire', () => {
-    it('a url reaches the native start action', async () => {
-      const wire = await captureStartOptions(
-        "window.Purchasely.builder('K').proxy('https://svc.purchasely.io').start(function(){}, function(){})"
+  describe('proxy: the three states, in the built payload', () => {
+    it('a url is carried in the payload', async () => {
+      const wire = await builtOptions(
+        "window.Purchasely.builder('K').proxy('https://svc.purchasely.io')"
       );
 
       expect(wire.proxy).toBe('https://svc.purchasely.io');
     });
 
     // A clear is a supported native operation, so the key must arrive PRESENT and null.
-    it('null reaches the native start action as a present null', async () => {
-      const wire = await captureStartOptions(
-        "window.Purchasely.builder('K').proxy(null).start(function(){}, function(){})"
-      );
+    it('null is carried as a PRESENT null', async () => {
+      const wire = await builtOptions("window.Purchasely.builder('K').proxy(null)");
 
       expect(Object.prototype.hasOwnProperty.call(wire, 'proxy')).toBe(true);
       expect(wire.proxy).toBe(null);
     });
 
-    it('an omitted proxy leaves the key absent from the wire', async () => {
-      const wire = await captureStartOptions(
-        "window.Purchasely.builder('K').start(function(){}, function(){})"
-      );
+    it('an omitted proxy leaves the key absent', async () => {
+      const wire = await builtOptions("window.Purchasely.builder('K')");
 
       expect(Object.prototype.hasOwnProperty.call(wire, 'proxy')).toBe(false);
     });
@@ -130,12 +137,8 @@ describe('6.1.0 start options and the redemption listener', () => {
     // the whole option depends on, and the one that JSON.stringify would destroy if the
     // builder ever stored undefined instead of null.
     it('an omitted proxy and a cleared proxy are different on the wire', async () => {
-      const omitted = await captureStartOptions(
-        "window.Purchasely.builder('K').start(function(){}, function(){})"
-      );
-      const cleared = await captureStartOptions(
-        "window.Purchasely.builder('K').proxy(null).start(function(){}, function(){})"
-      );
+      const omitted = await builtOptions("window.Purchasely.builder('K')");
+      const cleared = await builtOptions("window.Purchasely.builder('K').proxy(null)");
 
       expect(cleared).not.toEqual(omitted);
       expect(Object.keys(cleared)).toContain('proxy');
@@ -143,8 +146,8 @@ describe('6.1.0 start options and the redemption listener', () => {
     });
 
     it('the last proxy call wins, set then cleared', async () => {
-      const wire = await captureStartOptions(
-        "window.Purchasely.builder('K').proxy('https://svc.purchasely.io').proxy(null).start(function(){}, function(){})"
+      const wire = await builtOptions(
+        "window.Purchasely.builder('K').proxy('https://svc.purchasely.io').proxy(null)"
       );
 
       expect(Object.prototype.hasOwnProperty.call(wire, 'proxy')).toBe(true);
@@ -153,9 +156,9 @@ describe('6.1.0 start options and the redemption listener', () => {
   });
 
   describe('anonymousUserId', () => {
-    it('reaches the wire with its override flag', async () => {
-      const wire = await captureStartOptions(
-        "window.Purchasely.builder('K').anonymousUserId('3f2504e0-4f89-11d3-9a0c-0305e82c3301', true).start(function(){}, function(){})"
+    it('is carried with its override flag', async () => {
+      const wire = await builtOptions(
+        "window.Purchasely.builder('K').anonymousUserId('3f2504e0-4f89-11d3-9a0c-0305e82c3301', true)"
       );
 
       expect(wire.anonymousUserId).toBe('3f2504e0-4f89-11d3-9a0c-0305e82c3301');
@@ -163,8 +166,8 @@ describe('6.1.0 start options and the redemption listener', () => {
     });
 
     it('defaults the override flag to false', async () => {
-      const wire = await captureStartOptions(
-        "window.Purchasely.builder('K').anonymousUserId('3f2504e0-4f89-11d3-9a0c-0305e82c3301').start(function(){}, function(){})"
+      const wire = await builtOptions(
+        "window.Purchasely.builder('K').anonymousUserId('3f2504e0-4f89-11d3-9a0c-0305e82c3301')"
       );
 
       expect(wire.anonymousUserIdOverride).toBe(false);
@@ -182,31 +185,12 @@ describe('6.1.0 start options and the redemption listener', () => {
   });
 
   describe('the Web2App redemption listener', () => {
-    // The ordering the builder modifier exists to guarantee, asserted on the real
-    // cordova.exec call order rather than on a comment.
-    it('the builder modifier subscribes before the native start call', async () => {
-      await switchToWebview();
-      const actions = await browser.execute(function () {
-        var recorded = [];
-        var cordovaExec = window.cordova.exec;
-        window.cordova.exec = function (success, error, service, action) {
-          if (service === 'Purchasely') recorded.push(action);
-          if (service === 'Purchasely' && action === 'start') return;
-          if (service === 'Purchasely' && action === 'addWebRedemptionListener') return;
-          return cordovaExec.apply(this, arguments);
-        };
-        try {
-          window.Purchasely.builder('K')
-            .webRedemptionListener(function () {})
-            .start(function () {}, function () {});
-        } finally {
-          window.cordova.exec = cordovaExec;
-        }
-        return recorded;
-      });
-
-      expect(actions).toEqual(['addWebRedemptionListener', 'start']);
-    });
+    // The chain-time subscription ORDER is asserted in the Jest suite
+    // (`webRedemptionListener subscribes BEFORE the native start call`), where
+    // `cordova/exec` is a mock and the call sequence is observable. It cannot be observed
+    // here: the plugin captured `require('cordova/exec')` at module load, so the global
+    // cannot be hooked afterwards. What this file adds instead is the end-to-end proof
+    // below, which only passes if the listener was in place before the redemption settled.
 
     // A true end-to-end pass: a `ply/redeem` deeplink goes into the native SDK, the SDK
     // calls the real backend, and the settled outcome comes back through the native
