@@ -378,7 +378,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 this.webRedemptionListener(appHandlesRedemptionAlert, PLYWebRedemptionListener { result ->
                     val pluginResult = PluginResult(
                         PluginResult.Status.OK,
-                        webRedemptionResultToJson(result, ::transformSubscriptionToMap)
+                        webRedemptionResultToJson(result, Companion::transformSubscriptionToMap)
                     )
                     pluginResult.keepCallback = true
                     webRedemptionCallback?.sendPluginResult(pluginResult)
@@ -911,42 +911,6 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
             } catch (e: Exception) {
                 callbackContext.error(e.message)
             }
-        }
-    }
-
-    // Hardening for the upcoming rc.4 native release: PLYPlan.toMap()'s raw "type" entry is
-    // moving from an ordinal (Int) to the DistributionType name (String). transformPlanToMap
-    // already overwrites "type" explicitly wherever it's used, but allProducts/
-    // productWithIdentifier/the subscription's nested "product" field pass product.toMap()
-    // straight through -- normalize those raw plan entries so the JS PlanType contract
-    // (an ordinal) stays stable across both native formats. Both formats resolve to the same
-    // ordinal since DistributionType's declared order already matches Purchasely.PlanType.
-    private fun normalizePlanTypeOrdinal(raw: Any?): Int? = when (raw) {
-        is Number -> raw.toInt()
-        is String -> runCatching { DistributionType.valueOf(raw).ordinal }.getOrNull()
-        else -> null
-    }
-
-    private fun normalizeProductPlans(map: Map<String, Any?>): Map<String, Any?> {
-        val plans = map["plans"] as? List<*> ?: return map
-        val normalized = plans.map { plan ->
-            val planMap = plan as? Map<*, *> ?: return@map plan
-            HashMap(planMap).apply { this["type"] = normalizePlanTypeOrdinal(this["type"]) }
-        }
-        return HashMap(map).apply { this["plans"] = normalized }
-    }
-
-    /**
-     * Map one [PLYSubscriptionData] to the JS subscription shape.
-     *
-     * Shared by `userSubscriptions`, `userSubscriptionsHistory` and the web redemption
-     * listener, whose `context.subscription` is the same type, so the three report one shape.
-     */
-    internal fun transformSubscriptionToMap(data: PLYSubscriptionData): Map<String, Any?> {
-        return HashMap(data.data.toMap()).apply {
-            this["plan"] = transformPlanToMap(data.plan)
-            this["product"] = normalizeProductPlans(data.product.toMap())
-            this["subscriptionSource"] = subscriptionSourceFor(data.data.storeType)
         }
     }
 
@@ -1534,6 +1498,47 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
             )
         }
 
+        // These three live in the companion, not on the instance, so that
+        // `Companion::transformSubscriptionToMap` is an UNBOUND reference. The SDK keeps
+        // the redemption listener in a static (Purchasely.webRedemptionListener), so a
+        // bound reference would keep the plugin, its Activity and its WebView reachable
+        // for as long as that static holds the lambda. None of them touches instance state.
+        // Hardening for the upcoming rc.4 native release: PLYPlan.toMap()'s raw "type" entry is
+        // moving from an ordinal (Int) to the DistributionType name (String). transformPlanToMap
+        // already overwrites "type" explicitly wherever it's used, but allProducts/
+        // productWithIdentifier/the subscription's nested "product" field pass product.toMap()
+        // straight through -- normalize those raw plan entries so the JS PlanType contract
+        // (an ordinal) stays stable across both native formats. Both formats resolve to the same
+        // ordinal since DistributionType's declared order already matches Purchasely.PlanType.
+        private fun normalizePlanTypeOrdinal(raw: Any?): Int? = when (raw) {
+            is Number -> raw.toInt()
+            is String -> runCatching { DistributionType.valueOf(raw).ordinal }.getOrNull()
+            else -> null
+        }
+
+        private fun normalizeProductPlans(map: Map<String, Any?>): Map<String, Any?> {
+            val plans = map["plans"] as? List<*> ?: return map
+            val normalized = plans.map { plan ->
+                val planMap = plan as? Map<*, *> ?: return@map plan
+                HashMap(planMap).apply { this["type"] = normalizePlanTypeOrdinal(this["type"]) }
+            }
+            return HashMap(map).apply { this["plans"] = normalized }
+        }
+
+        /**
+         * Map one [PLYSubscriptionData] to the JS subscription shape.
+         *
+         * Shared by `userSubscriptions`, `userSubscriptionsHistory` and the web redemption
+         * listener, whose `context.subscription` is the same type, so the three report one shape.
+         */
+        internal fun transformSubscriptionToMap(data: PLYSubscriptionData): Map<String, Any?> {
+            return HashMap(data.data.toMap()).apply {
+                this["plan"] = transformPlanToMap(data.plan)
+                this["product"] = normalizeProductPlans(data.product.toMap())
+                this["subscriptionSource"] = subscriptionSourceFor(data.data.storeType)
+            }
+        }
+
         private fun transformPlanToMap(plan: PLYPlan?): Map<String?, Any?> {
             if (plan == null) return HashMap()
             val map = HashMap(plan.toMap())
@@ -1670,6 +1675,10 @@ internal fun resolveProxyOption(options: JSONObject): PLYProxyOption {
 
     val raw = options.opt("proxy")
     if (raw !is String) return PLYProxyOption.Invalid(raw?.toString())
+    // A blank value is refused HERE, to match iOS: `[NSURL URLWithString:@""]` is nil, so
+    // the iOS bridge resolves Invalid and never calls native. Leaving it to the SDK would
+    // make the two platforms accept different sets of strings for the same option.
+    if (raw.isBlank()) return PLYProxyOption.Invalid(raw)
     return try {
         URI(raw)
         PLYProxyOption.Set(raw)

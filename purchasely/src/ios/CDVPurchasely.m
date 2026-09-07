@@ -58,6 +58,28 @@
     return CDVPurchaselyProxyOptionSet;
 }
 
++ (NSDictionary<NSString *, id> * _Nonnull)webRedemptionBodyWithSuccess:(BOOL)isSuccess
+                                                             hasContext:(BOOL)hasContext
+                                                           subscription:(NSDictionary * _Nullable)subscription
+                                                                 replay:(BOOL)replay
+                                                              errorCode:(NSString * _Nullable)errorCode
+                                                           errorMessage:(NSString * _Nullable)errorMessage {
+    // Every key is always present, on both branches, so a JS listener reads one shape
+    // whether the redemption was granted or refused. Absence is NSNull, never a missing
+    // key: a missing key reaches JS as `undefined` instead of `null`.
+    id context = [NSNull null];
+    if (hasContext) {
+        context = @{ @"subscription": subscription ?: [NSNull null] };
+    }
+    return @{
+        @"isSuccess":    @(isSuccess),
+        @"context":      context,
+        @"replay":       @(replay),
+        @"errorCode":    errorCode ?: [NSNull null],
+        @"errorMessage": errorMessage ?: [NSNull null]
+    };
+}
+
 + (NSUUID * _Nullable)canonicalUUIDFromString:(id _Nullable)value {
     if (![value isKindOfClass:[NSString class]]) {
         return nil;
@@ -69,11 +91,12 @@
 /// previous page handed us. Without it the stored commands stay live and every listener
 /// callback is sent to a dead callbackId after a reload.
 ///
-/// The redemption case is the one that matters most: `webRedemptionDelegate:` is fixed on
-/// the builder at `start:` and `start:` cannot run twice, so the SDK keeps calling this
-/// object for the whole process lifetime. `webRedemptionCompletedWithResult:` reads
-/// `webRedemptionCommand` at fire time, so a reloaded page can re-register and keep
-/// working; clearing here makes the window in between a clean no-op.
+/// The redemption case is the one that matters most: `webRedemptionDelegate:` is set on the
+/// builder at `start:`, and the SDK holds the delegate weakly, so this object keeps
+/// receiving outcomes for as long as the plugin lives.
+/// `webRedemptionCompletedWithResult:` reads `webRedemptionCommand` at fire time, so a
+/// reloaded page can re-register and keep working; clearing here makes the window in
+/// between a clean no-op rather than a send on a dead callbackId.
 - (void)onReset {
     self.eventCommand = nil;
     self.attributeCommand = nil;
@@ -159,9 +182,13 @@
     if ([anonymousUserId isKindOfClass:[NSString class]]) {
         NSUUID *parsed = [CDVPurchasely canonicalUUIDFromString:anonymousUserId];
         if (parsed == nil) {
+            // The value is NOT logged. A mis-wired field lands here just as easily as a
+            // typo -- an email, an appUserId -- and a device log is captured during
+            // support. The length is enough to tell a truncated id from a wrong field.
             NSLog(@"[Purchasely] `anonymousUserId` must be a canonical UUID string, for example "
-                   "\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\". Received \"%@\". The anonymous user "
-                   "id is not applied.", anonymousUserId);
+                   "\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\". Received a %lu-character value. "
+                   "The anonymous user id is not applied.",
+                  (unsigned long)((NSString *)anonymousUserId).length);
         } else {
             NSNumber *override = opts[@"anonymousUserIdOverride"];
             BOOL shouldOverride = [override isKindOfClass:[NSNumber class]] ? override.boolValue : NO;

@@ -285,4 +285,110 @@
     XCTAssertNoThrow([delegate webRedemptionCompletedWithResult:(PLYWebRedemptionResult * _Nonnull)nil],
                      @"the redemption callback must return early once the command is cleared");
 }
+#pragma mark - the redemption body's five-key contract (6.1.0)
+
+// Every key is present on both branches, so one JS listener reads one shape whether the
+// redemption was granted or refused. Absence is NSNull, never a missing key: a missing key
+// reaches JS as `undefined` instead of `null`, which silently changes what the listener can
+// rely on.
+//
+// These drive +webRedemptionBodyWithSuccess:..., the same builder the delegate uses.
+// PLYWebRedemptionResult declares `init` unavailable, so a test cannot construct one, which
+// is why the builder takes primitives.
+- (void)assertWebRedemptionShape:(NSDictionary *)body {
+    XCTAssertEqual(body.count, (NSUInteger)5, @"the body must always carry exactly five keys");
+    for (NSString *key in @[@"isSuccess", @"context", @"replay", @"errorCode", @"errorMessage"]) {
+        XCTAssertNotNil(body[key], @"%@ must be present", key);
+    }
+}
+
+- (void)testRedemptionBodySuccessWithNoContext {
+    NSDictionary *body = [CDVPurchasely webRedemptionBodyWithSuccess:YES
+                                                          hasContext:NO
+                                                        subscription:nil
+                                                              replay:NO
+                                                           errorCode:nil
+                                                        errorMessage:nil];
+
+    [self assertWebRedemptionShape:body];
+    XCTAssertEqualObjects(body[@"isSuccess"], @YES);
+    XCTAssertEqualObjects(body[@"context"], [NSNull null],
+                          @"no context at all must be NSNull, not an empty dictionary");
+    XCTAssertEqualObjects(body[@"replay"], @NO);
+    XCTAssertEqualObjects(body[@"errorCode"], [NSNull null]);
+    XCTAssertEqualObjects(body[@"errorMessage"], [NSNull null]);
+}
+
+// A present context holding no subscription is NOT the same as no context. Both levels stay
+// separately nullable, matching the Android bridge.
+- (void)testRedemptionBodyKeepsAPresentContextWithNoSubscription {
+    NSDictionary *body = [CDVPurchasely webRedemptionBodyWithSuccess:YES
+                                                          hasContext:YES
+                                                        subscription:nil
+                                                              replay:NO
+                                                           errorCode:nil
+                                                        errorMessage:nil];
+
+    [self assertWebRedemptionShape:body];
+    NSDictionary *context = body[@"context"];
+    XCTAssertTrue([context isKindOfClass:[NSDictionary class]],
+                  @"a present context must be a dictionary, not NSNull");
+    XCTAssertNotNil(context[@"subscription"], @"the subscription key must be present");
+    XCTAssertEqualObjects(context[@"subscription"], [NSNull null],
+                          @"and hold NSNull, not be missing");
+}
+
+- (void)testRedemptionBodyCarriesAPresentSubscription {
+    NSDictionary *body = [CDVPurchasely webRedemptionBodyWithSuccess:YES
+                                                          hasContext:YES
+                                                        subscription:@{ @"plan": @{ @"vendorId": @"monthly" } }
+                                                              replay:NO
+                                                           errorCode:nil
+                                                        errorMessage:nil];
+
+    [self assertWebRedemptionShape:body];
+    XCTAssertEqualObjects(body[@"context"][@"subscription"][@"plan"][@"vendorId"], @"monthly");
+}
+
+- (void)testRedemptionBodyReportsAReplayedToken {
+    NSDictionary *body = [CDVPurchasely webRedemptionBodyWithSuccess:YES
+                                                          hasContext:NO
+                                                        subscription:nil
+                                                              replay:YES
+                                                           errorCode:nil
+                                                        errorMessage:nil];
+
+    XCTAssertEqualObjects(body[@"replay"], @YES);
+}
+
+// A failure still reports replay and context, so the shape never changes between branches.
+- (void)testRedemptionBodyFailureKeepsTheShapeStable {
+    NSDictionary *body = [CDVPurchasely webRedemptionBodyWithSuccess:NO
+                                                          hasContext:NO
+                                                        subscription:nil
+                                                              replay:NO
+                                                           errorCode:@"EXPIRED_REDEMPTION_TOKEN"
+                                                        errorMessage:@"Redemption link has expired."];
+
+    [self assertWebRedemptionShape:body];
+    XCTAssertEqualObjects(body[@"isSuccess"], @NO);
+    XCTAssertEqualObjects(body[@"context"], [NSNull null]);
+    XCTAssertEqualObjects(body[@"replay"], @NO);
+    XCTAssertEqualObjects(body[@"errorCode"], @"EXPIRED_REDEMPTION_TOKEN");
+    XCTAssertEqualObjects(body[@"errorMessage"], @"Redemption link has expired.");
+}
+
+// A transport or parsing failure never reached the server, so it carries no code.
+- (void)testRedemptionBodyFailureWithNoErrorCode {
+    NSDictionary *body = [CDVPurchasely webRedemptionBodyWithSuccess:NO
+                                                          hasContext:NO
+                                                        subscription:nil
+                                                              replay:NO
+                                                           errorCode:nil
+                                                        errorMessage:@"Network error"];
+
+    [self assertWebRedemptionShape:body];
+    XCTAssertEqualObjects(body[@"errorCode"], [NSNull null]);
+    XCTAssertEqualObjects(body[@"errorMessage"], @"Network error");
+}
 @end

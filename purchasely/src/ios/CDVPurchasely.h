@@ -37,6 +37,22 @@ typedef NS_ENUM(NSInteger, CDVPurchaselyProxyOption) {
 /// `outUrl` receives the URL only for `CDVPurchaselyProxyOptionSet`.
 + (CDVPurchaselyProxyOption)proxyOptionFor:(id _Nullable)value url:(NSURL * _Nullable * _Nullable)outUrl;
 
+/// Build the flat 5-key body a settled Web2App redemption reports to JS.
+///
+/// Takes primitives rather than a `PLYWebRedemptionResult`, because that class declares
+/// `init` unavailable and a test cannot construct one. `hasContext` is separate from
+/// `subscription` on purpose: a present context carrying no subscription is NOT the same as
+/// no context at all, and both must stay expressible.
+///
+/// Exposed so the XCTest target asserts the real shape the delegate emits, rather than a
+/// copy of it. Matches the React Native bridge's seam of the same name.
++ (NSDictionary<NSString *, id> * _Nonnull)webRedemptionBodyWithSuccess:(BOOL)isSuccess
+                                                             hasContext:(BOOL)hasContext
+                                                           subscription:(NSDictionary * _Nullable)subscription
+                                                                 replay:(BOOL)replay
+                                                              errorCode:(NSString * _Nullable)errorCode
+                                                           errorMessage:(NSString * _Nullable)errorMessage;
+
 /// Parse a canonical UUID string, or return nil.
 ///
 /// JS has no UUID type, so an anonymous user id crosses the bridge as a string. Exposed so

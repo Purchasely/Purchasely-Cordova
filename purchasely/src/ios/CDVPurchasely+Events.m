@@ -47,19 +47,14 @@
 		return;
 	}
 
-	id context = [NSNull null];
-	if (result.context != nil) {
-		PLYSubscription *subscription = result.context.subscription;
-		context = @{ @"subscription": subscription != nil ? subscription.asDictionary : [NSNull null] };
-	}
-
-	NSDictionary<NSString *, id> *body = @{
-		@"isSuccess":    @(result.isSuccess),
-		@"context":      context,
-		@"replay":       @(result.replay),
-		@"errorCode":    result.errorCode ?: [NSNull null],
-		@"errorMessage": result.errorMessage ?: [NSNull null]
-	};
+	PLYSubscription *subscription = result.context.subscription;
+	NSDictionary<NSString *, id> *body =
+		[CDVPurchasely webRedemptionBodyWithSuccess:result.isSuccess
+										 hasContext:result.context != nil
+									   subscription:subscription != nil ? subscription.asDictionary : nil
+											 replay:result.replay
+										  errorCode:result.errorCode
+									   errorMessage:result.errorMessage];
 
 	CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:body];
 	[pluginResult setKeepCallbackAsBool:YES];

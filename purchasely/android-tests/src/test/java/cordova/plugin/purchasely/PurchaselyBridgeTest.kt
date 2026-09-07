@@ -143,17 +143,23 @@ class PurchaselyBridgeTest {
     }
 
     /**
-     * An empty string must reach native rather than collapse into Absent, so both bridges
-     * hand the same value to the SDK and the SDK refuses it the same way. The earlier
-     * implementation dropped it with a `length > 0` guard on iOS and a null-mapping helper
-     * on Android, which made the two platforms disagree.
+     * A blank string resolves as Invalid, NOT as Absent and NOT as Set.
+     *
+     * Invalid rather than Set so the two platforms accept the same strings: on iOS
+     * `[NSURL URLWithString:@""]` is nil, so its bridge resolves Invalid and never calls
+     * native. An earlier version forwarded it on Android and let the SDK refuse it, which
+     * made the accepted sets differ.
+     *
+     * Invalid rather than Absent because the key WAS present: the caller asked for
+     * something, it was refused, and that is logged. Absent means "never asked".
      */
     @Test
-    fun `an empty string is forwarded, so native refuses it rather than the bridge`() {
-        assertEquals(
-            PLYProxyOption.Set(""),
-            resolveProxyOption(JSONObject().put("proxy", ""))
-        )
+    fun `a blank string resolves as Invalid, matching the iOS bridge`() {
+        assertEquals(PLYProxyOption.Invalid(""), resolveProxyOption(JSONObject().put("proxy", "")))
+        assertEquals(PLYProxyOption.Invalid("   "), resolveProxyOption(JSONObject().put("proxy", "   ")))
+        // And it must not be mistaken for the two "no proxy" states.
+        assertNotEquals(PLYProxyOption.Absent, resolveProxyOption(JSONObject().put("proxy", "")))
+        assertNotEquals(PLYProxyOption.Clear, resolveProxyOption(JSONObject().put("proxy", "")))
     }
 
     // endregion
