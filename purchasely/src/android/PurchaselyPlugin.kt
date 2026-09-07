@@ -16,6 +16,7 @@ import io.purchasely.ext.PLYEvent
 import io.purchasely.ext.PLYInterceptResult
 import io.purchasely.ext.PLYInterceptorInfo
 import io.purchasely.ext.PLYRunningMode
+import io.purchasely.ext.PLYWebRedemptionListener
 import io.purchasely.ext.PurchaseListener
 import io.purchasely.ext.Purchasely
 import io.purchasely.ext.State
@@ -33,6 +34,7 @@ import io.purchasely.models.PLYPlan
 import io.purchasely.models.PLYPresentationPlan
 import io.purchasely.models.PLYProduct
 import io.purchasely.models.PLYSubscriptionData
+import io.purchasely.models.PLYWebRedemptionResult
 import io.purchasely.views.presentation.PLYThemeMode
 import io.purchasely.views.presentation.models.PLYDimensionType
 import io.purchasely.views.presentation.models.PLYTransition
@@ -53,6 +55,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -103,6 +106,8 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 "addUserAttributeListener" -> addUserAttributesListener(callbackContext)
                 "removeUserAttributeListener" -> removeUserAttributesListener()
                 "removeEventsListener" -> removeEventsListener()
+                "addWebRedemptionListener" -> addWebRedemptionListener(callbackContext)
+                "removeWebRedemptionListener" -> removeWebRedemptionListener()
                 "getAnonymousUserId" -> getAnonymousUserId(callbackContext)
                 "isAnonymous" -> isAnonymous(callbackContext)
                 "userLogin" -> userLogin(getStringFromJson(args.getString(0)), callbackContext)
@@ -281,6 +286,21 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         val allowCampaigns = if (options.has("allowCampaigns")) options.optBoolean("allowCampaigns") else null
         val deeplink = getStringFromJson(options.optString("deeplink"))
         val sdkVersion = getStringFromJson(options.optString("sdkVersion"))
+        val proxyApi = getStringFromJson(options.optString("proxy"))
+        val appHandlesRedemptionAlert = options.optBoolean("appHandlesRedemptionAlert", false)
+
+        // v6.1.0: JS has no UUID type, so the id crosses the bridge as a string and is parsed
+        // here. The native builder takes a UUID?, which is where the guarantee used to live; a
+        // string-typed bridge is the only place left to catch a bad value. Refuse it loudly and
+        // skip the option. The SDK still starts, matching how native treats an unusable proxy url.
+        val anonymousUserIdString = getStringFromJson(options.optString("anonymousUserId"))
+        val anonymousUserId = parseCanonicalUuid(anonymousUserIdString)
+        if (anonymousUserIdString != null && anonymousUserId == null) {
+            Log.e("Purchasely", "`anonymousUserId` must be a canonical UUID string, for example " +
+                "\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\". Received \"$anonymousUserIdString\". " +
+                "The anonymous user id is not applied.")
+        }
+        val anonymousUserIdOverride = options.optBoolean("anonymousUserIdOverride", false)
 
         Purchasely.Builder(cordova.context)
             .apiKey(apiKey)
@@ -293,6 +313,21 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 allowCampaigns?.let { this.allowCampaigns(it) }
                 // Cold-start deeplink: replayed automatically once started.
                 deeplink?.let { this.handleDeeplink(Uri.parse(it)) }
+                proxyApi?.let { this.proxy(it) }
+                anonymousUserId?.let { this.anonymousUserId(it, anonymousUserIdOverride) }
+                // Registered unconditionally: the native SDK has no runtime setter on purpose,
+                // because a redemption can settle during start() (a cold start that the
+                // `ply/redeem` link itself triggered, or a token a previous launch left pending).
+                // The listener sends nothing when `addWebRedemptionListener` recorded no
+                // callback, so this is behaviour-neutral by default.
+                this.webRedemptionListener(appHandlesRedemptionAlert, PLYWebRedemptionListener { result ->
+                    val pluginResult = PluginResult(
+                        PluginResult.Status.OK,
+                        JSONObject(webRedemptionResultToMap(result))
+                    )
+                    pluginResult.keepCallback = true
+                    webRedemptionCallback?.sendPluginResult(pluginResult)
+                })
             }
             .build()
 
@@ -391,6 +426,76 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         eventsCallback = null
         Purchasely.eventListener = null
     }
+
+    /**
+     * v6.1.0. Record the callback the redemption outcome is routed to.
+     *
+     * The native [PLYWebRedemptionListener] is registered on the builder chain in [start] (the
+     * SDK has no runtime setter, because a redemption can settle during `start()`), so this
+     * action only records where to send the outcome. JS must call it BEFORE `start()`.
+     */
+    private fun addWebRedemptionListener(callbackContext: CallbackContext) {
+        webRedemptionCallback = callbackContext
+    }
+
+    private fun removeWebRedemptionListener() {
+        // The native listener stays registered; clearing the callback makes it a no-op.
+        webRedemptionCallback = null
+    }
+
+    /**
+     * Parse a canonical UUID string, or return null.
+     *
+     * JS has no UUID type, so an anonymous user id crosses the bridge as a string.
+     * `UUID.fromString` is lenient and accepts a short form such as `"1-2-3-4-5"` that the iOS
+     * `NSUUID` parser refuses. The round-trip check makes both platforms agree on what
+     * "canonical" means, so one id string is accepted, or refused, on both.
+     */
+    private fun parseCanonicalUuid(value: String?): UUID? {
+        if (value == null) return null
+        val parsed = try {
+            UUID.fromString(value)
+        } catch (e: IllegalArgumentException) {
+            return null
+        }
+        return if (parsed.toString().equals(value, ignoreCase = true)) parsed else null
+    }
+
+    /**
+     * Flatten a [PLYWebRedemptionResult] to the 5-key shape the JS listener receives.
+     *
+     * The sealed Kotlin result and the flat iOS `PLYWebRedemptionResult` object both map to the
+     * same 5 keys, so one JS listener drives both platforms. A `Failure` still reports
+     * `replay = false` and a null `context`, which keeps the JS shape stable.
+     *
+     * `context` and `context.subscription` stay separately nullable: a success can carry no
+     * context at all, and a present context can carry no subscription. JSONObject renders a
+     * null value as JSON null, which reaches JS as `null`.
+     */
+    private fun webRedemptionResultToMap(result: PLYWebRedemptionResult): Map<String, Any?> =
+        when (result) {
+            is PLYWebRedemptionResult.Success -> mapOf(
+                "isSuccess" to true,
+                "context" to result.context?.let { context ->
+                    JSONObject(
+                        mapOf(
+                            "subscription" to context.subscription
+                                ?.let { JSONObject(transformSubscriptionToMap(it)) }
+                        )
+                    )
+                },
+                "replay" to result.replay,
+                "errorCode" to null,
+                "errorMessage" to null,
+            )
+            is PLYWebRedemptionResult.Failure -> mapOf(
+                "isSuccess" to false,
+                "context" to null,
+                "replay" to false,
+                "errorCode" to result.errorCode,
+                "errorMessage" to result.errorMessage,
+            )
+        }
 
     private fun getAnonymousUserId(callbackContext: CallbackContext) {
         callbackContext.success(Purchasely.anonymousUserId)
@@ -830,13 +935,17 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         return HashMap(map).apply { this["plans"] = normalized }
     }
 
-    private fun transformSubscriptionsToJson(list: List<PLYSubscriptionData>): JSONArray {
-        val result = JSONArray()
-        for (data in list) {
-            val map = HashMap(data.data.toMap())
-            map["plan"] = transformPlanToMap(data.plan)
-            map["product"] = normalizeProductPlans(data.product.toMap())
-            map["subscriptionSource"] = when (data.data.storeType) {
+    /**
+     * Map one [PLYSubscriptionData] to the JS subscription shape.
+     *
+     * Shared by `userSubscriptions`, `userSubscriptionsHistory` and the web redemption
+     * listener, whose `context.subscription` is the same type, so the three report one shape.
+     */
+    private fun transformSubscriptionToMap(data: PLYSubscriptionData): Map<String, Any?> {
+        return HashMap(data.data.toMap()).apply {
+            this["plan"] = transformPlanToMap(data.plan)
+            this["product"] = normalizeProductPlans(data.product.toMap())
+            this["subscriptionSource"] = when (data.data.storeType) {
                 StoreType.GOOGLE_PLAY_STORE -> StoreType.GOOGLE_PLAY_STORE.ordinal
                 StoreType.AMAZON_APP_STORE -> StoreType.AMAZON_APP_STORE.ordinal
                 StoreType.HUAWEI_APP_GALLERY -> StoreType.HUAWEI_APP_GALLERY.ordinal
@@ -846,7 +955,13 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 StoreType.NONE, StoreType.WEB_CHECKOUT_STRIPE -> 4
                 else -> null
             }
-            result.put(JSONObject(map))
+        }
+    }
+
+    private fun transformSubscriptionsToJson(list: List<PLYSubscriptionData>): JSONArray {
+        val result = JSONArray()
+        for (data in list) {
+            result.put(JSONObject(transformSubscriptionToMap(data)))
         }
         return result
     }
@@ -1374,6 +1489,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         var defaultCallback: CallbackContext? = null
         var eventsCallback: CallbackContext? = null
         var attributesCallback: CallbackContext? = null
+        var webRedemptionCallback: CallbackContext? = null
 
         // Serializes a v6 PLYPresentationOutcome to the wire contract. `result` is kept as an
         // int (PurchaseResult 0/1/2) for back-compat with the pre-6.0 JS layer.
