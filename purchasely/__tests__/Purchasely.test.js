@@ -353,7 +353,7 @@ describe('Purchasely', () => {
         expect(mockExec.mock.calls[0][4][0].anonymousUserId).toBe('not-a-uuid');
       });
 
-      it('forwards proxy (Android only; the iOS bridge ignores it)', () => {
+      it('forwards proxy', () => {
         Purchasely.builder('API_KEY').proxy('https://svc.purchasely.io').start(jest.fn(), jest.fn());
 
         expect(mockExec.mock.calls[0][4][0].proxy).toBe('https://svc.purchasely.io');

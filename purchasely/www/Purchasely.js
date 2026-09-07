@@ -63,7 +63,7 @@ function presentationDispatcher(success, callbacks) {
 // Purchasely 6.1.0 adds four options:
 //   anonymousUserId         (string, optional — a canonical UUID string, see below)
 //   anonymousUserIdOverride (bool, optional — defaults to false)
-//   proxy                   (string, optional — Android only, an https base URL)
+//   proxy                   (string, optional — an https base URL)
 //   appHandlesRedemptionAlert (bool, optional — defaults to the native false)
 //
 // `anonymousUserId` is the anonymous user id the SDK reports for this device. JavaScript
@@ -75,8 +75,13 @@ function presentationDispatcher(success, callbacks) {
 // under the previous id.
 //
 // `proxy` routes the Purchasely API traffic through a proxy instead of api.purchasely.io,
-// for a region where that host is unreachable. Only the API host changes: the paywall
-// host and the tracking host stay on production. Android only — the iOS bridge ignores it.
+// for a region where that host is unreachable, such as mainland China. Only the API host
+// changes: the paywall host and the tracking host stay on production. Purchasely operates
+// a proxy at https://svc.purchasely.io; you can also host your own. The value must be an
+// https base URL with a host, and it must carry no query, no fragment and no credentials.
+// Each native SDK refuses any other value with an error log, keeps the production host,
+// and drops a trailing slash. It is a start-time option on both platforms: neither native
+// SDK has a runtime setter for it.
 //
 // `appHandlesRedemptionAlert` decides who shows the outcome of a Web2App redemption.
 // false (the default) keeps the SDK popin. true shows nothing, so the app renders its own
@@ -119,7 +124,7 @@ PLYStartBuilder.prototype.anonymousUserId = function (id, override) {
     return this;
 };
 
-// Purchasely 6.1.0. Android only; the iOS bridge ignores it.
+// Purchasely 6.1.0. See the exports.start option block for the full contract.
 PLYStartBuilder.prototype.proxy = function (api) { this._options.proxy = api; return this; };
 
 // Purchasely 6.1.0. false (the default) keeps the SDK's own redemption popin.

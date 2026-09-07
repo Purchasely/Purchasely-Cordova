@@ -85,19 +85,24 @@ id yet. Add `anonymousUserIdOverride: true` to replace an existing id.
 under the previous id. Use it only when your app owns the anonymous identity, for example
 after a cross-device restore.
 
-### API proxy (Android only)
+### API proxy
 
 Route the Purchasely API traffic through a proxy instead of `api.purchasely.io`, for a
-region where that host is unreachable.
+region where that host is unreachable, such as mainland China.
 
 ```js
 Purchasely.start({ apiKey: 'API_KEY', proxy: 'https://svc.purchasely.io' }, onConfigured, onError);
 ```
 
+Purchasely operates a proxy at `https://svc.purchasely.io`. You can also host your own.
+
 The SDK overrides the API host only: the paywall host and the tracking host stay on
-production. `proxy` must be an `https` base URL. The native SDK refuses any other value
-with an error log and keeps the production host. This option is **Android only**; the iOS
-bridge ignores it.
+production. `proxy` must be an `https` base URL with a host, and it must carry no query,
+no fragment and no credentials. Each native SDK refuses any other value with an error log,
+keeps the production host, and drops a trailing slash.
+
+This is a start-time option on both platforms. Neither native SDK has a runtime setter
+for it.
 
 ### Web2App redemption
 

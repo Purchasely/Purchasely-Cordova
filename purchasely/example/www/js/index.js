@@ -81,9 +81,9 @@ function onDeviceReady() {
 			// generated id.
 			// anonymousUserId: '3f2504e0-4f89-11d3-9a0c-0305e82c3301',
 			//
-			// 6.1.0. Android only. Route the API traffic through a proxy for a region
-			// where api.purchasely.io is unreachable. Only https is accepted. Ignored
-			// on iOS.
+			// 6.1.0. Route the API traffic through a proxy for a region where
+			// api.purchasely.io is unreachable. Only an https base URL is accepted.
+			// Purchasely operates one at https://svc.purchasely.io.
 			//
 			// Kept inactive here on purpose: this demo app must keep talking to
 			// production.

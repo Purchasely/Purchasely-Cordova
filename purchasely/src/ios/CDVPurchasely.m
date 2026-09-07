@@ -110,8 +110,23 @@
         }
     }
 
-    // v6.1.0: `proxy` has no iOS builder equivalent (MOB-308 is Android-only in 6.1.0) and
-    // is ignored here.
+    // v6.1.0: the native modifier takes an NSURL, and a nil there means "turn the proxy
+    // off", not "ignore this value". So a string NSURL cannot parse must skip the modifier
+    // entirely rather than pass nil, which would silently disable a proxy the app asked
+    // for. Native validates the rest (https, a host, no query, no fragment, no
+    // credentials) and keeps the production host on a bad value, so the bridge does not
+    // re-check those.
+    NSString *proxyApi = opts[@"proxy"];
+    if ([proxyApi isKindOfClass:[NSString class]] && proxyApi.length > 0) {
+        NSURL *proxyUrl = [NSURL URLWithString:proxyApi];
+        if (proxyUrl == nil) {
+            NSLog(@"[Purchasely] `proxy` must be an https base URL, for example "
+                   "\"https://svc.purchasely.io\". Received \"%@\". The proxy is not applied.",
+                  proxyApi);
+        } else {
+            builder = [builder proxyWithApi:proxyUrl];
+        }
+    }
 
     // v6.1.0: registered unconditionally. The native SDK has no runtime setter on purpose,
     // because a redemption can settle during `start()` (a cold start that the `ply/redeem`
