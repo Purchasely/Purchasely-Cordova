@@ -40,6 +40,49 @@ android {
     }
 }
 
+// Make the CI log self-auditing. Gradle's plain console prints nothing on a passing test
+// task, so a green job is otherwise indistinguishable from one that ran ZERO tests.
+tasks.withType(Test).configureEach {
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat 'full'
+    }
+    afterSuite { descriptor, result ->
+        if (descriptor.parent != null) return
+        println "Android bridge unit tests: ${result.testCount} run, " +
+            "${result.failedTestCount} failed, ${result.skippedTestCount} skipped"
+    }
+}
+
+// Fail when nothing ran.
+//
+// This CANNOT live in the test task itself. With no test sources Gradle marks the task
+// NO-SOURCE and skips it, so `afterSuite` and `doLast` never run and the build still goes
+// green -- verified by pointing the test source set at an empty directory, which passed
+// against an afterSuite guard. This task reads the result XML instead, so a skipped test
+// task fails it for want of any report at all.
+tasks.register('verifyTestsRan') {
+    description = 'Runs the unit tests, then fails unless they actually executed.'
+    // dependsOn, not just ordering: without it Gradle is free to run this BEFORE the test
+    // task and pass on a stale report from a previous run, which is what happened the
+    // first time this guard was written. CI runs this task alone.
+    dependsOn 'testDebugUnitTest'
+    doLast {
+        def resultsDir = layout.buildDirectory.dir('test-results/testDebugUnitTest').get().asFile
+        def reports = resultsDir.exists() ? resultsDir.listFiles({ f -> f.name.endsWith('.xml') } as FileFilter) : null
+        if (!reports) {
+            throw new GradleException(
+                "No test report in ${resultsDir}. The test task ran no tests, which a " +
+                'passing build would otherwise hide.')
+        }
+        def total = reports.sum { new groovy.xml.XmlSlurper().parse(it).@tests.text() as int }
+        println "verifyTestsRan: ${total} test(s) reported across ${reports.length} suite file(s)"
+        if (total == 0) {
+            throw new GradleException('Test reports exist but contain zero tests.')
+        }
+    }
+}
+
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17

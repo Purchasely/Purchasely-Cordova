@@ -338,9 +338,13 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # verifyTestsRan depends on testDebugUnitTest and then fails unless the run
+      # actually produced tests. Without it a green job cannot be told apart from one
+      # that ran zero tests: Gradle marks a test task with no sources NO-SOURCE, skips
+      # it, and still succeeds.
       - name: Run the Android bridge unit tests
         working-directory: purchasely/android-tests
-        run: gradle testDebugUnitTest --console=plain
+        run: gradle verifyTestsRan --console=plain
 
       - name: Upload the test report on failure
         if: failure()
