@@ -18,9 +18,10 @@ const APP = process.env.PURCHASELY_E2E_APP ||
 //
 // Overridable, and left that way deliberately: caching this directory between CI runs was
 // tried and MEASURED NOT TO WORK. Restoring it (53s) still left the prebuild at 140s, worse
-// than the 102s clean cold build in the run before it — xcodebuild does not trust restored
-// mtimes and rebuilds anyway. Runs 34144808577 (cold, 102s) and 34147235666 (restored,
-// 140s). Do not re-add actions/cache here without beating those numbers.
+// than the 102s clean cold build in the run before it: 119 CompileC tasks ran against the
+// restored directory, so xcodebuild recompiled every source file anyway. Runs 34144808577
+// (cold, 102s) and 34147235666 (restored, 140s). Do not re-add actions/cache here without
+// beating those numbers.
 const WDA_DERIVED = process.env.PURCHASELY_E2E_WDA_DERIVED ||
   path.join(os.tmpdir(), 'ply-wda-derived');
 
