@@ -58,7 +58,25 @@ run_suite() { # $1 = spec glob, $2 = hard|soft
 
 cd "$HERE"
 rc=0
+# Every spec file on disk must be named above. These scripts pass --spec explicitly, so
+# wdio's own glob does not apply and a new spec would otherwise never run in CI while the
+# job still reported green. That happened once; this makes it fail loudly instead.
+missing=""
+for f in ./specs/*.e2e.js; do
+  grep -q "run_suite \"$f\"" "$0" || missing="$missing $f"
+done
+if [ -n "$missing" ]; then
+  echo "::error::spec file(s) not registered in $(basename "$0"):$missing"
+  echo "Add a run_suite line for each, choosing a hard or soft gate."
+  exit 1
+fi
+
 run_suite "./specs/bridge.e2e.js"          hard || rc=1
+# NOTE: these scripts name every spec EXPLICITLY and pass --spec, so wdio's
+# `specs: ['./specs/**/*.e2e.js']` glob does NOT apply here. A new spec file that is not
+# added to this list silently never runs in CI, which is exactly what happened to
+# start-options-6-1-0 on its first push.
+run_suite "./specs/start-options-6-1-0.e2e.js" hard || rc=1
 run_suite "./specs/preload-display.e2e.js" hard || rc=1
 run_suite "./specs/dismiss.e2e.js"         soft || true
 run_suite "./specs/interceptor.e2e.js"     soft || true

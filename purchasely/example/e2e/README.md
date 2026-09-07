@@ -30,6 +30,17 @@ The redemption outcome needs the real backend reachable from the runner. When no
 arrives the spec logs `[redemption] KNOWN:` and returns rather than asserting on something
 that cannot arrive — the same policy the store-dependent bridge assertions use.
 
+## Adding a spec
+
+`tools/ci_run_e2e.sh` and `tools/ci_run_e2e_ios.sh` name every spec **explicitly** and pass
+`--spec`, so wdio's own `specs: ['./specs/**/*.e2e.js']` glob does **not** apply in CI. A
+new spec file that is not added to both scripts never runs there, while the job still
+reports green. `start-options-6-1-0.e2e.js` shipped that way on its first push.
+
+Both scripts now assert that every `./specs/*.e2e.js` on disk has a `run_suite` line, and
+fail with `::error::spec file(s) not registered` otherwise. So add the spec, add its
+`run_suite` line with a hard or soft gate, and the guard keeps the two in step.
+
 Best-effort suites emit `::warning::` on failure and do not fail the job (native/paywall
 rendering is flaky in CI — same policy as the Flutter suite). Each suite retries up to 3×.
 
