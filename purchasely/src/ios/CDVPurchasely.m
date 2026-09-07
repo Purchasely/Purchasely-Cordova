@@ -29,6 +29,42 @@
     self.pendingInterceptCompletions = [NSMutableDictionary new];
 }
 
++ (CDVPurchaselyProxyOption)proxyOptionFor:(id _Nullable)value url:(NSURL * _Nullable * _Nullable)outUrl {
+    if (outUrl != NULL) {
+        *outUrl = nil;
+    }
+    // An absent key and an explicit null are different operations. Check NSNull FIRST:
+    // it is a real object, so an `isKindOfClass:[NSString class]` test would fall through
+    // to the absent branch and turn a requested clear into a silent no-op.
+    if (value == nil) {
+        return CDVPurchaselyProxyOptionAbsent;
+    }
+    if (value == [NSNull null]) {
+        return CDVPurchaselyProxyOptionClear;
+    }
+    if (![value isKindOfClass:[NSString class]]) {
+        return CDVPurchaselyProxyOptionInvalid;
+    }
+    // Do not validate the scheme, the host, a query, a fragment or credentials here. The
+    // native SDK refuses those with an error log and keeps the production host, and it
+    // drops a trailing slash. The bridge only rejects what will not convert at all.
+    NSURL *url = [NSURL URLWithString:(NSString *)value];
+    if (url == nil) {
+        return CDVPurchaselyProxyOptionInvalid;
+    }
+    if (outUrl != NULL) {
+        *outUrl = url;
+    }
+    return CDVPurchaselyProxyOptionSet;
+}
+
++ (NSUUID * _Nullable)canonicalUUIDFromString:(id _Nullable)value {
+    if (![value isKindOfClass:[NSString class]]) {
+        return nil;
+    }
+    return [[NSUUID alloc] initWithUUIDString:(NSString *)value];
+}
+
 - (void)start:(CDVInvokedUrlCommand*)command {
     // v6: a single options dictionary (see the JS↔native contract), no longer positional args.
     NSDictionary *opts = [command argumentAtIndex:0];
@@ -96,9 +132,9 @@
     // a string-typed bridge is the only place left to catch a bad value. Refuse it loudly
     // and skip the option. The SDK still starts, matching how native treats an unusable
     // proxy url.
-    NSString *anonymousUserId = opts[@"anonymousUserId"];
+    id anonymousUserId = opts[@"anonymousUserId"];
     if ([anonymousUserId isKindOfClass:[NSString class]]) {
-        NSUUID *parsed = [[NSUUID alloc] initWithUUIDString:anonymousUserId];
+        NSUUID *parsed = [CDVPurchasely canonicalUUIDFromString:anonymousUserId];
         if (parsed == nil) {
             NSLog(@"[Purchasely] `anonymousUserId` must be a canonical UUID string, for example "
                    "\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\". Received \"%@\". The anonymous user "
@@ -110,22 +146,27 @@
         }
     }
 
-    // v6.1.0: the native modifier takes an NSURL, and a nil there means "turn the proxy
-    // off", not "ignore this value". So a string NSURL cannot parse must skip the modifier
-    // entirely rather than pass nil, which would silently disable a proxy the app asked
-    // for. Native validates the rest (https, a host, no query, no fragment, no
-    // credentials) and keeps the production host on a bad value, so the bridge does not
-    // re-check those.
-    NSString *proxyApi = opts[@"proxy"];
-    if ([proxyApi isKindOfClass:[NSString class]] && proxyApi.length > 0) {
-        NSURL *proxyUrl = [NSURL URLWithString:proxyApi];
-        if (proxyUrl == nil) {
-            NSLog(@"[Purchasely] `proxy` must be an https base URL, for example "
-                   "\"https://svc.purchasely.io\". Received \"%@\". The proxy is not applied.",
-                  proxyApi);
-        } else {
+    // v6.1.0: three states, and they are not interchangeable. An absent key makes no
+    // native call and leaves the current setting untouched; an explicit null clears the
+    // proxy and returns to api.purchasely.io, which is a supported operation and not an
+    // error; a string routes the API host. A value NSURL cannot convert skips the
+    // modifier, because `proxyWithApi:nil` means CLEAR, not "ignore this value", so
+    // passing nil would silently disable a proxy the app asked for.
+    NSURL *proxyUrl = nil;
+    switch ([CDVPurchasely proxyOptionFor:opts[@"proxy"] url:&proxyUrl]) {
+        case CDVPurchaselyProxyOptionAbsent:
+            break;
+        case CDVPurchaselyProxyOptionClear:
+            builder = [builder proxyWithApi:nil];
+            break;
+        case CDVPurchaselyProxyOptionSet:
             builder = [builder proxyWithApi:proxyUrl];
-        }
+            break;
+        case CDVPurchaselyProxyOptionInvalid:
+            NSLog(@"[Purchasely] `proxy` must be an https base URL, for example "
+                   "\"https://svc.purchasely.io\", or null to clear the proxy. Received "
+                   "\"%@\". The proxy is not applied.", opts[@"proxy"]);
+            break;
     }
 
     // v6.1.0: registered unconditionally. The native SDK has no runtime setter on purpose,

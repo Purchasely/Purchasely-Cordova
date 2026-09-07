@@ -8,10 +8,42 @@
 #import <Cordova/CDVPlugin.h>
 #import <Purchasely/Purchasely-Swift.h>
 
+/// How the `proxy` start option resolves. Purchasely 6.1.0.
+///
+/// The three JS states are NOT interchangeable, and a fourth case exists for a value the
+/// bridge cannot convert. `proxyWithApi:` takes an `NSURL *_Nullable`, where nil means
+/// CLEAR, so an unconvertible string must skip the modifier rather than pass nil: passing
+/// nil would silently disable a proxy the app explicitly asked for, because of a typo.
+typedef NS_ENUM(NSInteger, CDVPurchaselyProxyOption) {
+    /// The key is absent. Make no native call: leave the current setting untouched.
+    CDVPurchaselyProxyOptionAbsent = 0,
+    /// The key is present and null. Call `proxyWithApi:nil` to clear the proxy.
+    CDVPurchaselyProxyOptionClear,
+    /// The key holds a convertible string. Call `proxyWithApi:` with the URL.
+    CDVPurchaselyProxyOptionSet,
+    /// The key holds a string `NSURL` cannot convert. Log and make no native call.
+    CDVPurchaselyProxyOptionInvalid
+};
+
 // Protocol conformance (PLYEventDelegate / PLYUserAttributeDelegate) is declared on the
 // CDVPurchasely (Events) and (UserAttributes) categories, which implement the delegate methods.
 @interface CDVPurchasely : CDVPlugin {
 }
+
+/// Resolve the `proxy` start option to one of the four cases above.
+///
+/// Pure, and exposed so a unit test drives the real bridge logic instead of a copy. `value`
+/// is the raw option, so `nil` for an absent key and `NSNull` for an explicit JS null.
+/// `outUrl` receives the URL only for `CDVPurchaselyProxyOptionSet`.
++ (CDVPurchaselyProxyOption)proxyOptionFor:(id _Nullable)value url:(NSURL * _Nullable * _Nullable)outUrl;
+
+/// Parse a canonical UUID string, or return nil.
+///
+/// JS has no UUID type, so an anonymous user id crosses the bridge as a string. Exposed so
+/// a unit test can pin the cross-platform contract: this refuses the lenient short form
+/// (`"1-2-3-4-5"`) that Android's `UUID.fromString` accepts, which is why the Android
+/// bridge adds a round-trip check.
++ (NSUUID * _Nullable)canonicalUUIDFromString:(id _Nullable)value;
 
 // The presentation currently displayed (v6 uses id<PLYPresentation> for close()/back()).
 @property (nonatomic, strong) id<PLYPresentation> currentPresentation;
