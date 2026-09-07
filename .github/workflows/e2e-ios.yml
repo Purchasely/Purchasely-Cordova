@@ -24,6 +24,10 @@ jobs:
     name: E2E iOS (real backend)
     runs-on: macos-15
     timeout-minutes: 60
+    # A stable, cacheable home for the WebDriverAgent build. The wdio config's default is
+    # os.tmpdir(), which on a macOS runner is a per-boot random path — nothing to cache.
+    env:
+      PURCHASELY_E2E_WDA_DERIVED: ${{ runner.temp }}/ply-wda-derived
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -49,6 +53,29 @@ jobs:
         working-directory: purchasely/example/e2e
         run: npm install
 
+      # WebDriverAgent is rebuilt from scratch on every cold runner, and that build was the
+      # dominant cost of this job. It depends only on Xcode and on the WDA sources shipped
+      # with the xcuitest driver, so it is the same build on every run until either changes.
+      - name: WebDriverAgent cache key
+        id: wda
+        working-directory: purchasely/example/e2e
+        run: |
+          xc=$(xcodebuild -version | tr '\n' '-' | tr -d ' ')
+          wda=$(node -e "
+            const path = require('path');
+            const dir = path.dirname(require.resolve('appium-xcuitest-driver/package.json'));
+            const pkg = require.resolve('appium-webdriveragent/package.json', { paths: [dir] });
+            console.log(require(pkg).version);
+          ")
+          echo "key=wda-${xc}-${wda}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore WebDriverAgent build
+        id: wda-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ env.PURCHASELY_E2E_WDA_DERIVED }}
+          key: ${{ steps.wda.outputs.key }}
+
       - name: Boot iOS simulator
         id: sim
         run: |
@@ -61,6 +88,16 @@ jobs:
       - name: Run E2E suite on simulator
         working-directory: purchasely/example/e2e
         run: bash ./tools/ci_run_e2e_ios.sh "${{ steps.sim.outputs.udid }}"
+
+      # Save even when the suite fails: the WDA build succeeded either way, and plain
+      # actions/cache would drop it on a red run, leaving the next run cold again.
+      - name: Save WebDriverAgent build
+        if: always() && steps.wda-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ env.PURCHASELY_E2E_WDA_DERIVED }}
+          key: ${{ steps.wda.outputs.key }}
 
       - name: Upload E2E logs
         if: always()
