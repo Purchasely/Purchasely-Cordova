@@ -125,4 +125,125 @@
                      @"The redemption callback should return early when no listener is recorded.");
 }
 
+#pragma mark - proxy: the three states (6.1.0)
+
+// Both natives treat null as "clear the proxy and return to api.purchasely.io", which is
+// a supported operation and not an error. The bridge therefore has to keep three states
+// apart, plus a fourth case for a value NSURL cannot convert.
+//
+// These drive +proxyOptionFor:url:, the same resolver -start: switches on, so they cover
+// the shipped logic rather than a copy of it.
+
+- (void)testProxyAbsentKeyMakesNoNativeCall {
+    NSURL *url = [NSURL URLWithString:@"https://sentinel.example"];
+
+    // A missing key reads as nil out of an NSDictionary.
+    CDVPurchaselyProxyOption option = [CDVPurchasely proxyOptionFor:nil url:&url];
+
+    XCTAssertEqual(option, CDVPurchaselyProxyOptionAbsent,
+                   @"An absent key must leave the current setting untouched. Resolving it "
+                   @"as Clear would turn every start into an implicit clear.");
+    XCTAssertNil(url, @"The resolver must clear outUrl before it returns.");
+}
+
+- (void)testProxyExplicitNullClears {
+    // A JS null crosses JSON as NSNull, never as nil.
+    CDVPurchaselyProxyOption option = [CDVPurchasely proxyOptionFor:[NSNull null] url:NULL];
+
+    XCTAssertEqual(option, CDVPurchaselyProxyOptionClear,
+                   @"An explicit null must resolve as Clear. Resolving it as Absent makes "
+                   @"a requested clear silently do nothing.");
+}
+
+- (void)testProxyUrlStringResolvesToSet {
+    NSURL *url = nil;
+
+    CDVPurchaselyProxyOption option = [CDVPurchasely proxyOptionFor:@"https://svc.purchasely.io"
+                                                                url:&url];
+
+    XCTAssertEqual(option, CDVPurchaselyProxyOptionSet);
+    XCTAssertEqualObjects(url.absoluteString, @"https://svc.purchasely.io");
+}
+
+// The distinction the whole change exists for, asserted against itself rather than as two
+// separate expectations that could both drift the same way.
+- (void)testProxyAbsentAndClearAreDifferentOutcomes {
+    CDVPurchaselyProxyOption absent = [CDVPurchasely proxyOptionFor:nil url:NULL];
+    CDVPurchaselyProxyOption clear = [CDVPurchasely proxyOptionFor:[NSNull null] url:NULL];
+
+    XCTAssertNotEqual(absent, clear,
+                      @"Absent and Clear must not collapse into one outcome.");
+}
+
+// THE TRAP. proxyWithApi: takes an NSURL *_Nullable where nil means CLEAR, not "ignore
+// this value". So an unconvertible string must skip the modifier: passing nil would
+// silently disable a proxy the app explicitly asked for, because of a typo.
+- (void)testProxyUnconvertibleStringIsInvalidAndNotAClear {
+    NSURL *url = [NSURL URLWithString:@"https://sentinel.example"];
+
+    // A bare space is not a legal URL character, so NSURL returns nil for this string.
+    CDVPurchaselyProxyOption option = [CDVPurchasely proxyOptionFor:@"ht tp://nope" url:&url];
+
+    XCTAssertEqual(option, CDVPurchaselyProxyOptionInvalid,
+                   @"A string NSURL cannot convert must resolve as Invalid, so -start: "
+                   @"skips the modifier.");
+    XCTAssertNotEqual(option, CDVPurchaselyProxyOptionClear,
+                      @"Invalid must never resolve as Clear: a typo would then disable a "
+                      @"proxy the app asked for.");
+    XCTAssertNil(url, @"Invalid must not hand back a URL.");
+}
+
+- (void)testProxyNonStringIsInvalid {
+    XCTAssertEqual([CDVPurchasely proxyOptionFor:@42 url:NULL], CDVPurchaselyProxyOptionInvalid);
+    XCTAssertEqual([CDVPurchasely proxyOptionFor:@[@"x"] url:NULL], CDVPurchaselyProxyOptionInvalid);
+}
+
+// The bridge deliberately does NOT check the scheme, the host, a query, a fragment or
+// credentials. Each native SDK refuses those with an error log and keeps the production
+// host, and it drops a trailing slash. Re-checking here would diverge from that contract.
+- (void)testProxyDoesNotValidateTheSchemeOrHost {
+    NSURL *url = nil;
+
+    XCTAssertEqual([CDVPurchasely proxyOptionFor:@"http://insecure.example" url:&url],
+                   CDVPurchaselyProxyOptionSet,
+                   @"An http value converts, so the bridge forwards it and the SDK refuses it.");
+
+    XCTAssertEqual([CDVPurchasely proxyOptionFor:@"https://svc.purchasely.io/?a=b#c" url:&url],
+                   CDVPurchaselyProxyOptionSet,
+                   @"A query and a fragment convert, so the SDK is the one that refuses them.");
+}
+
+#pragma mark - anonymous user id (6.1.0)
+
+- (void)testCanonicalUUIDAcceptsACanonicalString {
+    NSUUID *parsed = [CDVPurchasely canonicalUUIDFromString:@"3f2504e0-4f89-11d3-9a0c-0305e82c3301"];
+
+    XCTAssertNotNil(parsed);
+    XCTAssertEqualObjects(parsed.UUIDString.lowercaseString,
+                          @"3f2504e0-4f89-11d3-9a0c-0305e82c3301");
+}
+
+- (void)testCanonicalUUIDAcceptsAnUppercaseString {
+    XCTAssertNotNil([CDVPurchasely canonicalUUIDFromString:@"3F2504E0-4F89-11D3-9A0C-0305E82C3301"]);
+}
+
+// This is the case that forces the Android bridge to add a round-trip check:
+// UUID.fromString accepts this short form, NSUUID does not. Pinning the iOS side here is
+// what makes "canonical" mean the same thing on both platforms.
+- (void)testCanonicalUUIDRefusesTheLenientShortForm {
+    XCTAssertNil([CDVPurchasely canonicalUUIDFromString:@"1-2-3-4-5"],
+                 @"NSUUID refuses the short form, so Android must refuse it too.");
+}
+
+- (void)testCanonicalUUIDRefusesANonUuid {
+    XCTAssertNil([CDVPurchasely canonicalUUIDFromString:@"not-a-uuid"]);
+    XCTAssertNil([CDVPurchasely canonicalUUIDFromString:@""]);
+    XCTAssertNil([CDVPurchasely canonicalUUIDFromString:@"3f2504e0-4f89-11d3-9a0c"]);
+}
+
+- (void)testCanonicalUUIDRefusesANonString {
+    XCTAssertNil([CDVPurchasely canonicalUUIDFromString:nil]);
+    XCTAssertNil([CDVPurchasely canonicalUUIDFromString:[NSNull null]]);
+    XCTAssertNil([CDVPurchasely canonicalUUIDFromString:@42]);
+}
 @end
