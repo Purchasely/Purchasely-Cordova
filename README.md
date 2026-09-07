@@ -104,36 +104,74 @@ keeps the production host, and drops a trailing slash.
 This is a start-time option on both platforms. Neither native SDK has a runtime setter
 for it.
 
+**The option has three states, and they are not interchangeable.** Passing `null` clears
+the proxy, which is a supported operation and not an error:
+
+| Call | Effect |
+|------|--------|
+| `proxy: 'https://svc.purchasely.io'` | routes the API host |
+| `proxy: null` | **clears** the proxy, back to `api.purchasely.io` |
+| the key is absent | leaves the current setting untouched |
+
+So pass the key with `null` to clear, and omit the key to leave the setting alone. Through
+the builder:
+
+```js
+Purchasely.builder('API_KEY').proxy(null).start();   // clear
+Purchasely.builder('API_KEY').start();               // leave untouched
+```
+
+`proxy()` with no argument is refused with an error log, because the no-argument native
+modifiers disagree: on iOS it routes through Purchasely's own proxy, on Android it clears.
+Always pass a URL or `null`.
+
 ### Web2App redemption
 
 Listen to the outcome of a Web2App redemption (`{scheme}://ply/redeem/{token}`).
 
-**Add the listener before `start()`.** A redemption can settle during `start()`, from a
-cold start that the link itself triggered, or from a token a previous launch left pending.
-Neither native SDK has a runtime setter for the delegate, so a listener added after
-`start()` misses exactly the case it is most needed for.
+A redemption can settle **during** `start()`, from a cold start the link itself triggered
+or from a token a previous launch left pending. Neither native SDK has a runtime setter for
+the delegate, so a listener registered after `start()` misses exactly the case the feature
+exists for.
+
+Put the listener on the start builder. It subscribes when you chain it, before `start()`
+runs, so the ordering cannot go wrong:
 
 ```js
-// Add the listener FIRST.
-Purchasely.addWebRedemptionListener((result) => {
-    if (result.isSuccess) {
-        console.log('Redemption granted', result.context && result.context.subscription);
-        if (result.replay) {
-            console.log('The server reports this token was redeemed before');
+Purchasely.builder('API_KEY')
+    .webRedemptionListener((result) => {
+        if (result.isSuccess) {
+            console.log('Redemption granted', result.context && result.context.subscription);
+            if (result.replay) {
+                console.log('The server reports this token was redeemed before');
+            }
+        } else {
+            // Show errorMessage to the user. Do not log it: see the note below.
+            showError(result.errorCode, result.errorMessage);
         }
-    } else {
-        console.log('Redemption failed', result.errorCode, result.errorMessage);
-    }
-});
+    })
+    .start();
+```
 
-// Then start the SDK.
+The optional second argument is shorthand for `appHandlesRedemptionAlert`:
+
+```js
+Purchasely.builder('API_KEY').webRedemptionListener(onRedemption, true).start();
+```
+
+**Secondary path, for the runtime case.** `Purchasely.addWebRedemptionListener(cb)` and
+`Purchasely.removeWebRedemptionListener()` let an app replace the listener while the SDK
+already runs. The trade-off: a redemption that settles during `start()` is missed, so call
+it before `start()` if you use it at all.
+
+```js
+Purchasely.addWebRedemptionListener((result) => { /* ... */ });
+
 Purchasely.start({
     apiKey: 'API_KEY',
     appHandlesRedemptionAlert: false // default: the SDK shows its own popin
 }, onConfigured, onError);
 ```
-
-Call `Purchasely.removeWebRedemptionListener()` to remove it.
 
 The SDK calls the listener on the main thread, exactly once per settled redemption, on
 success and on failure alike. `appHandlesRedemptionAlert` decides *when*:
@@ -167,8 +205,35 @@ Three behaviours to know:
 
 The SDK also emits two analytics events for a redemption, `REDEMPTION_CONSUMED` and
 `REDEMPTION_FAILED`. Read them with `Purchasely.addEventListener`. The payload is in
-`event.properties.redemption`: `token`, `receipt`, `subscriptions` and `purchase_context`
-on success; `token` and `error_code`, plus a top-level `error_message`, on failure.
+`event.properties.redemption`:
+
+| Field | On | Description |
+|-------|----|-------------|
+| `token` | both | the redemption link token the event reports on |
+| `receipt` | consumed | `{ id, validation_status }`, where `validation_status` is uppercase, e.g. `'COMPLETED'` |
+| `subscriptions` | consumed | what the redemption transferred. Active subscriptions and non-consumables only: an expired subscription is absent, because a redemption grants rather than reports history |
+| `purchase_context` | consumed | `{ version, source, sandbox, replay, built_in_attributes, custom_attributes }` |
+| `error_code` | failed | `'EXPIRED_REDEMPTION_TOKEN'`, `'INVALID_REDEMPTION_TOKEN'`, or absent for a failure that never reached the server |
+
+A failure also carries the reason in the **top-level** `event.properties.error_message`,
+not inside `redemption`. The masked email hint never reaches this event: the SDK gives it
+to the redemption listener only, on iOS.
+
+### A note on subscription fields, on iOS
+
+The native iOS `PLYSubscription` has no purchase token property, so the iOS bridge cannot
+emit `purchaseToken` and never did. It also omits `nextRenewalDate` and `cancelledDate`
+when the native date is `nil`.
+
+Read all three as optional rather than as guaranteed strings. This affects
+`userSubscriptions()` and `userSubscriptionsHistory()` as well as the redemption
+`context.subscription`, since the three share one mapper. Cordova ships plain JavaScript
+with no type declarations, so nothing enforces this for you:
+
+```js
+const token = subscription.purchaseToken;         // undefined on iOS
+const renews = subscription.nextRenewalDate || null;
+```
 
 ## 🏁 Documentation
 
