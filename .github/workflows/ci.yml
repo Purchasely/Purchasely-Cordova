@@ -311,6 +311,44 @@ jobs:
         working-directory: purchasely/example
         run: cordova build android
 
+  android-unit-tests:
+    name: Android Bridge Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Unit coverage for purchasely/src/android/PurchaselyPlugin.kt. `build-android` only
+    # proves the bridge COMPILES; these assert what it actually does with the start
+    # options and with a redemption result. The module compiles the shipped plugin source
+    # as its own main source set, so a refactor that breaks the bridge breaks this job too.
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # No Gradle wrapper is committed for this module, so the action provisions Gradle
+      # rather than the repository carrying a wrapper jar.
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run the Android bridge unit tests
+        working-directory: purchasely/android-tests
+        run: gradle testDebugUnitTest --console=plain
+
+      - name: Upload the test report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-unit-test-report
+          path: purchasely/android-tests/build/reports/tests/
+
   validate-versions:
     name: Validate Version Consistency
     runs-on: ubuntu-latest
