@@ -56,7 +56,7 @@ let package = Package(
         // documents another. That makes the linked SDK depend on install time and lets
         // the two integration paths drift apart. Bump this with the podspec, in the
         // same commit, and VERSIONS.md with it.
-        .package(url: "https://github.com/Purchasely/Purchasely-iOS.git", exact: "6.0.1")
+        .package(url: "https://github.com/Purchasely/Purchasely-iOS.git", exact: "6.1.0")
     ],
     targets: [
         .target(
