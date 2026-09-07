@@ -56,6 +56,8 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
+import java.net.URI
+import java.net.URISyntaxException
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -286,7 +288,13 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         val allowCampaigns = if (options.has("allowCampaigns")) options.optBoolean("allowCampaigns") else null
         val deeplink = getStringFromJson(options.optString("deeplink"))
         val sdkVersion = getStringFromJson(options.optString("sdkVersion"))
-        val proxyApi = getStringFromJson(options.optString("proxy"))
+        // v6.1.0: three states, and they are not interchangeable. See [resolveProxyOption].
+        val proxyOption = resolveProxyOption(options)
+        if (proxyOption is PLYProxyOption.Invalid) {
+            Log.e("Purchasely", "`proxy` must be an https base URL, for example " +
+                "\"https://svc.purchasely.io\", or null to clear the proxy. Received " +
+                "\"${proxyOption.rawValue}\". The proxy is not applied.")
+        }
         val appHandlesRedemptionAlert = options.optBoolean("appHandlesRedemptionAlert", false)
 
         // v6.1.0: JS has no UUID type, so the id crosses the bridge as a string and is parsed
@@ -313,7 +321,14 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 allowCampaigns?.let { this.allowCampaigns(it) }
                 // Cold-start deeplink: replayed automatically once started.
                 deeplink?.let { this.handleDeeplink(Uri.parse(it)) }
-                proxyApi?.let { this.proxy(it) }
+                // An absent key makes no call at all, so the current setting stands.
+                // Clear and Set are both real operations that must reach native.
+                when (proxyOption) {
+                    is PLYProxyOption.Absent -> {}
+                    is PLYProxyOption.Invalid -> {}
+                    is PLYProxyOption.Clear -> this.proxy(null)
+                    is PLYProxyOption.Set -> this.proxy(proxyOption.api)
+                }
                 anonymousUserId?.let { this.anonymousUserId(it, anonymousUserIdOverride) }
                 // Registered unconditionally: the native SDK has no runtime setter on purpose,
                 // because a redemption can settle during start() (a cold start that the
@@ -444,24 +459,6 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
     }
 
     /**
-     * Parse a canonical UUID string, or return null.
-     *
-     * JS has no UUID type, so an anonymous user id crosses the bridge as a string.
-     * `UUID.fromString` is lenient and accepts a short form such as `"1-2-3-4-5"` that the iOS
-     * `NSUUID` parser refuses. The round-trip check makes both platforms agree on what
-     * "canonical" means, so one id string is accepted, or refused, on both.
-     */
-    private fun parseCanonicalUuid(value: String?): UUID? {
-        if (value == null) return null
-        val parsed = try {
-            UUID.fromString(value)
-        } catch (e: IllegalArgumentException) {
-            return null
-        }
-        return if (parsed.toString().equals(value, ignoreCase = true)) parsed else null
-    }
-
-    /**
      * Flatten a [PLYWebRedemptionResult] to the 5-key shape the JS listener receives.
      *
      * The sealed Kotlin result and the flat iOS `PLYWebRedemptionResult` object both map to the
@@ -472,7 +469,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
      * context at all, and a present context can carry no subscription. JSONObject renders a
      * null value as JSON null, which reaches JS as `null`.
      */
-    private fun webRedemptionResultToMap(result: PLYWebRedemptionResult): Map<String, Any?> =
+    internal fun webRedemptionResultToMap(result: PLYWebRedemptionResult): Map<String, Any?> =
         when (result) {
             is PLYWebRedemptionResult.Success -> mapOf(
                 "isSuccess" to true,
@@ -941,7 +938,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
      * Shared by `userSubscriptions`, `userSubscriptionsHistory` and the web redemption
      * listener, whose `context.subscription` is the same type, so the three report one shape.
      */
-    private fun transformSubscriptionToMap(data: PLYSubscriptionData): Map<String, Any?> {
+    internal fun transformSubscriptionToMap(data: PLYSubscriptionData): Map<String, Any?> {
         return HashMap(data.data.toMap()).apply {
             this["plan"] = transformPlanToMap(data.plan)
             this["product"] = normalizeProductPlans(data.product.toMap())
@@ -1608,4 +1605,75 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
             BATCH_CUSTOM_USER_ID: 20,
          */
     }
+}
+
+/**
+ * How the `proxy` start option resolves. Purchasely 6.1.0.
+ *
+ * The three JS states are not interchangeable, and a fourth case exists for a value that
+ * will not convert to a URI. Collapsing [Absent] into [Clear] would turn every start into
+ * an implicit clear; collapsing [Clear] into [Absent] would make a clear silently do
+ * nothing.
+ */
+internal sealed class PLYProxyOption {
+    /** The key is absent. Make no native call: leave the current setting untouched. */
+    object Absent : PLYProxyOption()
+
+    /** The key is present and null. Call `proxy(null)` to clear the proxy. */
+    object Clear : PLYProxyOption()
+
+    /** The key holds a usable value. Call `proxy(api)`. */
+    data class Set(val api: String) : PLYProxyOption()
+
+    /** The key holds a value that will not convert. Log it and make no native call. */
+    data class Invalid(val rawValue: String?) : PLYProxyOption()
+}
+
+/**
+ * Resolve the `proxy` start option.
+ *
+ * Pure, and `internal` so a unit test drives the real bridge logic instead of a copy.
+ *
+ * `JSONObject.has` is what separates an absent key from an explicit null, and
+ * `JSONObject.isNull` separates the null from a value. `optString` cannot do this on its
+ * own: it renders `JSONObject.NULL` as the STRING `"null"`, which is exactly how a clear
+ * used to be swallowed into the absent branch.
+ *
+ * The scheme, the host, and the absence of a query, a fragment and credentials are the
+ * native SDK's business: it refuses a bad value with an error log and keeps the production
+ * host, and it drops a trailing slash. This only rejects what will not convert at all,
+ * which keeps the accepted set the same as the iOS bridge's `NSURL` conversion.
+ */
+internal fun resolveProxyOption(options: JSONObject): PLYProxyOption {
+    if (!options.has("proxy")) return PLYProxyOption.Absent
+    if (options.isNull("proxy")) return PLYProxyOption.Clear
+
+    val raw = options.opt("proxy")
+    if (raw !is String) return PLYProxyOption.Invalid(raw?.toString())
+    return try {
+        URI(raw)
+        PLYProxyOption.Set(raw)
+    } catch (e: URISyntaxException) {
+        PLYProxyOption.Invalid(raw)
+    }
+}
+
+/**
+ * Parse a canonical UUID string, or return null.
+ *
+ * JS has no UUID type, so an anonymous user id crosses the bridge as a string.
+ * `UUID.fromString` is lenient and accepts a short form such as `"1-2-3-4-5"` that the iOS
+ * `NSUUID` parser refuses. The round-trip check makes both platforms agree on what
+ * "canonical" means, so one id string is accepted, or refused, on both.
+ *
+ * `internal` so a unit test drives it without an Android logger. The caller logs a refusal.
+ */
+internal fun parseCanonicalUuid(value: String?): UUID? {
+    if (value == null) return null
+    val parsed = try {
+        UUID.fromString(value)
+    } catch (e: IllegalArgumentException) {
+        return null
+    }
+    return if (parsed.toString().equals(value, ignoreCase = true)) parsed else null
 }
