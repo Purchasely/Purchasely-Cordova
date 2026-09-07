@@ -53,11 +53,12 @@ function onDeviceReady() {
 				+ ' subscription=' + (result.context && result.context.subscription
 					? result.context.subscription.plan.vendorId : null));
 		} else {
-			// On iOS, errorMessage for an expired link can contain a masked email
-			// address. Show it to the user. Do not send it to an analytics stack or to
-			// a crash reporter.
-			console.log('Redemption failed. code=' + result.errorCode
-				+ ' message=' + result.errorMessage);
+			// The code is safe to log. errorMessage is NOT: on iOS, an expired link
+			// puts the backend's masked email hint in it, and a console line reaches
+			// `adb logcat` and the Xcode console, which support runs capture. Route
+			// the message to the UI instead, and log the code alone.
+			console.log('Redemption failed. code=' + result.errorCode);
+			if (result.errorMessage) alert(result.errorMessage);
 		}
 	});
 

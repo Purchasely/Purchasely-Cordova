@@ -332,6 +332,7 @@ jobs:
           LOCK_PKG_VERSION=$(jq -r '.packages[""].version' purchasely/package-lock.json)
           EXAMPLE_LOCK_PLUGIN_VERSION=$(jq -r '.packages[".."].version' purchasely/example/package-lock.json)
           EXAMPLE_LOCK_GOOGLE_VERSION=$(jq -r '.packages["../../purchasely-google"].version' purchasely/example/package-lock.json)
+          CAPACITOR_LOCK_PLUGIN_VERSION=$(jq -r '.packages[".."].version' purchasely/example-capacitor/package-lock.json)
 
           echo "purchasely/plugin.xml: $PLUGIN_XML_VERSION"
           echo "purchasely/package.json: $PACKAGE_JSON_VERSION"
@@ -343,6 +344,7 @@ jobs:
           echo "purchasely/package-lock.json (packages['']): $LOCK_PKG_VERSION"
           echo "purchasely/example/package-lock.json (packages['..']): $EXAMPLE_LOCK_PLUGIN_VERSION"
           echo "purchasely/example/package-lock.json (packages['../../purchasely-google']): $EXAMPLE_LOCK_GOOGLE_VERSION"
+          echo "purchasely/example-capacitor/package-lock.json (packages['..']): $CAPACITOR_LOCK_PLUGIN_VERSION"
 
           fail=0
           check() {
@@ -360,6 +362,10 @@ jobs:
           check "purchasely/package-lock.json (packages[''])" "$LOCK_PKG_VERSION"
           check "purchasely/example/package-lock.json (packages['..'])" "$EXAMPLE_LOCK_PLUGIN_VERSION"
           check "purchasely/example/package-lock.json (packages['../../purchasely-google'])" "$EXAMPLE_LOCK_GOOGLE_VERSION"
+          # The Capacitor sample's lockfile was missed by the 6.0.1 release and went
+          # stale at 6.0.0. `npm ci` tolerates a stale version on a `link` entry, so
+          # nothing else catches it. Reported by Greptile on #73.
+          check "purchasely/example-capacitor/package-lock.json (packages['..'])" "$CAPACITOR_LOCK_PLUGIN_VERSION"
 
           if [ $fail -ne 0 ]; then exit 1; fi
           echo "✅ All versions are consistent: $PLUGIN_XML_VERSION"
