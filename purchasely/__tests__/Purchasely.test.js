@@ -253,7 +253,7 @@ describe('Purchasely', () => {
           expect.any(Function),
           'Purchasely',
           'start',
-          [{ apiKey: 'API_KEY', sdkVersion: '6.0.1' }]
+          [{ apiKey: 'API_KEY', sdkVersion: '6.1.0' }]
         );
       } finally {
         metadata['cordova-plugin-purchasely'] = original;
@@ -321,6 +321,86 @@ describe('Purchasely', () => {
       );
     });
 
+    describe('the 6.1.0 modifiers', () => {
+      it('forwards anonymousUserId with the default override=false', () => {
+        Purchasely.builder('API_KEY')
+          .anonymousUserId('3f2504e0-4f89-11d3-9a0c-0305e82c3301')
+          .start(jest.fn(), jest.fn());
+
+        expect(mockExec.mock.calls[0][4]).toEqual([
+          {
+            apiKey: 'API_KEY',
+            anonymousUserId: '3f2504e0-4f89-11d3-9a0c-0305e82c3301',
+            anonymousUserIdOverride: false,
+            sdkVersion: '5.6.2'
+          }
+        ]);
+      });
+
+      it('forwards override=true when asked', () => {
+        Purchasely.builder('API_KEY')
+          .anonymousUserId('3f2504e0-4f89-11d3-9a0c-0305e82c3301', true)
+          .start(jest.fn(), jest.fn());
+
+        expect(mockExec.mock.calls[0][4][0].anonymousUserIdOverride).toBe(true);
+      });
+
+      // JS does not validate the string: each native bridge parses it into a UUID and
+      // refuses a bad value with an error log, and start() still succeeds.
+      it('forwards a value that is not a UUID unchanged', () => {
+        Purchasely.builder('API_KEY').anonymousUserId('not-a-uuid').start(jest.fn(), jest.fn());
+
+        expect(mockExec.mock.calls[0][4][0].anonymousUserId).toBe('not-a-uuid');
+      });
+
+      it('forwards proxy (Android only; the iOS bridge ignores it)', () => {
+        Purchasely.builder('API_KEY').proxy('https://svc.purchasely.io').start(jest.fn(), jest.fn());
+
+        expect(mockExec.mock.calls[0][4][0].proxy).toBe('https://svc.purchasely.io');
+      });
+
+      it('forwards appHandlesRedemptionAlert, true and false alike', () => {
+        Purchasely.builder('API_KEY').appHandlesRedemptionAlert(true).start(jest.fn(), jest.fn());
+        expect(mockExec.mock.calls[0][4][0].appHandlesRedemptionAlert).toBe(true);
+
+        mockExec.mockClear();
+        Purchasely.builder('API_KEY').appHandlesRedemptionAlert(false).start(jest.fn(), jest.fn());
+        expect(mockExec.mock.calls[0][4][0].appHandlesRedemptionAlert).toBe(false);
+      });
+
+      // An omitted modifier must stay absent, so each native SDK keeps its own default
+      // instead of receiving a bridge-invented one.
+      it('omits every 6.1.0 key when no modifier is called', () => {
+        Purchasely.builder('API_KEY').start(jest.fn(), jest.fn());
+
+        expect(mockExec.mock.calls[0][4]).toEqual([
+          { apiKey: 'API_KEY', sdkVersion: '5.6.2' }
+        ]);
+      });
+
+      it('carries every modifier in one start() call', () => {
+        Purchasely.builder('API_KEY')
+          .allowDeeplink(false)
+          .anonymousUserId('3f2504e0-4f89-11d3-9a0c-0305e82c3301', true)
+          .proxy('https://svc.purchasely.io')
+          .appHandlesRedemptionAlert(true)
+          .start(jest.fn(), jest.fn());
+
+        expect(mockExec).toHaveBeenCalledTimes(1);
+        expect(mockExec.mock.calls[0][4]).toEqual([
+          {
+            apiKey: 'API_KEY',
+            allowDeeplink: false,
+            anonymousUserId: '3f2504e0-4f89-11d3-9a0c-0305e82c3301',
+            anonymousUserIdOverride: true,
+            proxy: 'https://svc.purchasely.io',
+            appHandlesRedemptionAlert: true,
+            sdkVersion: '5.6.2'
+          }
+        ]);
+      });
+    });
+
     it('start() with no callbacks returns a Promise resolving the isConfigured value', async () => {
       const startPromise = Purchasely.builder('API_KEY').start();
 
@@ -362,6 +442,35 @@ describe('Purchasely', () => {
       Purchasely.addEventsListener(success, error);
 
       expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'addEventsListener', []);
+    });
+  });
+
+  describe('addWebRedemptionListener / removeWebRedemptionListener (6.1.0)', () => {
+    it('registers the callback on the addWebRedemptionListener action', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.addWebRedemptionListener(success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        success,
+        error,
+        'Purchasely',
+        'addWebRedemptionListener',
+        []
+      );
+    });
+
+    it('clears the callback on removeWebRedemptionListener', () => {
+      Purchasely.removeWebRedemptionListener();
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'removeWebRedemptionListener',
+        []
+      );
     });
   });
 
