@@ -43,7 +43,7 @@ jobs:
     # A stable, cacheable home for the WebDriverAgent build. The wdio config's default is
     # os.tmpdir(), which on a macOS runner is a per-boot random path — nothing to cache.
     env:
-      PURCHASELY_E2E_WDA_DERIVED: ${{ runner.temp }}/ply-wda-derived
+      PURCHASELY_E2E_WDA_DERIVED: ${{ github.workspace }}/.wda-derived
     steps:
       # GitHub raises no `labeled` event for a label that is already present, so the label
       # has to go before it can trigger the next run.
