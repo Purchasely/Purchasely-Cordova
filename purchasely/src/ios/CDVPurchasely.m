@@ -91,6 +91,38 @@
         builder = [builder allowCampaigns:allowCampaigns.boolValue];
     }
 
+    // v6.1.0: JS has no UUID type, so the id crosses the bridge as a string and is parsed
+    // here. The native builder takes an NSUUID, which is where the guarantee used to live;
+    // a string-typed bridge is the only place left to catch a bad value. Refuse it loudly
+    // and skip the option. The SDK still starts, matching how native treats an unusable
+    // proxy url.
+    NSString *anonymousUserId = opts[@"anonymousUserId"];
+    if ([anonymousUserId isKindOfClass:[NSString class]]) {
+        NSUUID *parsed = [[NSUUID alloc] initWithUUIDString:anonymousUserId];
+        if (parsed == nil) {
+            NSLog(@"[Purchasely] `anonymousUserId` must be a canonical UUID string, for example "
+                   "\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\". Received \"%@\". The anonymous user "
+                   "id is not applied.", anonymousUserId);
+        } else {
+            NSNumber *override = opts[@"anonymousUserIdOverride"];
+            BOOL shouldOverride = [override isKindOfClass:[NSNumber class]] ? override.boolValue : NO;
+            builder = [builder appAnonymousUserId:parsed override:shouldOverride];
+        }
+    }
+
+    // v6.1.0: `proxy` has no iOS builder equivalent (MOB-308 is Android-only in 6.1.0) and
+    // is ignored here.
+
+    // v6.1.0: registered unconditionally. The native SDK has no runtime setter on purpose,
+    // because a redemption can settle during `start()` (a cold start that the `ply/redeem`
+    // link itself triggered, or a token a previous launch left pending). The delegate
+    // callback returns early when `addWebRedemptionListener` recorded no command, so this
+    // is behaviour-neutral by default.
+    NSNumber *handlesRedemptionAlert = opts[@"appHandlesRedemptionAlert"];
+    builder = [builder webRedemptionDelegate:self
+                   appHandlesRedemptionAlert:[handlesRedemptionAlert isKindOfClass:[NSNumber class]]
+                                             ? handlesRedemptionAlert.boolValue : NO];
+
     // Cold-start deeplink URL captured at launch (handled automatically once start completes).
     NSString *deeplink = opts[@"deeplink"];
     if ([deeplink isKindOfClass:[NSString class]] && deeplink.length > 0) {
@@ -525,6 +557,19 @@
     // v6 `setEventDelegate:` is _Nonnull (no native unregister). The delegate stays
     // registered; clearing eventCommand makes `eventTriggered:` a no-op.
     self.eventCommand = nil;
+}
+
+// v6.1.0. The PLYWebRedemptionDelegate is registered on the builder chain in `start:` (the
+// native SDK has no runtime setter, because a redemption can settle during start()), so
+// this action only records the command to route the outcome to. Call it BEFORE start().
+- (void)addWebRedemptionListener:(CDVInvokedUrlCommand*)command {
+    self.webRedemptionCommand = command;
+}
+
+- (void)removeWebRedemptionListener:(CDVInvokedUrlCommand*)command {
+    // The delegate stays registered. Clearing the command makes
+    // `webRedemptionCompletedWithResult:` a no-op.
+    self.webRedemptionCommand = nil;
 }
 
 - (void)removeUserAttributeListener:(CDVInvokedUrlCommand*)command {

@@ -20,6 +20,12 @@
 @property CDVInvokedUrlCommand* eventCommand;
 @property CDVInvokedUrlCommand* attributeCommand;
 
+// Purchasely 6.1.0. The command `addWebRedemptionListener` recorded, or nil. The
+// PLYWebRedemptionDelegate is registered on the builder chain in `start:` (the native SDK
+// has no runtime setter), so this is the only switch: nil makes
+// `webRedemptionCompletedWithResult:` a no-op.
+@property CDVInvokedUrlCommand* webRedemptionCommand;
+
 @property (nonatomic) NSMutableArray<id<PLYPresentation>> *presentationsLoaded;
 
 @property (nonatomic) CDVInvokedUrlCommand* purchaseResolve;
@@ -57,6 +63,8 @@
 - (void)userSubscriptionsHistory:(CDVInvokedUrlCommand*)command;
 - (void)addEventsListener:(CDVInvokedUrlCommand*)command;
 - (void)removeEventsListener:(CDVInvokedUrlCommand*)command;
+- (void)addWebRedemptionListener:(CDVInvokedUrlCommand*)command;
+- (void)removeWebRedemptionListener:(CDVInvokedUrlCommand*)command;
 - (void)registerActionInterceptor:(CDVInvokedUrlCommand*)command;
 - (void)unregisterActionInterceptor:(CDVInvokedUrlCommand*)command;
 - (void)completeActionInterceptor:(CDVInvokedUrlCommand*)command;

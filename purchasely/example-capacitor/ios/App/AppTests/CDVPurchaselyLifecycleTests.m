@@ -81,4 +81,48 @@
                    @"addObject: to a nil array is discarded silently.");
 }
 
+#pragma mark - Web2App redemption (6.1.0)
+
+// `start:` registers the plugin as the PLYWebRedemptionDelegate on the builder chain
+// (`webRedemptionDelegate:appHandlesRedemptionAlert:`), so it must conform. The conformance
+// is declared on the (Events) category, which is easy to lose in a header edit and which
+// the compiler does not catch: passing a non-conforming object there is a warning, not an
+// error, and the redemption outcome then reaches nobody.
+- (void)testPluginConformsToWebRedemptionDelegate {
+    CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+
+    XCTAssertTrue([plugin conformsToProtocol:@protocol(PLYWebRedemptionDelegate)],
+                  @"CDVPurchasely should conform to PLYWebRedemptionDelegate.");
+    // Swift `webRedemptionCompleted(result:)` bridges to this selector.
+    XCTAssertTrue([plugin respondsToSelector:@selector(webRedemptionCompletedWithResult:)],
+                  @"The web redemption delegate callback should be implemented.");
+}
+
+// The two JS actions are dispatched by selector name, so a rename breaks the bridge with
+// no compile error: Cordova answers "Invalid action" at runtime instead.
+- (void)testWebRedemptionListenerActionsAreBridged {
+    CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+
+    XCTAssertTrue([plugin respondsToSelector:@selector(addWebRedemptionListener:)],
+                  @"addWebRedemptionListener: should be reachable from the bridge.");
+    XCTAssertTrue([plugin respondsToSelector:@selector(removeWebRedemptionListener:)],
+                  @"removeWebRedemptionListener: should be reachable from the bridge.");
+}
+
+// The delegate is registered unconditionally at start(), so the outcome callback runs even
+// when JS added no listener. It must return early rather than send a plugin result on a nil
+// callbackId.
+- (void)testRedemptionOutcomeIsANoOpWithNoListener {
+    CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+
+    XCTAssertNil(plugin.webRedemptionCommand,
+                 @"No listener is recorded before addWebRedemptionListener runs.");
+    // Called through the protocol: the implementation lives on the (Events) category, whose
+    // header the test target does not compile. A nil result would crash a callback that
+    // dereferenced it before the nil-command guard, which is the ordering this asserts.
+    id<PLYWebRedemptionDelegate> delegate = (id<PLYWebRedemptionDelegate>)plugin;
+    XCTAssertNoThrow([delegate webRedemptionCompletedWithResult:(PLYWebRedemptionResult * _Nonnull)nil],
+                     @"The redemption callback should return early when no listener is recorded.");
+}
+
 @end
