@@ -361,6 +361,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      # The Capacitor CLI REWRITES purchasely/Package.swift in place on every `cap sync`,
+      # and npm installs a `file:` dependency as a symlink, so a sync in a local sample
+      # edits the repository copy rather than a copy of it. That happened during this
+      # release: the packed tarball carried a Package.swift depending on
+      # capacitor-swift-pm instead of cordova-ios, which fails every Cordova iOS 8
+      # consumer with "multiple packages declare targets with a conflicting name:
+      # 'Cordova'". The file's own comment asks a human to check `git status`, which is
+      # exactly the kind of instruction that gets skipped, so it is asserted here.
+      - name: Check Package.swift was not rewritten by a Capacitor sync
+        run: |
+          if grep -q "capacitor-swift-pm" purchasely/Package.swift; then
+            echo "::error file=purchasely/Package.swift::Package.swift depends on capacitor-swift-pm. A local 'cap sync' rewrote it; restore it with 'git checkout -- purchasely/Package.swift'."
+            exit 1
+          fi
+          if ! grep -q "apache/cordova-ios.git" purchasely/Package.swift; then
+            echo "::error file=purchasely/Package.swift::Package.swift no longer depends on apache/cordova-ios."
+            exit 1
+          fi
+          echo "✅ Package.swift depends on apache/cordova-ios"
+
       - name: Check version consistency
         run: |
           # Extract versions from different files
