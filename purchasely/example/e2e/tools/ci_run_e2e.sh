@@ -73,6 +73,12 @@ run_suite() { # $1 = spec glob, $2 = hard|soft
   while [ $n -le $tries ]; do
     echo "== [$gate] $spec (attempt $n/$tries) =="
     if PURCHASELY_E2E_SPEC="$spec" npx wdio run ./wdio.android.conf.js --spec "$spec" 2>&1 | tee "$LOGDIR/wdio-$(basename "$spec").log"; then
+      # One install per run is enough: the app binary cannot change between suites, so every
+      # later session was reinstalling a binary already on the device. Set only after a wdio
+      # run actually returned 0 — a soft-gate suite that failed every attempt still makes
+      # run_suite return 0, and a retry of a failed first suite must still force the install.
+      # Fast reset between sessions is untouched, so app data is still cleared per suite.
+      export PURCHASELY_E2E_SKIP_INSTALL=1
       return 0
     fi
     n=$((n+1))
