@@ -385,6 +385,11 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # Google removed the legacy `tools` package from the SDK repository, so the
+          # action's default `tools platform-tools` makes sdkmanager exit 1. platform-tools
+          # (adb) is the only half these jobs use.
+          packages: platform-tools
 
       - name: Install Cordova CLI
         run: npm install -g cordova
@@ -428,6 +433,11 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # Google removed the legacy `tools` package from the SDK repository, so the
+          # action's default `tools platform-tools` makes sdkmanager exit 1. platform-tools
+          # (adb) is the only half these jobs use.
+          packages: platform-tools
 
       # No Gradle wrapper is committed for this module, so the action provisions Gradle
       # rather than the repository carrying a wrapper jar.
