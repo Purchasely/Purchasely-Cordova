@@ -9,8 +9,8 @@ SDK through the Cordova bridge. Built with **Appium + WebdriverIO**:
 
 These mirror the Flutter `integration_test` suite (`E2E_TEST_INDEX.md`) adapted to the
 Cordova imperative API. They are **not** part of the PR-gating `ci.yml`; they run via the
-`E2E Android` / `E2E iOS` workflows (`workflow_dispatch`, nightly `schedule`, and scoped
-`pull_request`).
+`E2E Android` / `E2E iOS` workflows (`workflow_dispatch`, a scoped `pull_request` when it
+opens, and the `run-ci` label for any later run).
 
 ## Suites & gating
 
