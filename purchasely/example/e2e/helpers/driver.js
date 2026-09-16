@@ -75,26 +75,16 @@ async function waitForPurchaselyReady() {
   // This reduces the exposure, it does not remove it. The real fix is bounding that await
   // in the SDK, tracked separately.
   //
-  // A budget and a retry, not a single 20s shot. With WebDriverAgent prebuilt the session
-  // starts minutes earlier than it used to, on a simulator still loaded by that build, and
-  // the first cold StoreKit call takes longer than 20s there — so the warm-up timed out and
-  // left preload to hit the same unbounded await, which is what made preload-display fail
-  // 12 attempts running. A timed-out warm-up leaves the native call in flight, so the second
-  // attempt usually lands on a path the first one warmed.
-  //
-  // "Settled" is the bar, not "ok": on a simulator with no StoreKit configuration
-  // allProducts settles as a clean error, and that warms the path just the same. Only
-  // pollGlobal's own timeout sets `timedOut`.
-  let warmed = null;
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    warmed = await callBridge('allProducts', [], 60000);
-    if (!warmed || !warmed.timedOut) break;
-    console.log('[ready] StoreKit warm-up attempt ' + attempt + '/2 did not settle in 60s; retrying');
-  }
+  // MEASURED, do not raise this budget hoping it will warm: on the CI simulator allProducts
+  // does not settle at 20s, and does not settle at 60s either, retried. It is gated behind
+  // the same unbounded await it is meant to warm, so the warm-up is a no-op here and only
+  // the retries in tools/ci_run_e2e_ios.sh carry the suite. Kept at 20s because a longer
+  // budget buys nothing and costs that much per spec attempt.
+  const warmed = await callBridge('allProducts', [], 20000);
   if (warmed && warmed.timedOut) {
-    // Not thrown: the specs below still assert real behaviour, and a red here would hide
-    // which one actually broke. Said out loud so a later preload timeout is not a mystery.
-    console.log('[ready] KNOWN: StoreKit never warmed — a preload below is likely to time out');
+    // Said out loud so a preload timeout below is not a mystery: this line means the SDK
+    // never answered a plain product query, and preload is gated behind the same await.
+    console.log('[ready] KNOWN: StoreKit never warmed (allProducts did not settle) — a preload below may time out');
   }
 }
 
