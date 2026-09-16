@@ -224,7 +224,14 @@ jobs:
 
           FOUND=0
           while IFS= read -r f; do
-            if "$NM" -a "$f" 2>/dev/null | grep -q '_OBJC_CLASS_\$_CDVPurchasely'; then
+            # `grep -c`, not `grep -q`, and the same load-bearing `|| true` as the
+            # diagnostic below. `grep -q` exits on the first match and closes the pipe, so
+            # nm dies of SIGPIPE; under `set -o pipefail` its 141 becomes the pipeline's
+            # status and the `if` reads a symbol that IS present as absent. Whether nm had
+            # finished writing is a pipe-buffer race, which is why this assertion failed
+            # intermittently on binaries its own diagnostic then listed the symbol in.
+            # `grep -c` consumes all of nm's output, so nm is never signalled.
+            if [ "$("$NM" -a "$f" 2>/dev/null | grep -c '_OBJC_CLASS_\$_CDVPurchasely' || true)" -gt 0 ]; then
               echo "CDVPurchasely found in ${f#"$APP"/}"
               FOUND=1
               break
