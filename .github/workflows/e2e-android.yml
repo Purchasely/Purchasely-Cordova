@@ -2,7 +2,8 @@ name: E2E Android
 
 # End-to-end JS <-> Android tests against the REAL Purchasely backend, run on a real
 # Android emulator via Appium + WebdriverIO. NOT part of the PR-gating ci.yml (they need
-# an emulator, real network and the uiautomator2 driver) — they run on demand + nightly.
+# an emulator, real network and the uiautomator2 driver) — they run when a pull request
+# opens, and on demand.
 #
 # Requirements to go green:
 #   * the placement PURCHASELY_E2E_PLACEMENT (default ONBOARDING) must exist for the
@@ -11,14 +12,16 @@ name: E2E Android
 on:
   pull_request:
     branches: [main]
+    # No `synchronize`: a push to an open pull request does not rebuild. It runs once when
+    # the PR opens and then only on request — add the `run-ci` label (PR sidebar, or
+    # `gh pr edit N --add-label run-ci`).
+    types: [opened, reopened, ready_for_review, labeled]
     paths:
       - "purchasely/www/**"
       - "purchasely/src/android/**"
       - "purchasely/example/**"
       - ".github/workflows/e2e-android.yml"
   workflow_dispatch:
-  schedule:
-    - cron: "0 3 * * *"
 
 concurrency:
   group: e2e-android-${{ github.ref }}
@@ -28,8 +31,24 @@ jobs:
   e2e-android:
     name: E2E Android (real backend)
     runs-on: ubuntu-latest
+    # `labeled` fires for every label; only `run-ci` means "build this".
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.action != 'labeled' ||
+      github.event.label.name == 'run-ci'
     timeout-minutes: 60
     steps:
+      # GitHub raises no `labeled` event for a label that is already present, so the label
+      # has to go before it can trigger the next run.
+      - name: Consume the run-ci label
+        if: github.event.action == 'labeled'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X DELETE \
+            "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels/run-ci"
+
       - name: Checkout repository
         uses: actions/checkout@v7
 
