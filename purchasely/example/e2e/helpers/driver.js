@@ -74,7 +74,18 @@ async function waitForPurchaselyReady() {
   //
   // This reduces the exposure, it does not remove it. The real fix is bounding that await
   // in the SDK, tracked separately.
-  await callBridge('allProducts', [], 20000);
+  //
+  // MEASURED, do not raise this budget hoping it will warm: on the CI simulator allProducts
+  // does not settle at 20s, and does not settle at 60s either, retried. It is gated behind
+  // the same unbounded await it is meant to warm, so the warm-up is a no-op here and only
+  // the retries in tools/ci_run_e2e_ios.sh carry the suite. Kept at 20s because a longer
+  // budget buys nothing and costs that much per spec attempt.
+  const warmed = await callBridge('allProducts', [], 20000);
+  if (warmed && warmed.timedOut) {
+    // Said out loud so a preload timeout below is not a mystery: this line means the SDK
+    // never answered a plain product query, and preload is gated behind the same await.
+    console.log('[ready] KNOWN: StoreKit never warmed (allProducts did not settle) — a preload below may time out');
+  }
 }
 
 // Poll a window global until a native callback has populated it, then return it.

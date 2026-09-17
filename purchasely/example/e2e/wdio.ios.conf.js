@@ -14,6 +14,17 @@ const APP = process.env.PURCHASELY_E2E_APP ||
   APP_CANDIDATES.find((p) => fs.existsSync(p)) ||
   APP_CANDIDATES[0];
 
+// Where xcodebuild puts (and finds) the WebDriverAgent build.
+//
+// Overridable, and left that way deliberately: caching this directory between CI runs was
+// tried and MEASURED NOT TO WORK. Restoring it (53s) still left the prebuild at 140s, worse
+// than the 102s clean cold build in the run before it: 119 CompileC tasks ran against the
+// restored directory, so xcodebuild recompiled every source file anyway. Runs 34144808577
+// (cold, 102s) and 34147235666 (restored, 140s). Do not re-add actions/cache here without
+// beating those numbers.
+const WDA_DERIVED = process.env.PURCHASELY_E2E_WDA_DERIVED ||
+  path.join(os.tmpdir(), 'ply-wda-derived');
+
 exports.config = Object.assign({}, config, {
   capabilities: [{
     platformName: 'iOS',
@@ -48,6 +59,28 @@ exports.config = Object.assign({}, config, {
     // across spec retries. Without it appium uses a fresh temp dir per session, so WDA is
     // rebuilt from scratch every attempt and the hard-gate bridge spec times out before the
     // (slow, cold) build ever finishes.
-    'appium:derivedDataPath': path.join(os.tmpdir(), 'ply-wda-derived'),
+    //
+    // CI overrides the location: os.tmpdir() on a macOS runner is a per-boot random path,
+    // which cannot be restored from actions/cache. tools/prebuild_wda.js reads this same
+    // value, so the prebuilt WDA and the sessions always share one directory.
+    'appium:derivedDataPath': WDA_DERIVED,
   }],
+
+  // The client must outlast the SERVER's WDA budget above. It did not, and that was the
+  // single biggest cost in this job: wdio.shared.conf.js sets connectionRetryTimeout to
+  // 120s with 2 retries, so the client abandoned `POST /session` after two minutes while
+  // appium kept building WDA — and every retry started ANOTHER driver on the same simulator
+  // and the same DerivedData dir. Run 34126281588 ended up with nine concurrent
+  // xcodebuilds; the first WDA came up 18m47s later, after the bridge spec had burned three
+  // full attempts (19 minutes) failing with a bare "Request timed out!". The 600000ms
+  // wdaLaunchTimeout tuned above had never once applied.
+  //
+  // 660000 > wdaLaunchTimeout, so appium's own timeout always fires first and reports what
+  // actually went wrong. connectionRetryCount 0 because retrying a session-creation request
+  // that the server is still working on is what created the pile-up: there is nothing to
+  // gain from a second in-flight session, and tools/ci_run_e2e_ios.sh already retries the
+  // whole spec. Individual test commands stay bounded by mocha's 300s timeout; this longer
+  // window only covers session creation.
+  connectionRetryTimeout: 660000,
+  connectionRetryCount: 0,
 });
