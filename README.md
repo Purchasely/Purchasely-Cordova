@@ -253,6 +253,46 @@ This affects `userSubscriptions()` and `userSubscriptionsHistory()` as well as t
 redemption `context.subscription`, since the three share one mapper. Cordova ships plain
 JavaScript with no type declarations, so nothing enforces this for you.
 
+## Data processing consent
+
+Tell the SDK which data processing purposes the user refuses. The native SDK persists the
+list and sends it to the backend on every API call.
+
+```js
+Purchasely.revokeDataProcessingConsent([
+    Purchasely.DataProcessingPurpose.analytics,
+    Purchasely.DataProcessingPurpose.refundHandling,
+]);
+```
+
+| Purpose | Meaning |
+|---------|---------|
+| `analytics` | Usage analytics |
+| `identifiedAnalytics` | Analytics tied to the user's identifiers (vendor id). Not part of `allNonEssentials` |
+| `campaigns` | Campaign targeting and triggers |
+| `personalization` | Paywall and content personalization |
+| `thirdPartyIntegrations` | Forwarding to the third-party integrations you have set up |
+| `refundHandling` | iOS 6.2.0+ only. Processing of the consumption data attached to an App Store refund request. Not part of `allNonEssentials`; ignored on Android |
+| `allNonEssentials` | Bundle of `analytics`, `campaigns`, `personalization`, `thirdPartyIntegrations` — and nothing else |
+
+**Each call replaces the whole set.** The SDK does not merge with the previous call, so pass
+the complete list of refused purposes every time; a call with `[refundHandling]` after a
+call with `[analytics]` grants analytics back. Pass `[]` to grant everything back.
+
+`allNonEssentials` is a fixed bundle: bumping the plugin never adds a purpose to it, so an
+app that already calls it does not start refusing refund data processing. List
+`refundHandling` (and `identifiedAnalytics`) explicitly next to it when you want them:
+
+```js
+Purchasely.revokeDataProcessingConsent([
+    Purchasely.DataProcessingPurpose.allNonEssentials,
+    Purchasely.DataProcessingPurpose.refundHandling,
+]);
+```
+
+`refundHandling` only carries the refusal to the backend. It gates nothing in the SDK and
+nothing in the plugin reads refund state or answers Apple's `CONSUMPTION_REQUEST`.
+
 ## 🏁 Documentation
 
 A complete documentation is available on our website [https://docs.purchasely.com](https://docs.purchasely.com/quick-start/sdk-installation/cordova)
