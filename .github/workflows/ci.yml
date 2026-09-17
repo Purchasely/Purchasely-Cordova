@@ -3,19 +3,57 @@ name: CI
 on:
   pull_request:
     branches: [main, master]
+    # No `synchronize`: this suite is 7 jobs, three of them on macOS runners, and it ran on
+    # every push to an open pull request. It runs once when the PR opens and then only on
+    # request — add the `run-ci` label (PR sidebar, or `gh pr edit N --add-label run-ci`).
+    #
+    # `labeled` fires for every label, so each job carries
+    #   if: github.event.action != 'labeled' || github.event.label.name == 'run-ci'
+    # which filters that one event and leaves every other trigger alone: `workflow_dispatch`
+    # carries no action, and the `workflow_call` from publish.yml carries the release's
+    # `published`.
+    types: [opened, reopened, ready_for_review, labeled]
   workflow_call:
   workflow_dispatch:
 
+# A `labeled` event for any other label must not land in this group: with
+# `cancel-in-progress` it would kill a running build, and the replacement run skips the
+# jobs, so the checks end up "skipped" and the requested validation is lost. Dependabot
+# makes that concrete — it opens a PR and then applies its own labels to it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: >-
+    ${{ github.workflow }}-${{ github.ref }}-${{
+      (github.event.action == 'labeled' && github.event.label.name != 'run-ci')
+      && format('label-{0}', github.event.label.name) || 'build' }}
   cancel-in-progress: true
 
 jobs:
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
+    if: github.event.action != 'labeled' || github.event.label.name == 'run-ci'
 
     steps:
+      # First step of the cheapest job. Adding a label that is already present raises no
+      # event, so the label has to go before the next request can add it back — and if that
+      # removal lives in a long job, `cancel-in-progress` can kill the run before it happens
+      # and leave the label stuck.
+      #
+      # Only where the token can write: a fork PR and a Dependabot PR both get a read-only
+      # token, so the DELETE would 403 and `continue-on-error` would bury it. On those, take
+      # the label off by hand.
+      - name: Consume the run-ci label
+        if: >-
+          github.event.action == 'labeled' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.user.login != 'dependabot[bot]'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X DELETE \
+            "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels/run-ci"
+
       - name: Checkout repository
         uses: actions/checkout@v7
 
@@ -35,6 +73,7 @@ jobs:
   build-ios:
     name: Build iOS
     runs-on: macos-15
+    if: github.event.action != 'labeled' || github.event.label.name == 'run-ci'
     timeout-minutes: 25
 
     steps:
@@ -87,6 +126,7 @@ jobs:
   capacitor-ios-dependency-paths:
     name: Capacitor iOS (${{ matrix.manager }})
     runs-on: macos-15
+    if: github.event.action != 'labeled' || github.event.label.name == 'run-ci'
     timeout-minutes: 30
 
     # Both halves of this PR's promise, each of which the existing jobs stopped covering:
@@ -310,6 +350,7 @@ jobs:
   capacitor-ios-tests:
     name: Capacitor iOS Native Tests
     runs-on: macos-15
+    if: github.event.action != 'labeled' || github.event.label.name == 'run-ci'
     timeout-minutes: 25
 
     # Regression cover for the nil-collections bug (PR #66). CDVPurchasely allocated its
@@ -372,6 +413,7 @@ jobs:
   build-android:
     name: Build Android
     runs-on: ubuntu-latest
+    if: github.event.action != 'labeled' || github.event.label.name == 'run-ci'
 
     steps:
       - name: Checkout repository
@@ -422,6 +464,7 @@ jobs:
   android-unit-tests:
     name: Android Bridge Unit Tests
     runs-on: ubuntu-latest
+    if: github.event.action != 'labeled' || github.event.label.name == 'run-ci'
     timeout-minutes: 20
 
     # Unit coverage for purchasely/src/android/PurchaselyPlugin.kt. `build-android` only
@@ -476,6 +519,7 @@ jobs:
   validate-versions:
     name: Validate Version Consistency
     runs-on: ubuntu-latest
+    if: github.event.action != 'labeled' || github.event.label.name == 'run-ci'
 
     steps:
       - name: Checkout repository
