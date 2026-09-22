@@ -65,6 +65,11 @@
   },
   "homepage": "https://github.com/Purchasely/Purchasely-Cordova#readme",
   "overrides": {
-    "js-yaml@3": "^3.15.1"
+    "js-yaml@3": "^3.15.2",
+    "browserslist": "^4.28.7"
+  },
+  "resolutions": {
+    "js-yaml": "^3.15.2",
+    "browserslist": "^4.28.7"
   }
 }
