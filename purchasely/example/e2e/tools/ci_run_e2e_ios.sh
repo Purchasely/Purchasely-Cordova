@@ -117,4 +117,8 @@ run_suite "./specs/start-options-6-1-0.e2e.js" hard || rc=1
 E2E_TRIES=1 run_suite "./specs/preload-display.e2e.js" soft || true
 run_suite "./specs/dismiss.e2e.js"         soft || true
 run_suite "./specs/interceptor.e2e.js"     soft || true
+# Regression guard for iOS SDK 6.1.2: a drawer closed by a real tap must leave no SDK window
+# over the app. Hard: it only asserts once a drawer is on screen, and returns as
+# inconclusive when the real backend renders no paywall (same policy as dismiss).
+run_suite "./specs/drawer-close-tap.e2e.js" hard || rc=1
 exit $rc
