@@ -97,8 +97,8 @@ dependencies {
     testImplementation 'org.apache.cordova:framework:15.1.0'
 
     // The native SDK under bridge. Must match plugin.xml's <framework src="io.purchasely:core">.
-    compileOnly 'io.purchasely:core:6.1.0'
-    testImplementation 'io.purchasely:core:6.1.0'
+    compileOnly 'io.purchasely:core:6.1.1'
+    testImplementation 'io.purchasely:core:6.1.1'
 
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.2'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
