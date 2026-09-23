@@ -97,4 +97,6 @@ run_suite "./specs/start-options-6-1-0.e2e.js" hard || rc=1
 run_suite "./specs/preload-display.e2e.js" hard || rc=1
 run_suite "./specs/dismiss.e2e.js"         soft || true
 run_suite "./specs/interceptor.e2e.js"     soft || true
+# iOS-only (iOS SDK 6.1.2 window fix); self-skips on Android. Registered for the guard above.
+run_suite "./specs/drawer-close-tap.e2e.js" soft || true
 exit $rc

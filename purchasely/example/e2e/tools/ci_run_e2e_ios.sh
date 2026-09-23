@@ -117,4 +117,12 @@ run_suite "./specs/start-options-6-1-0.e2e.js" hard || rc=1
 E2E_TRIES=1 run_suite "./specs/preload-display.e2e.js" soft || true
 run_suite "./specs/dismiss.e2e.js"         soft || true
 run_suite "./specs/interceptor.e2e.js"     soft || true
+# Regression guard for iOS SDK 6.1.2: a drawer closed by a real tap must leave no SDK window
+# over the app. Hard: it only asserts once a drawer is on screen, and returns as
+# inconclusive when the real backend renders no paywall (same policy as dismiss).
+run_suite "./specs/drawer-close-tap.e2e.js" hard || rc=1
+# The spec returns green when no paywall presents. Say so: that run did not check the fix.
+if grep -q '\[drawer:.*inconclusive' "$LOGDIR/wdio-drawer-close-tap.e2e.js.log" 2>/dev/null; then
+  echo "::warning::drawer-close-tap was inconclusive (no paywall presented): the iOS 6.1.2 window fix was NOT checked in this run"
+fi
 exit $rc

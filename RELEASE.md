@@ -35,6 +35,8 @@ Update **all** of the following files:
 | `purchasely-google/plugin.xml` | `version` attribute in `<plugin>` tag |
 | `purchasely-google/plugin.xml` | `<framework src="io.purchasely:google-play:ANDROID_VERSION" />` |
 | `purchasely-google/package.json` | `version` field |
+| `purchasely/android-tests/build.gradle` | `io.purchasely:core:ANDROID_VERSION` (compile and test) |
+| `purchasely/example-capacitor/ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved` | `purchasely-ios` `version` and `revision` (`git ls-remote --tags https://github.com/Purchasely/Purchasely-iOS.git IOS_VERSION`) |
 | `VERSIONS.md` | Add new row with Cordova / iOS / Android versions |
 
 > **Tip:** the `Validate Version Consistency` CI job checks `plugin.xml`, `package.json`, and the lockfiles — a forgotten file fails the PR.
