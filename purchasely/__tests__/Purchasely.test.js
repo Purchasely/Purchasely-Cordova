@@ -68,6 +68,28 @@ describe('Purchasely', () => {
         expect(Purchasely.DataProcessingPurpose.campaigns).toBe('CAMPAIGNS');
         expect(Purchasely.DataProcessingPurpose.personalization).toBe('PERSONALIZATION');
         expect(Purchasely.DataProcessingPurpose.thirdPartyIntegrations).toBe('THIRD_PARTY_INTEGRATIONS');
+        expect(Purchasely.DataProcessingPurpose.refundHandling).toBe('REFUND_HANDLING');
+      });
+
+      it('should expose exactly the seven known purposes', () => {
+        expect(Object.keys(Purchasely.DataProcessingPurpose).sort()).toEqual([
+          'allNonEssentials',
+          'analytics',
+          'campaigns',
+          'identifiedAnalytics',
+          'personalization',
+          'refundHandling',
+          'thirdPartyIntegrations',
+        ]);
+      });
+
+      // allNonEssentials is a single opaque token expanded natively into a fixed bundle;
+      // refundHandling must stay a distinct token so it is never revoked implicitly.
+      it('should keep refundHandling distinct from allNonEssentials', () => {
+        expect(Purchasely.DataProcessingPurpose.allNonEssentials).toBe('ALL_NON_ESSENTIALS');
+        expect(Purchasely.DataProcessingPurpose.refundHandling).not.toBe(
+          Purchasely.DataProcessingPurpose.allNonEssentials
+        );
       });
     });
 
@@ -2027,6 +2049,36 @@ describe('Purchasely', () => {
         'revokeDataProcessingConsent',
         [['ANALYTICS', 'CAMPAIGNS']]
       );
+    });
+
+    it('should pass refundHandling through untouched', () => {
+      Purchasely.revokeDataProcessingConsent([Purchasely.DataProcessingPurpose.refundHandling]);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'revokeDataProcessingConsent',
+        [['REFUND_HANDLING']]
+      );
+    });
+
+    // Each call replaces the stored set natively, so the bridge must forward the full list
+    // as given — no merging, no dedup against earlier calls, and [] must reach the native
+    // side to grant everything back.
+    it('should forward each call as a complete replacement set', () => {
+      Purchasely.revokeDataProcessingConsent([Purchasely.DataProcessingPurpose.analytics]);
+      Purchasely.revokeDataProcessingConsent([
+        Purchasely.DataProcessingPurpose.allNonEssentials,
+        Purchasely.DataProcessingPurpose.refundHandling,
+      ]);
+      Purchasely.revokeDataProcessingConsent([]);
+
+      expect(mockExec.mock.calls.map((call) => call[4])).toEqual([
+        [['ANALYTICS']],
+        [['ALL_NON_ESSENTIALS', 'REFUND_HANDLING']],
+        [[]],
+      ]);
     });
   });
 

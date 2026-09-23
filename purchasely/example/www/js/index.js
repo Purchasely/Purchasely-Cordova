@@ -251,7 +251,10 @@ function onPurchaselySdkReady() {
 	Purchasely.setUserAttributeWithDoubleArray("key_double_array", [1.1, 2.2, 3.3]);
 	Purchasely.setUserAttributeWithBooleanArray("key_boolean_array", [true, false, true]);
 
-	Purchasely.revokeDataProcessingConsent(["CAMPAIGNS"])
+	Purchasely.revokeDataProcessingConsent([
+		Purchasely.DataProcessingPurpose.campaigns,
+		Purchasely.DataProcessingPurpose.refundHandling,
+	])
 
 	Purchasely.userAttribute("key_string", value => {
 		console.log("User attribute string: " + value);

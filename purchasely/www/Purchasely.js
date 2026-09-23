@@ -785,6 +785,10 @@ exports.setThemeMode = function (mode) {
     exec(() => {}, defaultError, 'Purchasely', 'setThemeMode', [mode]);
 };
 
+// Replaces the stored set of revoked purposes; it does not merge with a previous call.
+// Pass the complete list of purposes the user refuses every time, and [] to grant them
+// all back. ALL_NON_ESSENTIALS expands to a fixed bundle that does not include
+// IDENTIFIED_ANALYTICS or REFUND_HANDLING; list those explicitly when needed.
 exports.revokeDataProcessingConsent = function (purposes) {
     exec(() => {}, defaultError, 'Purchasely', 'revokeDataProcessingConsent', [purposes]);
 }
@@ -841,7 +845,10 @@ exports.DataProcessingPurpose = {
     identifiedAnalytics:    'IDENTIFIED_ANALYTICS',
     campaigns:              'CAMPAIGNS',
     personalization:        'PERSONALIZATION',
-    thirdPartyIntegrations: 'THIRD_PARTY_INTEGRATIONS'
+    thirdPartyIntegrations: 'THIRD_PARTY_INTEGRATIONS',
+    // iOS only (SDK 6.2.0+): the user refuses processing of the consumption data attached
+    // to a refund request. Carries a flag to the backend; gates nothing in the SDK.
+    refundHandling:         'REFUND_HANDLING'
 }
 
 exports.PurchaseResult = {
