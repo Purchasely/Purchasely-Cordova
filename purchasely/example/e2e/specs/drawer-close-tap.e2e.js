@@ -12,8 +12,9 @@
 // leftover SDK window on top, the OS tap never reaches the WebView.
 //
 // If the paywall never presents (real backend, see dismiss.e2e.js), the pass is
-// inconclusive and returns: there is nothing to close. Everything after a presented drawer
-// is asserted.
+// inconclusive and returns: there is nothing to close. tools/ci_run_e2e_ios.sh turns that
+// log line into a ::warning::, so a green job does not hide it. Everything after a
+// presented drawer is asserted.
 const {
   waitForPurchaselyReady,
   switchToWebview,
@@ -108,11 +109,10 @@ describe('Drawer closed by a real tap (iOS SDK 6.1.2)', () => {
       await switchToNative();
       const size = await browser.getWindowSize();
       if (mode === 'button') {
+        // A failure, not an inconclusive return: the ONBOARDING screen has a close button,
+        // so a miss means the lookup broke and the pass would test nothing.
         const r = await findCloseButton();
-        if (!r) {
-          console.log('[drawer:button] the screen has no labelled close button — inconclusive');
-          return;
-        }
+        if (!r) throw new Error('[drawer:button] no labelled close button on the drawer');
         await tapAt(r.x + r.width / 2, r.y + r.height / 2);
       } else {
         await tapAt(size.width / 2, size.height * 0.12); // the scrim above a 70% drawer
