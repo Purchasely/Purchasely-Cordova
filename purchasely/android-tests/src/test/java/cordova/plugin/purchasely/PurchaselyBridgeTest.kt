@@ -833,6 +833,36 @@ class PurchaselyBridgeTest {
         verify(callback).success()
     }
 
+
+    // The name is not a nullable option: the string "null" is a valid event name, and only a
+    // missing or empty value is refused.
+    @Test
+    fun `emit sends the name null as a name`() {
+        val callback = mock<CallbackContext>()
+
+        Mockito.mockStatic(Purchasely::class.java).use { sdk ->
+            assertTrue(PurchaselyPlugin().execute("emit", JSONArray().put("null"), callback))
+
+            sdk.verify { Purchasely.emit(eq("null"), eq(emptyMap())) }
+        }
+        verify(callback).success()
+    }
+
+    @Test
+    fun `emit refuses a missing or empty name and makes no native call`() {
+        for (args in listOf(JSONArray().put(JSONObject.NULL), JSONArray().put(""))) {
+            val callback = mock<CallbackContext>()
+
+            Mockito.mockStatic(Purchasely::class.java).use { sdk ->
+                assertTrue(PurchaselyPlugin().execute("emit", args, callback))
+
+                sdk.verifyNoInteractions()
+            }
+            verify(callback).error("name is required")
+            verify(callback, never()).success()
+        }
+    }
+
     // endregion
 
     // region promotional offer signing

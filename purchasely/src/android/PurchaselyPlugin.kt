@@ -250,7 +250,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 "signPromotionalOffer" -> signPromotionalOffer(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), callbackContext)
                 "signPromotionalOfferWithToken" -> signPromotionalOffer(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), callbackContext)
                 "revokeDataProcessingConsent" -> revokeDataProcessingConsent(args.getJSONArray(0))
-                "emit" -> emit(getStringFromJson(args.getString(0)), args.optJSONObject(1), callbackContext)
+                "emit" -> emit(if (args.isNull(0)) null else args.getString(0), args.optJSONObject(1), callbackContext)
                 "setDebugMode" -> setDebugMode(args.getBoolean(0))
                 "setDynamicOffering" -> setDynamicOffering(
                     getStringFromJson(args.getString(0)),
@@ -1484,10 +1484,11 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
 
     // Custom event. The terminal result closes the JS callback; the event itself is fire-and-forget.
     private fun emit(name: String?, properties: JSONObject?, callbackContext: CallbackContext) {
-        if (name == null) {
+        if (name.isNullOrEmpty()) {
             callbackContext.error("name is required")
             return
         }
+        // The name goes through as given: getStringFromJson would read the name "null" as missing.
         Purchasely.emit(name, customEventProperties(properties))
         callbackContext.success()
     }
