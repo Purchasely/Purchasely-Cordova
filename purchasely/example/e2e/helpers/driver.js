@@ -244,7 +244,7 @@ async function displayPresentation(source, sourceId, transition) {
 // "nothing to close" rather than asserting on a dismiss outcome that cannot arrive.
 //
 // MEASURED on the CI simulator (runs 34150577620..37854420317): when start() called back,
-// display presented in 1.5-35s (17/17). When it did not (StoreKit stuck in configure(), the
+// display presented in 1.5-35s (23/23). When it did not (StoreKit stuck in configure(), the
 // same gate as preload), 0/27 presented within the old 45s, and the 3 seen later presented
 // at 48, 81 and 88s after the display call. If it times out at 120s, the cause is not
 // latency: do not raise this again. A timeout leaves the display in flight: see
