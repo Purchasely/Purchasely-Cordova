@@ -745,7 +745,7 @@
                 [self failureFor:command resultString:error.localizedDescription];
             }];
         } else {
-            [self failureFor:command resultString:@"This fonctionality is unavailable before ios 12.2"];
+            [self failureFor:command resultString:@"This functionality is unavailable before iOS 12.2"];
         }
     });
 }
@@ -776,7 +776,7 @@
                 [self failureFor:command resultString:error.localizedDescription];
             }];
         } else {
-            [self failureFor:command resultString:@"This fonctionality is unavailable before ios 12.2"];
+            [self failureFor:command resultString:@"This functionality is unavailable before iOS 12.2"];
         }
     });
 }
