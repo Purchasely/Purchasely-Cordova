@@ -84,7 +84,9 @@ describe('Preloaded presentation display', () => {
     // Wait for the paywall to be on screen rather than guessing with a fixed pause: a
     // close() sent before it presents produces no outcome at all, which would read as a
     // timeout rather than as the "Presentation not loaded" this spec looks for.
-    await awaitPresented();
+    // 45s, not the 120s default: preload already waited up to 180s, and 180+120+30 is past
+    // mocha's 300s. A preloaded presentation presents fast.
+    await awaitPresented(45000);
     await closeCurrentPresentation();
 
     const outcome = await awaitDismissOutcome(30000);
