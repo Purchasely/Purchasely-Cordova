@@ -1668,7 +1668,7 @@ internal fun subscriptionSourceFor(storeType: StoreType?): Int? = when (storeTyp
     StoreType.GOOGLE_PLAY_STORE -> StoreType.GOOGLE_PLAY_STORE.ordinal
     StoreType.AMAZON_APP_STORE -> StoreType.AMAZON_APP_STORE.ordinal
     StoreType.HUAWEI_APP_GALLERY -> StoreType.HUAWEI_APP_GALLERY.ordinal
-    StoreType.WEB_CHECKOUT_STRIPE -> StoreType.WEB_CHECKOUT_STRIPE.ordinal
+    StoreType.STRIPE -> StoreType.STRIPE.ordinal
     StoreType.NONE -> StoreType.NONE.ordinal
     null -> null
 }

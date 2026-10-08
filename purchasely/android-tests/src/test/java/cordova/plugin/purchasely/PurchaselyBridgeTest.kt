@@ -369,7 +369,7 @@ class PurchaselyBridgeTest {
     fun `a web checkout subscription reaches JS as webCheckoutStripe, not none`() {
         val json = deliveredJson(
             PLYWebRedemptionResult.Success(
-                PLYWebRedemptionContext(fakeSubscription(StoreType.WEB_CHECKOUT_STRIPE)), false
+                PLYWebRedemptionContext(fakeSubscription(StoreType.STRIPE)), false
             )
         )
 
@@ -461,7 +461,7 @@ class PurchaselyBridgeTest {
         assertEquals(3, subscriptionSourceFor(StoreType.HUAWEI_APP_GALLERY))
         assertEquals(
             "Stripe is 4, not `none`",
-            4, subscriptionSourceFor(StoreType.WEB_CHECKOUT_STRIPE)
+            4, subscriptionSourceFor(StoreType.STRIPE)
         )
         assertEquals("`none` is 5, not 4", 5, subscriptionSourceFor(StoreType.NONE))
     }
@@ -473,7 +473,7 @@ class PurchaselyBridgeTest {
     @Test
     fun `web checkout and none map to distinct wire values`() {
         assertNotEquals(
-            subscriptionSourceFor(StoreType.WEB_CHECKOUT_STRIPE),
+            subscriptionSourceFor(StoreType.STRIPE),
             subscriptionSourceFor(StoreType.NONE)
         )
     }
