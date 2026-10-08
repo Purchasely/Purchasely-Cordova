@@ -248,6 +248,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 "getBuiltInAttribute" -> getBuiltInAttribute(getStringFromJson(args.getString(0)), callbackContext)
                 "isEligibleForIntroOffer" -> isEligibleForIntroOffer(getStringFromJson(args.getString(0)), callbackContext)
                 "signPromotionalOffer" -> signPromotionalOffer(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), callbackContext)
+                "signPromotionalOfferWithToken" -> signPromotionalOffer(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), callbackContext)
                 "revokeDataProcessingConsent" -> revokeDataProcessingConsent(args.getJSONArray(0))
                 "emit" -> emit(getStringFromJson(args.getString(0)), args.optJSONObject(1), callbackContext)
                 "setDebugMode" -> setDebugMode(args.getBoolean(0))

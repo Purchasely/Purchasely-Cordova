@@ -2024,6 +2024,34 @@ describe('Purchasely', () => {
     });
   });
 
+  describe('signPromotionalOfferWithToken', () => {
+    const call = (...args) => {
+      Purchasely.signPromotionalOfferWithToken(...args);
+      return mockExec.mock.calls[0];
+    };
+
+    it('should pass the token and the callbacks to exec', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      expect(call('product1', 'offer1', 'token1', success, error)).toEqual([
+        success,
+        error,
+        'Purchasely',
+        'signPromotionalOfferWithToken',
+        ['product1', 'offer1', 'token1'],
+      ]);
+    });
+
+    it.each([[undefined], [null]])('should send a %s token as null so native makes one', (token) => {
+      expect(call('product1', 'offer1', token, jest.fn(), jest.fn())[4]).toEqual(['product1', 'offer1', null]);
+    });
+
+    it('should let an empty token reach native, which rejects it', () => {
+      expect(call('product1', 'offer1', '', jest.fn(), jest.fn())[4]).toEqual(['product1', 'offer1', '']);
+    });
+  });
+
   describe('emit', () => {
     it('should call exec with the name and the properties', () => {
       const success = jest.fn();

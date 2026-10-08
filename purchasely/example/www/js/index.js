@@ -494,11 +494,12 @@ function isEligibleForIntroOffer() {
 
 function signPromotionalOffer() {
 	console.log("signPromotionalOffer");
-	Purchasely.signPromotionalOffer(
+	Purchasely.signPromotionalOfferWithToken(
 		'com.purchasely.plus.yearly', // storeProductId
 		'com.purchasely.plus.yearly.winback.test', // storeOfferId
+		null, // purchaseContextToken: null lets the SDK make one
 		(signature) => {
-			console.log("signPromotionalOffer result: " + signature);
+			console.log("signPromotionalOffer result: " + JSON.stringify(signature));
 		},
 		(error) => {
 			console.log("Error with signPromotionalOffer : " + error);

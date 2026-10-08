@@ -783,8 +783,19 @@ exports.isEligibleForIntroOffer = function (planId, success, error) {
 
 // REC-04: iOS-only (StoreKit promotional offer signing). On Android this is a no-op that
 // resolves success (no signing is required there); no error is raised.
+// @deprecated use signPromotionalOfferWithToken instead; this one signs over the anonymous
+// user id, not over a purchase context token.
 exports.signPromotionalOffer = function (storeProductId, storeOfferId, success, error) {
     exec(success, error, 'Purchasely', 'signPromotionalOffer', [storeProductId, storeOfferId]);
+};
+
+// iOS-only, like signPromotionalOffer (a no-op success on Android). The signature covers a
+// purchase context token: pass null to let native make one. The result is the signature plus
+// the lowercase `purchaseContextToken` that the purchase must carry. An empty or malformed
+// token string is rejected by native, with no signing.
+exports.signPromotionalOfferWithToken = function (storeProductId, storeOfferId, purchaseContextToken, success, error) {
+    exec(success, error, 'Purchasely', 'signPromotionalOfferWithToken',
+        [storeProductId, storeOfferId, purchaseContextToken == null ? null : purchaseContextToken]);
 };
 
 exports.setThemeMode = function (mode) {

@@ -834,4 +834,31 @@ class PurchaselyBridgeTest {
     }
 
     // endregion
+
+    // region promotional offer signing
+
+    // iOS-only. Android resolves a no-op success so shared JS can call it on both platforms.
+
+    @Test
+    fun `signing a promotional offer with a token is a no-op success on Android`() {
+        val callback = mock<CallbackContext>()
+        val args = JSONArray().put("product").put("offer").put("3f2504e0-4f89-11d3-9a0c-0305e82c3301")
+
+        assertTrue(PurchaselyPlugin().execute("signPromotionalOfferWithToken", args, callback))
+
+        verify(callback).success()
+        verify(callback, never()).error(any<String>())
+    }
+
+    @Test
+    fun `signing a promotional offer with a null token is a no-op success on Android`() {
+        val callback = mock<CallbackContext>()
+        val args = JSONArray().put("product").put("offer").put(JSONObject.NULL)
+
+        assertTrue(PurchaselyPlugin().execute("signPromotionalOfferWithToken", args, callback))
+
+        verify(callback).success()
+    }
+
+    // endregion
 }

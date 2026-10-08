@@ -663,3 +663,135 @@
 }
 
 @end
+
+#pragma mark - signPromotionalOfferWithToken
+
+// `+signPromotionalOfferWithStoreProductId:storeOfferId:purchaseContextToken:success:failure:`
+// is a class method on the SDK, so the test swaps its implementation for a stub that records
+// the token it receives and then answers with `signature` or `error`, and restores it.
+
+typedef void (^CDVSignSuccess)(PLYOfferSignature *, NSUUID *);
+typedef void (^CDVSignFailure)(NSError *);
+
+/// What the stub saw, and what the bridge answered.
+@interface CDVSignRun : NSObject
+@property (nonatomic, assign) NSUInteger nativeCalls;
+@property (nonatomic, strong) NSUUID *tokenSeenByNative;
+@property (nonatomic, strong) NSArray<CDVPluginResult *> *results;
+@end
+@implementation CDVSignRun
+@end
+
+@interface CDVPurchaselyLifecycleTests (Signing)
+@end
+
+@implementation CDVPurchaselyLifecycleTests (Signing)
+
+- (PLYOfferSignature *)offerSignature {
+    // The class has no public initializer; the bridge only reads these six properties.
+    PLYOfferSignature *signature = [PLYOfferSignature alloc];
+    [signature setValue:@"monthly" forKey:@"planVendorId"];
+    [signature setValue:@"offer-1" forKey:@"identifier"];
+    [signature setValue:@"c2lnbmF0dXJl" forKey:@"signature"];
+    [signature setValue:@"KEY1" forKey:@"keyIdentifier"];
+    [signature setValue:[[NSUUID alloc] initWithUUIDString:@"3F2504E0-4F89-11D3-9A0C-0305E82C3301"] forKey:@"nonce"];
+    [signature setValue:@(1700000000.0) forKey:@"timestamp"];
+    return signature;
+}
+
+- (CDVSignRun *)signWithArguments:(NSArray *)arguments
+                      nativeToken:(NSUUID *)nativeToken
+                      nativeError:(NSError *)nativeError {
+    SEL selector = @selector(signPromotionalOfferWithStoreProductId:storeOfferId:purchaseContextToken:success:failure:);
+    Method method = class_getClassMethod([Purchasely class], selector);
+    IMP original = method_getImplementation(method);
+    CDVSignRun *run = [CDVSignRun new];
+    PLYOfferSignature *signature = [self offerSignature];
+    method_setImplementation(method, imp_implementationWithBlock(
+        ^(id _self, NSString *product, NSString *offer, NSUUID *token, CDVSignSuccess success, CDVSignFailure failure) {
+            run.nativeCalls += 1;
+            run.tokenSeenByNative = token;
+            if (nativeError) { failure(nativeError); } else { success(signature, nativeToken); }
+        }));
+    CDVFakeCommandDelegate *delegate = [CDVFakeCommandDelegate new];
+    @try {
+        CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+        plugin.commandDelegate = delegate;
+        [plugin signPromotionalOfferWithToken:[self commandWithId:@"sign" arguments:arguments]];
+        XCTNSPredicateExpectation *answered = [[XCTNSPredicateExpectation alloc]
+            initWithPredicate:[NSPredicate predicateWithFormat:@"results.@count > 0" ] object:delegate];
+        [self waitForExpectations:@[answered] timeout:5];
+    } @finally {
+        method_setImplementation(method, original);
+    }
+    run.results = [delegate.results copy];
+    return run;
+}
+
+- (void)testSignWithTokenHandsTheParsedTokenToNativeAndReturnsItLowercase {
+    NSUUID *returned = [[NSUUID alloc] initWithUUIDString:@"3F2504E0-4F89-11D3-9A0C-0305E82C3301"];
+    NSArray *arguments = @[@"product", @"offer", @"3F2504E0-4F89-11D3-9A0C-0305E82C3301"];
+
+    CDVSignRun *run = [self signWithArguments:arguments nativeToken:returned nativeError:nil];
+
+    XCTAssertEqual(run.nativeCalls, (NSUInteger)1);
+    XCTAssertEqualObjects(run.tokenSeenByNative, returned);
+    XCTAssertEqual(run.results.count, (NSUInteger)1);
+    XCTAssertEqualObjects(run.results.firstObject.status, @(CDVCommandStatus_OK));
+    NSDictionary *message = run.results.firstObject.message;
+    XCTAssertEqualObjects(message[@"purchaseContextToken"], @"3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+                          @"StoreKit 1 needs the lowercase form");
+    XCTAssertEqualObjects(message[@"planVendorId"], @"monthly");
+    XCTAssertEqualObjects(message[@"identifier"], @"offer-1");
+    XCTAssertEqualObjects(message[@"signature"], @"c2lnbmF0dXJl");
+    XCTAssertEqualObjects(message[@"keyIdentifier"], @"KEY1");
+    XCTAssertEqualObjects(message[@"nonce"], @"3F2504E0-4F89-11D3-9A0C-0305E82C3301");
+}
+
+- (void)testSignWithANullTokenLetsNativeMakeOne {
+    NSUUID *made = [NSUUID UUID];
+    NSArray *arguments = @[@"product", @"offer", [NSNull null]];
+
+    CDVSignRun *run = [self signWithArguments:arguments nativeToken:made nativeError:nil];
+
+    XCTAssertEqual(run.nativeCalls, (NSUInteger)1);
+    XCTAssertNil(run.tokenSeenByNative);
+    XCTAssertEqualObjects(run.results.firstObject.message[@"purchaseContextToken"],
+                          made.UUIDString.lowercaseString);
+}
+
+- (void)testSignWithAnAbsentTokenLetsNativeMakeOne {
+    CDVSignRun *run = [self signWithArguments:@[@"product", @"offer"] nativeToken:[NSUUID UUID] nativeError:nil];
+
+    XCTAssertEqual(run.nativeCalls, (NSUInteger)1);
+    XCTAssertNil(run.tokenSeenByNative);
+}
+
+- (void)testSignWithAnEmptyTokenFailsAndMakesNoNativeCall {
+    CDVSignRun *run = [self signWithArguments:@[@"product", @"offer", @""] nativeToken:[NSUUID UUID] nativeError:nil];
+
+    XCTAssertEqual(run.nativeCalls, (NSUInteger)0, @"an empty token must not become a new token");
+    XCTAssertEqual(run.results.count, (NSUInteger)1);
+    XCTAssertEqualObjects(run.results.firstObject.status, @(CDVCommandStatus_ERROR));
+}
+
+- (void)testSignWithAMalformedTokenFailsAndMakesNoNativeCall {
+    CDVSignRun *run = [self signWithArguments:@[@"product", @"offer", @"not-a-uuid"] nativeToken:[NSUUID UUID] nativeError:nil];
+
+    XCTAssertEqual(run.nativeCalls, (NSUInteger)0);
+    XCTAssertEqualObjects(run.results.firstObject.status, @(CDVCommandStatus_ERROR));
+}
+
+- (void)testSignWithATokenForwardsANativeError {
+    NSError *error = [NSError errorWithDomain:@"purchasely" code:7
+                                     userInfo:@{NSLocalizedDescriptionKey: @"signature failed"}];
+    NSArray *arguments = @[@"product", @"offer", @"3f2504e0-4f89-11d3-9a0c-0305e82c3301"];
+
+    CDVSignRun *run = [self signWithArguments:arguments nativeToken:[NSUUID UUID] nativeError:error];
+
+    XCTAssertEqual(run.nativeCalls, (NSUInteger)1);
+    XCTAssertEqualObjects(run.results.firstObject.status, @(CDVCommandStatus_ERROR));
+    XCTAssertEqualObjects(run.results.firstObject.message, @"signature failed");
+}
+
+@end
