@@ -11,6 +11,12 @@ const {
 
 const PLACEMENT = process.env.PURCHASELY_E2E_PLACEMENT || 'ONBOARDING';
 
+// Set when a display never presented: it is still in flight (close() cannot cancel it) and
+// would present during the next test, whose shared window globals it then answers. CI runs
+// 35862839526 and 37854420317: the second test "passed" against the first test's paywall.
+// See drawer-close-tap.e2e.js.
+let pendingDisplay = false;
+
 describe('Presentation dismiss outcome', () => {
   before(async () => {
     await waitForPurchaselyReady();
@@ -32,6 +38,7 @@ describe('Presentation dismiss outcome', () => {
     // the assertion below failed on a timeout.
     const presented = await awaitPresented();
     if (!presented.ok) {
+      pendingDisplay = true;
       console.log('[dismiss] the paywall never presented (' + (presented.error || 'unknown') +
         ') — nothing to close, so there is no dismiss outcome to assert');
       return;
@@ -51,6 +58,10 @@ describe('Presentation dismiss outcome', () => {
   // just with no placement/screen id (was presentPresentationForDefault). Best-effort:
   // depends on a default audience being configured on the backend for this app id.
   it('presentation.defaultSource().build().display() + request.close() delivers a dismiss outcome', async () => {
+    if (pendingDisplay) {
+      console.log('[dismiss] the placement display never presented and can still answer for this one — inconclusive');
+      return;
+    }
     await displayPresentation('defaultSource', null, 'fullScreen');
 
     const presented = await awaitPresented();

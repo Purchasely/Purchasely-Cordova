@@ -30,6 +30,15 @@ const PLACEMENT = process.env.PURCHASELY_E2E_PLACEMENT || 'ONBOARDING';
 const DRAWER = { type: 'drawer', height: { type: 'percentage', value: 0.7 } }; // iOS reads 0.0-1.0 (CDVPurchasely.m)
 const CLOSE_LABEL = /^(x|×|close|fermer|dismiss)$|close/i;
 
+// Set when a pass's display never presented. That display is still in flight: close() is
+// closeAllScreens, which cannot cancel a paywall that is not on screen yet. It presents
+// later, on top of the next pass's drawer, and both requests write the same window
+// globals. CI run 37854420317: the 'outside' pass presented 2.5s after its display (48s
+// after the orphan's), its scrim tap closed one of two stacked drawers, the SDK sent the
+// outcome (from deinit) but no PRESENTATION_CLOSED (only closeWindow() sends it, and the
+// other drawer kept the window open), and the other drawer ate the probe tap.
+let pendingDisplay = false;
+
 // Record PRESENTATION_CLOSED. The native events slot holds one callback, so this replaces
 // the sample's logger for the rest of the session; nothing else in this spec needs it.
 async function listenForClosed() {
@@ -96,11 +105,16 @@ describe('Drawer closed by a real tap (iOS SDK 6.1.2)', () => {
 
   for (const mode of ['button', 'outside']) {
     it(`a ${mode} tap closes the drawer, sends PRESENTATION_CLOSED and the app still takes taps`, async () => {
+      if (pendingDisplay) {
+        console.log(`[drawer:${mode}] an earlier display never presented and can still stack on this one — inconclusive`);
+        return;
+      }
       await switchToWebview();
       await listenForClosed();
       await displayPresentation('placement', PLACEMENT, DRAWER);
       const presented = await awaitPresented();
       if (!presented.ok) {
+        pendingDisplay = true;
         console.log(`[drawer:${mode}] the paywall never presented (${presented.error || 'unknown'}) — inconclusive`);
         return;
       }
