@@ -12,6 +12,14 @@ import io.purchasely.models.PLYSubscription
 import io.purchasely.models.PLYSubscriptionData
 import io.purchasely.models.PLYWebRedemptionContext
 import io.purchasely.models.PLYWebRedemptionResult
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.long
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -21,11 +29,13 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mockito.Mockito
 import java.util.UUID
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
@@ -763,6 +773,64 @@ class PurchaselyBridgeTest {
 
         // And the serialised form the WebView receives carries them as nulls.
         assertTrue(wire.toString().contains("\"errorCode\":null"))
+    }
+
+    // endregion
+
+    // region emit
+
+    // The native SDK drops org.json values, so the bridge converts the JS object to kotlinx
+    // elements, which it accepts. Integers must stay integers: the backend casts each
+    // property against its declared data_type.
+
+    @Test
+    fun `emit properties keep their JSON types`() {
+        val json = JSONObject("""{"n":42,"d":1.5,"s":"a","b":true,"nil":null,"o":{"x":1},"l":[1,2]}""")
+
+        val map = customEventProperties(json)
+
+        assertEquals(setOf("n", "d", "s", "b", "nil", "o", "l"), map.keys)
+        assertEquals(42, (map["n"] as JsonPrimitive).int)
+        assertEquals(42L, (map["n"] as JsonPrimitive).long)
+        assertFalse((map["n"] as JsonPrimitive).isString)
+        assertEquals(1.5, (map["d"] as JsonPrimitive).double, 0.0)
+        assertEquals("a", (map["s"] as JsonPrimitive).content)
+        assertTrue((map["s"] as JsonPrimitive).isString)
+        assertTrue((map["b"] as JsonPrimitive).boolean)
+        assertTrue(map["nil"] is JsonNull)
+        assertEquals(1, ((map["o"] as JsonObject)["x"] as JsonPrimitive).int)
+        assertEquals(2, (map["l"] as JsonArray).size)
+    }
+
+    @Test
+    fun `absent emit properties become an empty map`() {
+        assertTrue(customEventProperties(null).isEmpty())
+    }
+
+    @Test
+    fun `emit hands the name and the converted properties to the SDK and answers once`() {
+        val callback = mock<CallbackContext>()
+
+        Mockito.mockStatic(Purchasely::class.java).use { sdk ->
+            val args = JSONArray().put("level_up").put(JSONObject().put("level", 3))
+
+            assertTrue(PurchaselyPlugin().execute("emit", args, callback))
+
+            sdk.verify { Purchasely.emit(eq("level_up"), eq(mapOf("level" to JsonPrimitive(3)))) }
+        }
+        verify(callback).success()
+    }
+
+    @Test
+    fun `emit without properties sends an empty map`() {
+        val callback = mock<CallbackContext>()
+
+        Mockito.mockStatic(Purchasely::class.java).use { sdk ->
+            assertTrue(PurchaselyPlugin().execute("emit", JSONArray().put("opened"), callback))
+
+            sdk.verify { Purchasely.emit(eq("opened"), eq(emptyMap())) }
+        }
+        verify(callback).success()
     }
 
     // endregion

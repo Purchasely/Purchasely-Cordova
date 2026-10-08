@@ -126,6 +126,7 @@ typedef NS_ENUM(NSInteger, CDVPurchaselyProxyOption) {
 - (void)setUserAttributeWithDoubleArray:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithBooleanArray:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithString:(CDVInvokedUrlCommand*)command;
+- (void)emit:(CDVInvokedUrlCommand*)command;
 - (void)revokeDataProcessingConsent:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithBoolean:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithInt:(CDVInvokedUrlCommand*)command;

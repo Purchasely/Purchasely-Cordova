@@ -1248,6 +1248,19 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
     [Purchasely setUserAttributeWithDoubleArray:doubleArray forKey:key processingLegalBasis:processingLegalBasis];
 }
 
+// Custom event. The native SDK validates no type: the backend casts each property against
+// the data_type declared in the Console. The result closes the JS callback only.
+- (void)emit:(CDVInvokedUrlCommand*)command {
+    NSString *name = [command argumentAtIndex:0 withDefault:nil andClass:[NSString class]];
+    NSDictionary *properties = [command argumentAtIndex:1 withDefault:@{} andClass:[NSDictionary class]];
+    if (name.length == 0) {
+        [self failureFor:command resultString:@"name is required"];
+        return;
+    }
+    [Purchasely emitWithName:name properties:properties];
+    [self successFor:command];
+}
+
 - (void)setUserAttributeWithString:(CDVInvokedUrlCommand*)command {
     NSString *key = [command argumentAtIndex:0];
     NSString *value = [command argumentAtIndex:1];

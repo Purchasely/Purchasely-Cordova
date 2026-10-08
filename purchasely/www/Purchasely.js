@@ -767,6 +767,12 @@ exports.removeDynamicOffering = function (reference) {
     exec(() => {}, defaultError, 'Purchasely', 'removeDynamicOffering', [reference]);
 };
 
+// Custom event. The SDK validates no type: the backend casts each property against the
+// data_type declared in the Console. Pass dates as ISO strings.
+exports.emit = function (name, properties, success, error) {
+    exec(success || (() => {}), error || defaultError, 'Purchasely', 'emit', [name, properties || {}]);
+};
+
 exports.clearDynamicOfferings = function () {
     exec(() => {}, defaultError, 'Purchasely', 'clearDynamicOfferings', []);
 };

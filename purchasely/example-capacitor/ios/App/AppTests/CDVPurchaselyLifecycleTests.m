@@ -61,6 +61,16 @@
 - (void)runInBackground:(void (^)(void))block { if (block) block(); }
 @end
 
+/// What the stub saw, and what the bridge answered.
+@interface CDVEmitRun : NSObject
+@property (nonatomic, assign) NSUInteger nativeCalls;
+@property (nonatomic, copy) NSString *nameSeenByNative;
+@property (nonatomic, copy) NSDictionary *propertiesSeenByNative;
+@property (nonatomic, strong) CDVFakeCommandDelegate *delegate;
+@end
+@implementation CDVEmitRun
+@end
+
 @interface CDVPurchaselyLifecycleTests : XCTestCase
 @end
 
@@ -572,4 +582,84 @@
 
     XCTAssertEqualObjects([self setHandedToNativeFor:@[]], empty);
 }
+
+#pragma mark - emit
+
+// `+emitWithName:properties:` is a class method on the SDK, so the test swaps its
+// implementation for a stub that records what reaches native, and restores it. The bridge
+// also owns the callback: one terminal result, or the JS closure stays in cordova.callbacks
+// until the WebView reloads.
+
+- (CDVInvokedUrlCommand *)commandWithId:(NSString *)callbackId arguments:(NSArray *)arguments {
+    return [[CDVInvokedUrlCommand alloc] initWithArguments:arguments
+                                                callbackId:callbackId
+                                                 className:@"CDVPurchasely"
+                                                methodName:@"test"];
+}
+
+- (CDVEmitRun *)emitWithArguments:(NSArray *)arguments {
+    Method method = class_getClassMethod([Purchasely class], @selector(emitWithName:properties:));
+    IMP original = method_getImplementation(method);
+    CDVEmitRun *run = [CDVEmitRun new];
+    run.delegate = [CDVFakeCommandDelegate new];
+    method_setImplementation(method, imp_implementationWithBlock(^(id _self, NSString *name, NSDictionary *properties) {
+        run.nativeCalls += 1;
+        run.nameSeenByNative = name;
+        run.propertiesSeenByNative = properties;
+    }));
+    @try {
+        CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+        plugin.commandDelegate = run.delegate;
+        [plugin emit:[self commandWithId:@"emit" arguments:arguments]];
+    } @finally {
+        method_setImplementation(method, original);
+    }
+    return run;
+}
+
+- (void)assertSingleTerminalSuccess:(CDVEmitRun *)run {
+    CDVFakeCommandDelegate *delegate = run.delegate;
+    XCTAssertEqual(delegate.results.count, (NSUInteger)1);
+    XCTAssertEqualObjects(delegate.callbackIds.firstObject, @"emit");
+    XCTAssertEqualObjects(delegate.results.firstObject.status, @(CDVCommandStatus_OK));
+    XCTAssertEqualObjects(delegate.results.firstObject.keepCallback, @NO,
+                          @"keepCallback must be NO, or the JS callback is never freed");
+}
+
+- (void)testEmitHandsTheNameAndPropertiesToNativeAndAnswersOnce {
+    NSDictionary *properties = @{@"level": @3, @"vip": @YES};
+    NSArray *arguments = @[@"level_up", properties];
+
+    CDVEmitRun *run = [self emitWithArguments:arguments];
+
+    XCTAssertEqual(run.nativeCalls, (NSUInteger)1);
+    XCTAssertEqualObjects(run.nameSeenByNative, @"level_up");
+    XCTAssertEqualObjects(run.propertiesSeenByNative, properties);
+    [self assertSingleTerminalSuccess:run];
+}
+
+- (void)testEmitWithoutPropertiesSendsAnEmptyDictionary {
+    CDVEmitRun *run = [self emitWithArguments:@[@"opened"]];
+
+    XCTAssertEqual(run.nativeCalls, (NSUInteger)1);
+    XCTAssertEqualObjects(run.nameSeenByNative, @"opened");
+    XCTAssertEqualObjects(run.propertiesSeenByNative, @{});
+    [self assertSingleTerminalSuccess:run];
+}
+
+- (void)testEmitWithoutANameFailsAndMakesNoNativeCall {
+    CDVEmitRun *run = [self emitWithArguments:@[]];
+
+    XCTAssertEqual(run.nativeCalls, (NSUInteger)0);
+    XCTAssertEqual(run.delegate.results.count, (NSUInteger)1);
+    XCTAssertEqualObjects(run.delegate.results.firstObject.status, @(CDVCommandStatus_ERROR));
+}
+
+- (void)testEmitWithAnEmptyNameFailsAndMakesNoNativeCall {
+    CDVEmitRun *run = [self emitWithArguments:@[@"", @{}]];
+
+    XCTAssertEqual(run.nativeCalls, (NSUInteger)0);
+    XCTAssertEqualObjects(run.delegate.results.firstObject.status, @(CDVCommandStatus_ERROR));
+}
+
 @end

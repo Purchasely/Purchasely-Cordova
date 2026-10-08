@@ -44,6 +44,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import org.apache.cordova.CallbackContext
 import org.apache.cordova.CordovaPlugin
 import org.apache.cordova.PluginResult
@@ -247,6 +249,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 "isEligibleForIntroOffer" -> isEligibleForIntroOffer(getStringFromJson(args.getString(0)), callbackContext)
                 "signPromotionalOffer" -> signPromotionalOffer(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), callbackContext)
                 "revokeDataProcessingConsent" -> revokeDataProcessingConsent(args.getJSONArray(0))
+                "emit" -> emit(getStringFromJson(args.getString(0)), args.optJSONObject(1), callbackContext)
                 "setDebugMode" -> setDebugMode(args.getBoolean(0))
                 "setDynamicOffering" -> setDynamicOffering(
                     getStringFromJson(args.getString(0)),
@@ -1478,6 +1481,16 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         Purchasely.revokeDataProcessingConsent(mappedPurposes)
     }
 
+    // Custom event. The terminal result closes the JS callback; the event itself is fire-and-forget.
+    private fun emit(name: String?, properties: JSONObject?, callbackContext: CallbackContext) {
+        if (name == null) {
+            callbackContext.error("name is required")
+            return
+        }
+        Purchasely.emit(name, customEventProperties(properties))
+        callbackContext.success()
+    }
+
     fun setDebugMode(enabled: Boolean) {
         Purchasely.debugMode = enabled
     }
@@ -1823,3 +1836,10 @@ internal fun parseCanonicalUuid(value: String?): UUID? {
     }
     return if (parsed.toString().equals(value, ignoreCase = true)) parsed else null
 }
+
+/**
+ * The native `emit` drops `org.json` values, so convert the JS object to kotlinx elements,
+ * which it accepts. Integers stay integers. `internal` so a unit test drives it.
+ */
+internal fun customEventProperties(json: JSONObject?): Map<String, Any?> =
+    json?.let { Json.parseToJsonElement(it.toString()).jsonObject } ?: emptyMap()

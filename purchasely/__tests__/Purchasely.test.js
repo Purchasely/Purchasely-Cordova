@@ -2024,6 +2024,32 @@ describe('Purchasely', () => {
     });
   });
 
+  describe('emit', () => {
+    it('should call exec with the name and the properties', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.emit('level_up', { level: 3, vip: true }, success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'emit', [
+        'level_up',
+        { level: 3, vip: true },
+      ]);
+    });
+
+    it('should default the properties to an empty object', () => {
+      Purchasely.emit('level_up');
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'emit',
+        ['level_up', {}]
+      );
+    });
+  });
+
   describe('setThemeMode', () => {
     it('should call exec with correct parameters', () => {
       Purchasely.setThemeMode(Purchasely.ThemeMode.dark);
