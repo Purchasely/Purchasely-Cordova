@@ -253,6 +253,38 @@ This affects `userSubscriptions()` and `userSubscriptionsHistory()` as well as t
 redemption `context.subscription`, since the three share one mapper. Cordova ships plain
 JavaScript with no type declarations, so nothing enforces this for you.
 
+## What is new in 6.2.0
+
+### Custom events
+
+`Purchasely.emit(name, properties)` sends a custom event. `properties` is optional.
+
+```js
+Purchasely.emit('level_up', { level: 3, vip: true });
+```
+
+The SDK checks no type. The backend casts each property against the `data_type` that you
+declare in the Console. Pass a date as an ISO string. `success` and `error` callbacks are
+optional fourth and fifth arguments, and they are called once after the SDK takes the event.
+
+### Promotional offer signature over a purchase context token (iOS)
+
+`Purchasely.signPromotionalOfferWithToken` signs a promotional offer over a purchase context
+token. The result is the same signature object as `signPromotionalOffer`, plus the
+lowercase `purchaseContextToken` that the purchase must carry.
+
+```js
+Purchasely.signPromotionalOfferWithToken(
+    'com.example.yearly', 'com.example.yearly.winback', null,
+    (signature) => console.log(signature.purchaseContextToken),
+    (error) => console.log(error)
+);
+```
+
+Pass `null` to let the SDK make the token. A token string that is not a UUID fails, and the
+SDK does not sign. On Android the method resolves with success and does nothing.
+`signPromotionalOffer` still works and signs over the anonymous user id. It is deprecated.
+
 ## Data processing consent
 
 Tell the SDK which data processing purposes the user refuses. The native SDK persists the

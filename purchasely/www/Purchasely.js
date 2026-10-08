@@ -804,8 +804,9 @@ exports.setThemeMode = function (mode) {
 
 // Replaces the stored set of revoked purposes; it does not merge with a previous call.
 // Pass the complete list of purposes the user refuses every time, and [] to grant them
-// all back. ALL_NON_ESSENTIALS expands to a fixed bundle that does not include
-// IDENTIFIED_ANALYTICS or REFUND_HANDLING; list those explicitly when needed.
+// all back. ALL_NON_ESSENTIALS expands to a fixed bundle. On iOS it does not include
+// IDENTIFIED_ANALYTICS or REFUND_HANDLING; list those explicitly when needed. On Android
+// it includes IDENTIFIED_ANALYTICS, and REFUND_HANDLING is ignored.
 exports.revokeDataProcessingConsent = function (purposes) {
     exec(() => {}, defaultError, 'Purchasely', 'revokeDataProcessingConsent', [purposes]);
 }
