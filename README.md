@@ -265,13 +265,25 @@ Purchasely.emit('level_up', { level: 3, vip: true });
 
 The SDK checks no type. The backend casts each property against the `data_type` that you
 declare in the Console. Pass a date as an ISO string. `success` and `error` callbacks are
-optional fourth and fifth arguments, and they are called once after the SDK takes the event.
+optional third and fourth arguments, and they are called once after the SDK takes the event.
+
+```js
+Purchasely.emit('level_up', { level: 3 },
+    () => console.log('Event accepted'),
+    (error) => console.log(error)
+);
+```
 
 ### Promotional offer signature over a purchase context token (iOS)
 
 `Purchasely.signPromotionalOfferWithToken` signs a promotional offer over a purchase context
 token. The result is the same signature object as `signPromotionalOffer`, plus the
 lowercase `purchaseContextToken` that the purchase must carry.
+
+In Observer mode, set StoreKit 1 `applicationUsername` to the returned `purchaseContextToken`
+exactly. With StoreKit 2, pass its UUID as the purchase `appAccountToken`. Do not use the
+anonymous user id or generate another token: Apple rejects the offer when the purchase
+carries a different value from the one used to sign it.
 
 ```js
 Purchasely.signPromotionalOfferWithToken(
