@@ -268,20 +268,21 @@ Purchasely.revokeDataProcessingConsent([
 | Purpose | Meaning |
 |---------|---------|
 | `analytics` | Usage analytics |
-| `identifiedAnalytics` | Analytics tied to the user's identifiers (vendor id). Not part of `allNonEssentials` |
+| `identifiedAnalytics` | Analytics tied to the user's identifiers (vendor id). Part of `allNonEssentials` on Android, not on iOS |
 | `campaigns` | Campaign targeting and triggers |
 | `personalization` | Paywall and content personalization |
 | `thirdPartyIntegrations` | Forwarding to the third-party integrations you have set up |
 | `refundHandling` | iOS 6.2.0+ only. Processing of the consumption data attached to an App Store refund request. Not part of `allNonEssentials`; ignored on Android |
-| `allNonEssentials` | Bundle of `analytics`, `campaigns`, `personalization`, `thirdPartyIntegrations` — and nothing else |
+| `allNonEssentials` | Bundle of `analytics`, `campaigns`, `personalization`, `thirdPartyIntegrations`. Android adds `identifiedAnalytics`. Neither platform adds `refundHandling` |
 
 **Each call replaces the whole set.** The SDK does not merge with the previous call, so pass
 the complete list of refused purposes every time; a call with `[refundHandling]` after a
 call with `[analytics]` grants analytics back. Pass `[]` to grant everything back.
 
 `allNonEssentials` is a fixed bundle: bumping the plugin never adds a purpose to it, so an
-app that already calls it does not start refusing refund data processing. List
-`refundHandling` (and `identifiedAnalytics`) explicitly next to it when you want them:
+app that already calls it does not start refusing refund data processing. On iOS, list
+`refundHandling` and `identifiedAnalytics` explicitly next to it when you want them. The
+plugin keeps every purpose in the list, whatever the order:
 
 ```js
 Purchasely.revokeDataProcessingConsent([

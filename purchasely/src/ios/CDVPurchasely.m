@@ -1533,8 +1533,7 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
     for (id val in values) {
         NSString *string = val;
         if ([string isEqualToString:@"ALL_NON_ESSENTIALS"]) {
-            purposesSet = [NSMutableSet setWithObject:[PLYDataProcessingPurpose allNonEssentials]];
-            break;
+            [purposesSet addObject:[PLYDataProcessingPurpose allNonEssentials]];
         } else if ([string isEqualToString:@"ANALYTICS"]) {
             [purposesSet addObject:[PLYDataProcessingPurpose analytics]];
         } else if ([string isEqualToString:@"IDENTIFIED_ANALYTICS"]) {

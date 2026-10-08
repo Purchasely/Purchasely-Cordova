@@ -23,6 +23,7 @@
 
 #import <XCTest/XCTest.h>
 #import <WebKit/WebKit.h>
+#import <objc/runtime.h>
 #import "CDVPurchasely.h"
 
 /// Records what the bridge hands to Cordova.
@@ -513,5 +514,62 @@
     XCTAssertEqual(delegate.results.count, (NSUInteger)1);
     XCTAssertEqualObjects(delegate.callbackIds.firstObject, @"remove");
     XCTAssertEqualObjects(delegate.results.firstObject.status, @(CDVCommandStatus_OK));
+}
+
+#pragma mark - revokeDataProcessingConsent: the set handed to native
+
+// Native replaces the stored set on every call, so a purpose lost on the way is a refusal
+// that never reaches the backend. `+revokeDataProcessingConsentFor:` is a class method on
+// the SDK, so the test swaps its implementation to capture the set, and restores it.
+
+- (NSSet<PLYDataProcessingPurpose *> *)setHandedToNativeFor:(NSArray<NSString *> *)purposes {
+    Method method = class_getClassMethod([Purchasely class], @selector(revokeDataProcessingConsentFor:));
+    IMP original = method_getImplementation(method);
+    __block NSSet<PLYDataProcessingPurpose *> *captured = nil;
+    method_setImplementation(method, imp_implementationWithBlock(^(id _self, NSSet *set) { captured = set; }));
+    @try {
+        CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+        CDVInvokedUrlCommand *command = [[CDVInvokedUrlCommand alloc] initWithArguments:@[purposes]
+                                                                             callbackId:@"consent"
+                                                                              className:@"CDVPurchasely"
+                                                                             methodName:@"revokeDataProcessingConsent"];
+        [plugin revokeDataProcessingConsent:command];
+    } @finally {
+        method_setImplementation(method, original);
+    }
+    return captured;
+}
+
+- (void)testConsentAllNonEssentialsBeforeRefundHandlingKeepsBoth {
+    NSSet *expected = [NSSet setWithArray:@[[PLYDataProcessingPurpose allNonEssentials],
+                                            [PLYDataProcessingPurpose refundHandling]]];
+
+    NSArray *input = @[@"ALL_NON_ESSENTIALS", @"REFUND_HANDLING"];
+
+    XCTAssertEqualObjects([self setHandedToNativeFor:input], expected);
+}
+
+- (void)testConsentRefundHandlingBeforeAllNonEssentialsKeepsBoth {
+    NSSet *expected = [NSSet setWithArray:@[[PLYDataProcessingPurpose allNonEssentials],
+                                            [PLYDataProcessingPurpose refundHandling]]];
+
+    NSArray *input = @[@"REFUND_HANDLING", @"ALL_NON_ESSENTIALS"];
+
+    XCTAssertEqualObjects([self setHandedToNativeFor:input], expected);
+}
+
+- (void)testConsentAllNonEssentialsKeepsIdentifiedAnalytics {
+    NSSet *expected = [NSSet setWithArray:@[[PLYDataProcessingPurpose allNonEssentials],
+                                            [PLYDataProcessingPurpose identifiedAnalytics]]];
+
+    NSArray *input = @[@"ALL_NON_ESSENTIALS", @"IDENTIFIED_ANALYTICS"];
+
+    XCTAssertEqualObjects([self setHandedToNativeFor:input], expected);
+}
+
+- (void)testConsentEmptyListReachesNativeToGrantEverythingBack {
+    NSSet *empty = [NSSet set];
+
+    XCTAssertEqualObjects([self setHandedToNativeFor:@[]], empty);
 }
 @end
