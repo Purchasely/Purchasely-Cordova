@@ -187,8 +187,6 @@ async function callPresentation(source, sourceId, action, transition, timeoutMs 
         var builder = sourceId
           ? window.Purchasely.presentation[source](sourceId)
           : window.Purchasely.presentation[source]();
-        // Wired here too so a later displayLastPresentation() on this same request can be
-        // awaited with awaitPresented() instead of a fixed pause.
         var request = builder
           .onPresented(function (presentation, error) {
             window.__plyPresented = { ok: !error, error: error ? String(error) : null };
@@ -259,31 +257,6 @@ async function awaitPresented(timeoutMs = 120000) {
   return pollGlobal('__plyPresented', timeoutMs);
 }
 
-// Display the presentation PRELOADED by the last callPresentation(..., 'preload'), i.e.
-// re-display the SAME request object. That request carries preload()'s native payload
-// (`_raw`), so display() routes through the native `presentPresentation` action — the one
-// that looks the presentation up in the iOS `presentationsLoaded` array and answers
-// "Presentation not loaded" when it is not there.
-// displayPresentation() cannot cover this: it BUILDS A FRESH request whose empty `_raw`
-// makes display() fall back to presentPresentationForPlacement — a direct fetch+display
-// that never reads presentationsLoaded, so it would pass on a host where preload state is
-// silently dropped. Fire-and-forget + poll for the same reason as displayPresentation():
-// display()'s promise only settles at dismiss, which would deadlock the session.
-async function displayLastPresentation(transition) {
-  await browser.execute(
-    function (transition) {
-      window.__plyOutcome = undefined;
-      var request = window.__plyLastRequest;
-      if (!request) { window.__plyOutcome = { ok: false, error: 'no preloaded request' }; return; }
-      request.display(transition).then(
-        function (v) { window.__plyOutcome = { ok: true, value: v }; },
-        function (e) { window.__plyOutcome = { ok: false, error: String(e) }; }
-      );
-    },
-    transition
-  );
-}
-
 // Poll for the dismiss outcome stashed by displayPresentation(). Resolves { ok, value } /
 // { ok:false, error } once display()'s promise settles (i.e. after close()), or
 // { ok:false, error:'timeout' } if no outcome arrives in time.
@@ -349,7 +322,6 @@ module.exports = {
   callPresentation,
   displayPresentation,
   awaitPresented,
-  displayLastPresentation,
   awaitDismissOutcome,
   closeCurrentPresentation,
   tapPurchaseCta,
