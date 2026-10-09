@@ -57,6 +57,22 @@ Full steps and the file list are in `RELEASE.md`. Summary:
 4. Create a GitHub release tagged `X.Y.Z`. This triggers `publish.yml` (npm trusted publishing via OIDC, no token).
 5. Copy native SDK release notes from `Purchasely/Purchasely-Android` and `Purchasely/Purchasely-iOS`.
 
+## Testing scope of the bridge
+
+The bridge tests its own code and its calls to the native SDK. The native SDK tests its own behavior after the bridge calls it.
+
+Test these three things:
+
+1. **The bridge code.** Argument parsing, type conversion, default values, validation, error mapping, and the no-op of a platform-specific method.
+2. **The call to the native SDK.** The JS, TypeScript or Dart call reaches the native bridge with the expected method name and argument format, and the native bridge accepts that format.
+3. **The result that the bridge can see.** When the call has a completion (callback, promise, `Future` result or returned value), check it on a real device in the E2E suite: success or error, and the returned value. Examples: `setUserAttribute` has a listener callback, and `getUserAttribute` returns the value that was set. When the call has no completion (for example `emit`), stop at points 1 and 2.
+
+Do not test:
+
+- What the native SDK does after the call: network requests, backend reception, event delivery, StoreKit or Google Play Billing behavior. The native SDK owns this part.
+- The backend or an analytics database (for example ClickHouse) to prove that a call worked.
+- New iOS tests that swizzle a native SDK method. Existing swizzle tests stay.
+
 ## CI
 
 - `ci.yml`: Unit Tests, Build iOS, Capacitor iOS (per package manager), Capacitor iOS Native Tests, Build Android, Android Bridge Unit Tests, Validate Version Consistency. Runs on PR open and on demand with the `run-ci` label or `workflow_dispatch`.
