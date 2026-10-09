@@ -98,7 +98,13 @@ async function pollGlobal(name, timeoutMs) {
   try {
     await browser.waitUntil(
       async () => {
-        value = await browser.execute(function (n) { return window[n]; }, name);
+        // Read the value as JSON text. A raw object with an `error` key ({ ok:false, error }) looks
+        // like a W3C error response, so the driver throws it and the poll never settles.
+        const raw = await browser.execute(function (n) {
+          var v = window[n];
+          return v === undefined || v === null ? null : JSON.stringify(v);
+        }, name);
+        value = raw === null || raw === undefined ? raw : JSON.parse(raw);
         return value !== undefined && value !== null;
       },
       { timeout: timeoutMs, interval: 250, timeoutMsg: name + ' never settled' }
@@ -242,7 +248,14 @@ async function displayPresentation(source, sourceId, transition) {
 // Wait until the presentation started by displayPresentation() is actually on screen.
 // Resolves { ok:false, error:'timeout' } if it never presents, which callers treat as
 // "nothing to close" rather than asserting on a dismiss outcome that cannot arrive.
-async function awaitPresented(timeoutMs = 45000) {
+//
+// MEASURED on the CI simulator (runs 34150577620..37854420317): when start() called back,
+// display presented in 1.5-35s (23/23). When it did not (StoreKit stuck in configure(), the
+// same gate as preload), 0/27 presented within the old 45s, and the 3 seen later presented
+// at 48, 81 and 88s after the display call. If it times out at 120s, the cause is not
+// latency: do not raise this again. A timeout leaves the display in flight: see
+// drawer-close-tap.e2e.js before running another display in the same app session.
+async function awaitPresented(timeoutMs = 120000) {
   return pollGlobal('__plyPresented', timeoutMs);
 }
 

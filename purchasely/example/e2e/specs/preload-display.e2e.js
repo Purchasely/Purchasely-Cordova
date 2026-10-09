@@ -42,11 +42,17 @@ describe('Preloaded presentation display', () => {
   it('preload() then display() on the same request does not report "Presentation not loaded"', async () => {
     // 1. Preload. Unlike bridge.e2e.js T3 this does NOT tolerate a preload error: a
     // tolerated branch would silently skip the regression check that follows.
-    // 90s. The budgets in this test (90 preload + 45 presented + 30 dismiss = 165s worst
-    // case) must stay under the 300s mocha ceiling in wdio.shared.conf.js: when they do
-    // not, mocha kills the test first and reports a bare "Error: Timeout" instead of the
-    // explicit message below, which is exactly what happened at a 120s ceiling.
-    const preloaded = await callPresentation('placement', PLACEMENT, 'preload', undefined, 90000);
+    // 180s. On the CI simulator iOS 6.2.0 completes preload only after its StoreKit
+    // eligibility awaits (Transaction.currentEntitlements, Product.products), which have no
+    // timeout. Measured over ~25 CI attempts (2026-09-16..10-08): when preload completed it
+    // took 66-86s, and every failure was the old 90s budget running out. If it times out at
+    // 180s, the cause is not latency: do not raise this again.
+    // The budgets in this test (180 preload + 45 presented + 30 dismiss = 255s worst case)
+    // must stay under the 300s mocha ceiling in wdio.shared.conf.js: when they do not, mocha
+    // kills the test first and reports a bare "Error: Timeout" instead of the explicit
+    // message below, which is exactly what happened at a 120s ceiling.
+    const preloadStart = Date.now();
+    const preloaded = await callPresentation('placement', PLACEMENT, 'preload', undefined, 180000);
     if (!preloaded.ok) {
       // This failure has only ever reproduced in CI, never locally, so make the log carry
       // enough to diagnose it without another 40-minute round trip. bridge.e2e.js T3 runs
@@ -62,9 +68,11 @@ describe('Preloaded presentation display', () => {
       });
       console.log('[preload-display] diagnostics: ' + JSON.stringify(diag));
       throw new Error(
-        'preload() failed for placement "' + PLACEMENT + '" (' + preloaded.error + '). ' +
-        'This spec cannot verify the preload->display path without a loaded presentation; ' +
-        'check the placement exists on the backend for this app id.'
+        'preload() failed for placement "' + PLACEMENT + '" (' + preloaded.error + ') after ' +
+        Math.round((Date.now() - preloadStart) / 1000) + 's. ' +
+        'This spec cannot verify the preload->display path without a loaded presentation. ' +
+        'A timeout means the SDK never answered (StoreKit eligibility on iOS); an error ' +
+        'string means it answered: check the placement exists on the backend for this app id.'
       );
     }
     expect(preloaded.value).toBeDefined();
@@ -76,7 +84,9 @@ describe('Preloaded presentation display', () => {
     // Wait for the paywall to be on screen rather than guessing with a fixed pause: a
     // close() sent before it presents produces no outcome at all, which would read as a
     // timeout rather than as the "Presentation not loaded" this spec looks for.
-    await awaitPresented();
+    // 45s, not the 120s default: preload already waited up to 180s, and 180+120+30 is past
+    // mocha's 300s. A preloaded presentation presents fast.
+    await awaitPresented(45000);
     await closeCurrentPresentation();
 
     const outcome = await awaitDismissOutcome(30000);

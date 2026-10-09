@@ -12,6 +12,14 @@ import io.purchasely.models.PLYSubscription
 import io.purchasely.models.PLYSubscriptionData
 import io.purchasely.models.PLYWebRedemptionContext
 import io.purchasely.models.PLYWebRedemptionResult
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.long
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -21,11 +29,13 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mockito.Mockito
 import java.util.UUID
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
@@ -369,7 +379,7 @@ class PurchaselyBridgeTest {
     fun `a web checkout subscription reaches JS as webCheckoutStripe, not none`() {
         val json = deliveredJson(
             PLYWebRedemptionResult.Success(
-                PLYWebRedemptionContext(fakeSubscription(StoreType.WEB_CHECKOUT_STRIPE)), false
+                PLYWebRedemptionContext(fakeSubscription(StoreType.STRIPE)), false
             )
         )
 
@@ -461,7 +471,7 @@ class PurchaselyBridgeTest {
         assertEquals(3, subscriptionSourceFor(StoreType.HUAWEI_APP_GALLERY))
         assertEquals(
             "Stripe is 4, not `none`",
-            4, subscriptionSourceFor(StoreType.WEB_CHECKOUT_STRIPE)
+            4, subscriptionSourceFor(StoreType.STRIPE)
         )
         assertEquals("`none` is 5, not 4", 5, subscriptionSourceFor(StoreType.NONE))
     }
@@ -473,7 +483,7 @@ class PurchaselyBridgeTest {
     @Test
     fun `web checkout and none map to distinct wire values`() {
         assertNotEquals(
-            subscriptionSourceFor(StoreType.WEB_CHECKOUT_STRIPE),
+            subscriptionSourceFor(StoreType.STRIPE),
             subscriptionSourceFor(StoreType.NONE)
         )
     }
@@ -763,6 +773,121 @@ class PurchaselyBridgeTest {
 
         // And the serialised form the WebView receives carries them as nulls.
         assertTrue(wire.toString().contains("\"errorCode\":null"))
+    }
+
+    // endregion
+
+    // region emit
+
+    // The native SDK drops org.json values, so the bridge converts the JS object to kotlinx
+    // elements, which it accepts. Integers must stay integers: the backend casts each
+    // property against its declared data_type.
+
+    @Test
+    fun `emit properties keep their JSON types`() {
+        val json = JSONObject("""{"n":42,"d":1.5,"s":"a","b":true,"nil":null,"o":{"x":1},"l":[1,2]}""")
+
+        val map = customEventProperties(json)
+
+        assertEquals(setOf("n", "d", "s", "b", "nil", "o", "l"), map.keys)
+        assertEquals(42, (map["n"] as JsonPrimitive).int)
+        assertEquals(42L, (map["n"] as JsonPrimitive).long)
+        assertFalse((map["n"] as JsonPrimitive).isString)
+        assertEquals(1.5, (map["d"] as JsonPrimitive).double, 0.0)
+        assertEquals("a", (map["s"] as JsonPrimitive).content)
+        assertTrue((map["s"] as JsonPrimitive).isString)
+        assertTrue((map["b"] as JsonPrimitive).boolean)
+        assertTrue(map["nil"] is JsonNull)
+        assertEquals(1, ((map["o"] as JsonObject)["x"] as JsonPrimitive).int)
+        assertEquals(2, (map["l"] as JsonArray).size)
+    }
+
+    @Test
+    fun `absent emit properties become an empty map`() {
+        assertTrue(customEventProperties(null).isEmpty())
+    }
+
+    @Test
+    fun `emit hands the name and the converted properties to the SDK and answers once`() {
+        val callback = mock<CallbackContext>()
+
+        Mockito.mockStatic(Purchasely::class.java).use { sdk ->
+            val args = JSONArray().put("level_up").put(JSONObject().put("level", 3))
+
+            assertTrue(PurchaselyPlugin().execute("emit", args, callback))
+
+            sdk.verify { Purchasely.emit(eq("level_up"), eq(mapOf("level" to JsonPrimitive(3)))) }
+        }
+        verify(callback).success()
+    }
+
+    @Test
+    fun `emit without properties sends an empty map`() {
+        val callback = mock<CallbackContext>()
+
+        Mockito.mockStatic(Purchasely::class.java).use { sdk ->
+            assertTrue(PurchaselyPlugin().execute("emit", JSONArray().put("opened"), callback))
+
+            sdk.verify { Purchasely.emit(eq("opened"), eq(emptyMap())) }
+        }
+        verify(callback).success()
+    }
+
+
+    // The name is not a nullable option: the string "null" is a valid event name, and only a
+    // missing or empty value is refused.
+    @Test
+    fun `emit sends the name null as a name`() {
+        val callback = mock<CallbackContext>()
+
+        Mockito.mockStatic(Purchasely::class.java).use { sdk ->
+            assertTrue(PurchaselyPlugin().execute("emit", JSONArray().put("null"), callback))
+
+            sdk.verify { Purchasely.emit(eq("null"), eq(emptyMap())) }
+        }
+        verify(callback).success()
+    }
+
+    @Test
+    fun `emit refuses a missing or empty name and makes no native call`() {
+        for (args in listOf(JSONArray().put(JSONObject.NULL), JSONArray().put(""))) {
+            val callback = mock<CallbackContext>()
+
+            Mockito.mockStatic(Purchasely::class.java).use { sdk ->
+                assertTrue(PurchaselyPlugin().execute("emit", args, callback))
+
+                sdk.verifyNoInteractions()
+            }
+            verify(callback).error("name is required")
+            verify(callback, never()).success()
+        }
+    }
+
+    // endregion
+
+    // region promotional offer signing
+
+    // iOS-only. Android resolves a no-op success so shared JS can call it on both platforms.
+
+    @Test
+    fun `signing a promotional offer with a token is a no-op success on Android`() {
+        val callback = mock<CallbackContext>()
+        val args = JSONArray().put("product").put("offer").put("3f2504e0-4f89-11d3-9a0c-0305e82c3301")
+
+        assertTrue(PurchaselyPlugin().execute("signPromotionalOfferWithToken", args, callback))
+
+        verify(callback).success()
+        verify(callback, never()).error(any<String>())
+    }
+
+    @Test
+    fun `signing a promotional offer with a null token is a no-op success on Android`() {
+        val callback = mock<CallbackContext>()
+        val args = JSONArray().put("product").put("offer").put(JSONObject.NULL)
+
+        assertTrue(PurchaselyPlugin().execute("signPromotionalOfferWithToken", args, callback))
+
+        verify(callback).success()
     }
 
     // endregion

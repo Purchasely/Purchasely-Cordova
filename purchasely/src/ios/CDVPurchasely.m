@@ -745,7 +745,38 @@
                 [self failureFor:command resultString:error.localizedDescription];
             }];
         } else {
-            [self failureFor:command resultString:@"This fonctionality is unavailable before ios 12.2"];
+            [self failureFor:command resultString:@"This functionality is unavailable before iOS 12.2"];
+        }
+    });
+}
+
+// The signature covers a purchase context token. A null or absent token lets native make one;
+// a string that is not a canonical UUID fails here, because passing nil instead would sign
+// over a token the purchase does not carry. The result adds the token, lowercase for StoreKit 1.
+- (void)signPromotionalOfferWithToken:(CDVInvokedUrlCommand*)command {
+    NSString *storeProductId = [command argumentAtIndex:0];
+    NSString *storeOfferId = [command argumentAtIndex:1];
+    id tokenArgument = [command argumentAtIndex:2];
+    NSUUID *token = nil;
+    if (tokenArgument != nil && tokenArgument != [NSNull null]) {
+        token = [CDVPurchasely canonicalUUIDFromString:tokenArgument];
+        if (token == nil) {
+            [self failureFor:command resultString:@"purchaseContextToken must be a UUID string or null"];
+            return;
+        }
+    }
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (@available(iOS 12.2, *)) {
+            [Purchasely signPromotionalOfferWithStoreProductId:storeProductId storeOfferId:storeOfferId purchaseContextToken:token success:^(PLYOfferSignature * _Nonnull signature, NSUUID * _Nonnull signedToken) {
+                NSMutableDictionary *result = [[self resultSignatureForSignPromoOffer:signature] mutableCopy];
+                result[@"purchaseContextToken"] = signedToken.UUIDString.lowercaseString;
+                [self successFor:command resultDict:result];
+            } failure:^(NSError * _Nullable error) {
+                [self failureFor:command resultString:error.localizedDescription];
+            }];
+        } else {
+            [self failureFor:command resultString:@"This functionality is unavailable before iOS 12.2"];
         }
     });
 }
@@ -1248,6 +1279,19 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
     [Purchasely setUserAttributeWithDoubleArray:doubleArray forKey:key processingLegalBasis:processingLegalBasis];
 }
 
+// Custom event. The native SDK validates no type: the backend casts each property against
+// the data_type declared in the Console. The result closes the JS callback only.
+- (void)emit:(CDVInvokedUrlCommand*)command {
+    NSString *name = [command argumentAtIndex:0 withDefault:nil andClass:[NSString class]];
+    NSDictionary *properties = [command argumentAtIndex:1 withDefault:@{} andClass:[NSDictionary class]];
+    if (name.length == 0) {
+        [self failureFor:command resultString:@"name is required"];
+        return;
+    }
+    [Purchasely emitWithName:name properties:properties];
+    [self successFor:command];
+}
+
 - (void)setUserAttributeWithString:(CDVInvokedUrlCommand*)command {
     NSString *key = [command argumentAtIndex:0];
     NSString *value = [command argumentAtIndex:1];
@@ -1533,8 +1577,7 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
     for (id val in values) {
         NSString *string = val;
         if ([string isEqualToString:@"ALL_NON_ESSENTIALS"]) {
-            purposesSet = [NSMutableSet setWithObject:[PLYDataProcessingPurpose allNonEssentials]];
-            break;
+            [purposesSet addObject:[PLYDataProcessingPurpose allNonEssentials]];
         } else if ([string isEqualToString:@"ANALYTICS"]) {
             [purposesSet addObject:[PLYDataProcessingPurpose analytics]];
         } else if ([string isEqualToString:@"IDENTIFIED_ANALYTICS"]) {
@@ -1545,6 +1588,8 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
             [purposesSet addObject:[PLYDataProcessingPurpose personalization]];
         } else if ([string isEqualToString:@"THIRD_PARTY_INTEGRATIONS"]) {
             [purposesSet addObject:[PLYDataProcessingPurpose thirdPartyIntegrations]];
+        } else if ([string isEqualToString:@"REFUND_HANDLING"]) {
+            [purposesSet addObject:[PLYDataProcessingPurpose refundHandling]];
         }
     }
     [Purchasely revokeDataProcessingConsentFor: purposesSet];

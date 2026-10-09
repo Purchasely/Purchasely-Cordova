@@ -126,6 +126,8 @@ typedef NS_ENUM(NSInteger, CDVPurchaselyProxyOption) {
 - (void)setUserAttributeWithDoubleArray:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithBooleanArray:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithString:(CDVInvokedUrlCommand*)command;
+- (void)emit:(CDVInvokedUrlCommand*)command;
+- (void)revokeDataProcessingConsent:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithBoolean:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithInt:(CDVInvokedUrlCommand*)command;
 - (void)setUserAttributeWithDouble:(CDVInvokedUrlCommand*)command;
@@ -142,6 +144,7 @@ typedef NS_ENUM(NSInteger, CDVPurchaselyProxyOption) {
 - (void)fetchPresentation:(CDVInvokedUrlCommand*)command;
 - (void)presentPresentation:(CDVInvokedUrlCommand*)command;
 - (void)signPromotionalOffer:(CDVInvokedUrlCommand*)command;
+- (void)signPromotionalOfferWithToken:(CDVInvokedUrlCommand*)command;
 - (void)isEligibleForIntroOffer:(CDVInvokedUrlCommand*)command;
 - (void)setThemeMode:(CDVInvokedUrlCommand*)command;
 - (void)addUserAttributeListener:(CDVInvokedUrlCommand*)command;

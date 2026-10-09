@@ -251,7 +251,10 @@ function onPurchaselySdkReady() {
 	Purchasely.setUserAttributeWithDoubleArray("key_double_array", [1.1, 2.2, 3.3]);
 	Purchasely.setUserAttributeWithBooleanArray("key_boolean_array", [true, false, true]);
 
-	Purchasely.revokeDataProcessingConsent(["CAMPAIGNS"])
+	Purchasely.revokeDataProcessingConsent([
+		Purchasely.DataProcessingPurpose.campaigns,
+		Purchasely.DataProcessingPurpose.refundHandling,
+	])
 
 	Purchasely.userAttribute("key_string", value => {
 		console.log("User attribute string: " + value);
@@ -491,11 +494,12 @@ function isEligibleForIntroOffer() {
 
 function signPromotionalOffer() {
 	console.log("signPromotionalOffer");
-	Purchasely.signPromotionalOffer(
+	Purchasely.signPromotionalOfferWithToken(
 		'com.purchasely.plus.yearly', // storeProductId
 		'com.purchasely.plus.yearly.winback.test', // storeOfferId
+		null, // purchaseContextToken: null lets the SDK make one
 		(signature) => {
-			console.log("signPromotionalOffer result: " + signature);
+			console.log("signPromotionalOffer result: " + JSON.stringify(signature));
 		},
 		(error) => {
 			console.log("Error with signPromotionalOffer : " + error);

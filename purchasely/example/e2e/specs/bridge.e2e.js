@@ -189,4 +189,31 @@ describe('Purchasely bridge (WEBVIEW context)', () => {
     res = await callBridge('userAttribute', ['e2e_counter']);
     expect(res.value).toBe(6);
   });
+
+  // emit — only the hand-off is checked: the JS call reaches the native bridge in the
+  // expected format and the bridge answers through the right callback. What the SDK does with
+  // the event is not in scope. Independent of start(): the bridge answers either way, and
+  // start() often never calls back on CI iOS. `timedOut` must fail: it carries ok:false.
+  it('emit with every property type reaches the native bridge (success)', async () => {
+    const res = await callBridge('emit', [
+      'e2e_emit',
+      { string: 'a', int: 1, double: 1.5, bool: true, array: [1, 'two'], object: { k: 'v' }, null: null },
+    ], 20000);
+    expect(res.timedOut).not.toBe(true);
+    expect(res.ok).toBe(true);
+  });
+
+  // `undefined` is sent as null by execute, so the wrapper sees no properties.
+  it('emit without properties reaches the native bridge (success)', async () => {
+    const res = await callBridge('emit', ['e2e_emit_bare', undefined], 20000);
+    expect(res.timedOut).not.toBe(true);
+    expect(res.ok).toBe(true);
+  });
+
+  it('emit with an empty name fires the error callback', async () => {
+    const res = await callBridge('emit', ['', {}], 20000);
+    expect(res.timedOut).not.toBe(true);
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain('name is required');
+  });
 });

@@ -253,6 +253,91 @@ This affects `userSubscriptions()` and `userSubscriptionsHistory()` as well as t
 redemption `context.subscription`, since the three share one mapper. Cordova ships plain
 JavaScript with no type declarations, so nothing enforces this for you.
 
+## What is new in 6.2.0
+
+### Custom events
+
+`Purchasely.emit(name, properties)` sends a custom event. `properties` is optional.
+
+```js
+Purchasely.emit('level_up', { level: 3, vip: true });
+```
+
+The SDK checks no type. The backend casts each property against the `data_type` that you
+declare in the Console. Pass a date as an ISO string. `success` and `error` callbacks are
+optional third and fourth arguments, and they are called once after the SDK takes the event.
+
+```js
+Purchasely.emit('level_up', { level: 3 },
+    () => console.log('Event accepted'),
+    (error) => console.log(error)
+);
+```
+
+### Promotional offer signature over a purchase context token (iOS)
+
+`Purchasely.signPromotionalOfferWithToken` signs a promotional offer over a purchase context
+token. The result is the same signature object as `signPromotionalOffer`, plus the
+lowercase `purchaseContextToken` that the purchase must carry.
+
+In Observer mode, set StoreKit 1 `applicationUsername` to the returned `purchaseContextToken`
+exactly. With StoreKit 2, pass its UUID as the purchase `appAccountToken`. Do not use the
+anonymous user id or generate another token: Apple rejects the offer when the purchase
+carries a different value from the one used to sign it.
+
+```js
+Purchasely.signPromotionalOfferWithToken(
+    'com.example.yearly', 'com.example.yearly.winback', null,
+    (signature) => console.log(signature.purchaseContextToken),
+    (error) => console.log(error)
+);
+```
+
+Pass `null` to let the SDK make the token. A token string that is not a UUID fails, and the
+SDK does not sign. On Android the method resolves with success and does nothing.
+`signPromotionalOffer` still works and signs over the anonymous user id. It is deprecated.
+
+## Data processing consent
+
+Tell the SDK which data processing purposes the user refuses. The native SDK persists the
+list and sends it to the backend on every API call.
+
+```js
+Purchasely.revokeDataProcessingConsent([
+    Purchasely.DataProcessingPurpose.analytics,
+    Purchasely.DataProcessingPurpose.refundHandling,
+]);
+```
+
+| Purpose | Meaning |
+|---------|---------|
+| `analytics` | Usage analytics |
+| `identifiedAnalytics` | Analytics tied to the user's identifiers (vendor id). Part of `allNonEssentials` on Android, not on iOS |
+| `campaigns` | Campaign targeting and triggers |
+| `personalization` | Paywall and content personalization |
+| `thirdPartyIntegrations` | Forwarding to the third-party integrations you have set up |
+| `refundHandling` | iOS 6.2.0+ only. Processing of the consumption data attached to an App Store refund request. Not part of `allNonEssentials`; ignored on Android |
+| `allNonEssentials` | Bundle of `analytics`, `campaigns`, `personalization`, `thirdPartyIntegrations`. Android adds `identifiedAnalytics`. Neither platform adds `refundHandling` |
+
+**Each call replaces the whole set.** The SDK does not merge with the previous call, so pass
+the complete list of refused purposes every time; a call with `[refundHandling]` after a
+call with `[analytics]` grants analytics back. Pass `[]` to grant everything back.
+
+`allNonEssentials` is a fixed bundle: bumping the plugin never adds a purpose to it, so an
+app that already calls it does not start refusing refund data processing. On iOS, list
+`refundHandling` and `identifiedAnalytics` explicitly next to it when you want them. The
+plugin keeps every purpose in the list, whatever the order:
+
+```js
+Purchasely.revokeDataProcessingConsent([
+    Purchasely.DataProcessingPurpose.allNonEssentials,
+    Purchasely.DataProcessingPurpose.refundHandling,
+]);
+```
+
+`refundHandling` only carries the refusal to the backend. It gates nothing in the SDK and
+nothing in the plugin reads refund state or answers Apple's `CONSUMPTION_REQUEST`.
+
 ## 🏁 Documentation
 
 A complete documentation is available on our website [https://docs.purchasely.com](https://docs.purchasely.com/quick-start/sdk-installation/cordova)

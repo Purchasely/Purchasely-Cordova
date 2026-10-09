@@ -77,7 +77,7 @@ exports.start = function (options, success, error) {
     var opts = options || {};
     var cordovaSdkVersion = cordova.define.moduleMap['cordova/plugin_list'].exports['metadata']['cordova-plugin-purchasely']
     if(!cordovaSdkVersion) {
-        cordovaSdkVersion = "6.1.1";
+        cordovaSdkVersion = "6.2.0";
     }
     opts.sdkVersion = cordovaSdkVersion;
     exec(success, error, 'Purchasely', 'start', [opts]);
@@ -767,6 +767,12 @@ exports.removeDynamicOffering = function (reference) {
     exec(() => {}, defaultError, 'Purchasely', 'removeDynamicOffering', [reference]);
 };
 
+// Custom event. The SDK validates no type: the backend casts each property against the
+// data_type declared in the Console. Pass dates as ISO strings.
+exports.emit = function (name, properties, success, error) {
+    exec(success || (() => {}), error || defaultError, 'Purchasely', 'emit', [name, properties || {}]);
+};
+
 exports.clearDynamicOfferings = function () {
     exec(() => {}, defaultError, 'Purchasely', 'clearDynamicOfferings', []);
 };
@@ -777,14 +783,30 @@ exports.isEligibleForIntroOffer = function (planId, success, error) {
 
 // REC-04: iOS-only (StoreKit promotional offer signing). On Android this is a no-op that
 // resolves success (no signing is required there); no error is raised.
+// @deprecated use signPromotionalOfferWithToken instead; this one signs over the anonymous
+// user id, not over a purchase context token.
 exports.signPromotionalOffer = function (storeProductId, storeOfferId, success, error) {
     exec(success, error, 'Purchasely', 'signPromotionalOffer', [storeProductId, storeOfferId]);
+};
+
+// iOS-only, like signPromotionalOffer (a no-op success on Android). The signature covers a
+// purchase context token: pass null to let native make one. The result is the signature plus
+// the lowercase `purchaseContextToken` that the purchase must carry. An empty or malformed
+// token string is rejected by native, with no signing.
+exports.signPromotionalOfferWithToken = function (storeProductId, storeOfferId, purchaseContextToken, success, error) {
+    exec(success, error, 'Purchasely', 'signPromotionalOfferWithToken',
+        [storeProductId, storeOfferId, purchaseContextToken == null ? null : purchaseContextToken]);
 };
 
 exports.setThemeMode = function (mode) {
     exec(() => {}, defaultError, 'Purchasely', 'setThemeMode', [mode]);
 };
 
+// Replaces the stored set of revoked purposes; it does not merge with a previous call.
+// Pass the complete list of purposes the user refuses every time, and [] to grant them
+// all back. ALL_NON_ESSENTIALS expands to a fixed bundle. On iOS it does not include
+// IDENTIFIED_ANALYTICS or REFUND_HANDLING; list those explicitly when needed. On Android
+// it includes IDENTIFIED_ANALYTICS, and REFUND_HANDLING is ignored.
 exports.revokeDataProcessingConsent = function (purposes) {
     exec(() => {}, defaultError, 'Purchasely', 'revokeDataProcessingConsent', [purposes]);
 }
@@ -841,7 +863,10 @@ exports.DataProcessingPurpose = {
     identifiedAnalytics:    'IDENTIFIED_ANALYTICS',
     campaigns:              'CAMPAIGNS',
     personalization:        'PERSONALIZATION',
-    thirdPartyIntegrations: 'THIRD_PARTY_INTEGRATIONS'
+    thirdPartyIntegrations: 'THIRD_PARTY_INTEGRATIONS',
+    // iOS only (SDK 6.2.0+): the user refuses processing of the consumption data attached
+    // to a refund request. Carries a flag to the backend; gates nothing in the SDK.
+    refundHandling:         'REFUND_HANDLING'
 }
 
 exports.PurchaseResult = {

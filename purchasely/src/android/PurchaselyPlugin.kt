@@ -44,6 +44,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import org.apache.cordova.CallbackContext
 import org.apache.cordova.CordovaPlugin
 import org.apache.cordova.PluginResult
@@ -246,7 +248,9 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 "getBuiltInAttribute" -> getBuiltInAttribute(getStringFromJson(args.getString(0)), callbackContext)
                 "isEligibleForIntroOffer" -> isEligibleForIntroOffer(getStringFromJson(args.getString(0)), callbackContext)
                 "signPromotionalOffer" -> signPromotionalOffer(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), callbackContext)
+                "signPromotionalOfferWithToken" -> signPromotionalOffer(getStringFromJson(args.getString(0)), getStringFromJson(args.getString(1)), callbackContext)
                 "revokeDataProcessingConsent" -> revokeDataProcessingConsent(args.getJSONArray(0))
+                "emit" -> emit(if (args.isNull(0)) null else args.getString(0), args.optJSONObject(1), callbackContext)
                 "setDebugMode" -> setDebugMode(args.getBoolean(0))
                 "setDynamicOffering" -> setDynamicOffering(
                     getStringFromJson(args.getString(0)),
@@ -1478,6 +1482,17 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         Purchasely.revokeDataProcessingConsent(mappedPurposes)
     }
 
+    // Custom event. The terminal result closes the JS callback; the event itself is fire-and-forget.
+    private fun emit(name: String?, properties: JSONObject?, callbackContext: CallbackContext) {
+        if (name.isNullOrEmpty()) {
+            callbackContext.error("name is required")
+            return
+        }
+        // The name goes through as given: getStringFromJson would read the name "null" as missing.
+        Purchasely.emit(name, customEventProperties(properties))
+        callbackContext.success()
+    }
+
     fun setDebugMode(enabled: Boolean) {
         Purchasely.debugMode = enabled
     }
@@ -1668,7 +1683,7 @@ internal fun subscriptionSourceFor(storeType: StoreType?): Int? = when (storeTyp
     StoreType.GOOGLE_PLAY_STORE -> StoreType.GOOGLE_PLAY_STORE.ordinal
     StoreType.AMAZON_APP_STORE -> StoreType.AMAZON_APP_STORE.ordinal
     StoreType.HUAWEI_APP_GALLERY -> StoreType.HUAWEI_APP_GALLERY.ordinal
-    StoreType.WEB_CHECKOUT_STRIPE -> StoreType.WEB_CHECKOUT_STRIPE.ordinal
+    StoreType.STRIPE -> StoreType.STRIPE.ordinal
     StoreType.NONE -> StoreType.NONE.ordinal
     null -> null
 }
@@ -1823,3 +1838,10 @@ internal fun parseCanonicalUuid(value: String?): UUID? {
     }
     return if (parsed.toString().equals(value, ignoreCase = true)) parsed else null
 }
+
+/**
+ * The native `emit` drops `org.json` values, so convert the JS object to kotlinx elements,
+ * which it accepts. Integers stay integers. `internal` so a unit test drives it.
+ */
+internal fun customEventProperties(json: JSONObject?): Map<String, Any?> =
+    json?.let { Json.parseToJsonElement(it.toString()).jsonObject } ?: emptyMap()

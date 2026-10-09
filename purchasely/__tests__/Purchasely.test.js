@@ -68,6 +68,28 @@ describe('Purchasely', () => {
         expect(Purchasely.DataProcessingPurpose.campaigns).toBe('CAMPAIGNS');
         expect(Purchasely.DataProcessingPurpose.personalization).toBe('PERSONALIZATION');
         expect(Purchasely.DataProcessingPurpose.thirdPartyIntegrations).toBe('THIRD_PARTY_INTEGRATIONS');
+        expect(Purchasely.DataProcessingPurpose.refundHandling).toBe('REFUND_HANDLING');
+      });
+
+      it('should expose exactly the seven known purposes', () => {
+        expect(Object.keys(Purchasely.DataProcessingPurpose).sort()).toEqual([
+          'allNonEssentials',
+          'analytics',
+          'campaigns',
+          'identifiedAnalytics',
+          'personalization',
+          'refundHandling',
+          'thirdPartyIntegrations',
+        ]);
+      });
+
+      // allNonEssentials is a single opaque token expanded natively into a fixed bundle;
+      // refundHandling must stay a distinct token so it is never revoked implicitly.
+      it('should keep refundHandling distinct from allNonEssentials', () => {
+        expect(Purchasely.DataProcessingPurpose.allNonEssentials).toBe('ALL_NON_ESSENTIALS');
+        expect(Purchasely.DataProcessingPurpose.refundHandling).not.toBe(
+          Purchasely.DataProcessingPurpose.allNonEssentials
+        );
       });
     });
 
@@ -276,7 +298,7 @@ describe('Purchasely', () => {
           expect.any(Function),
           'Purchasely',
           'start',
-          [{ apiKey: 'API_KEY', sdkVersion: '6.1.1' }]
+          [{ apiKey: 'API_KEY', sdkVersion: '6.2.0' }]
         );
       } finally {
         metadata['cordova-plugin-purchasely'] = original;
@@ -2002,6 +2024,60 @@ describe('Purchasely', () => {
     });
   });
 
+  describe('signPromotionalOfferWithToken', () => {
+    const call = (...args) => {
+      Purchasely.signPromotionalOfferWithToken(...args);
+      return mockExec.mock.calls[0];
+    };
+
+    it('should pass the token and the callbacks to exec', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      expect(call('product1', 'offer1', 'token1', success, error)).toEqual([
+        success,
+        error,
+        'Purchasely',
+        'signPromotionalOfferWithToken',
+        ['product1', 'offer1', 'token1'],
+      ]);
+    });
+
+    it.each([[undefined], [null]])('should send a %s token as null so native makes one', (token) => {
+      expect(call('product1', 'offer1', token, jest.fn(), jest.fn())[4]).toEqual(['product1', 'offer1', null]);
+    });
+
+    it('should let an empty token reach native, which rejects it', () => {
+      expect(call('product1', 'offer1', '', jest.fn(), jest.fn())[4]).toEqual(['product1', 'offer1', '']);
+    });
+  });
+
+  describe('emit', () => {
+    it('should call exec with the name and the properties', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.emit('level_up', { level: 3, vip: true }, success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'emit', [
+        'level_up',
+        { level: 3, vip: true },
+      ]);
+    });
+
+    it('should default the properties to an empty object', () => {
+      Purchasely.emit('level_up');
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'emit',
+        ['level_up', {}]
+      );
+    });
+  });
+
   describe('setThemeMode', () => {
     it('should call exec with correct parameters', () => {
       Purchasely.setThemeMode(Purchasely.ThemeMode.dark);
@@ -2027,6 +2103,36 @@ describe('Purchasely', () => {
         'revokeDataProcessingConsent',
         [['ANALYTICS', 'CAMPAIGNS']]
       );
+    });
+
+    it('should pass refundHandling through untouched', () => {
+      Purchasely.revokeDataProcessingConsent([Purchasely.DataProcessingPurpose.refundHandling]);
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'revokeDataProcessingConsent',
+        [['REFUND_HANDLING']]
+      );
+    });
+
+    // Each call replaces the stored set natively, so the bridge must forward the full list
+    // as given — no merging, no dedup against earlier calls, and [] must reach the native
+    // side to grant everything back.
+    it('should forward each call as a complete replacement set', () => {
+      Purchasely.revokeDataProcessingConsent([Purchasely.DataProcessingPurpose.analytics]);
+      Purchasely.revokeDataProcessingConsent([
+        Purchasely.DataProcessingPurpose.allNonEssentials,
+        Purchasely.DataProcessingPurpose.refundHandling,
+      ]);
+      Purchasely.revokeDataProcessingConsent([]);
+
+      expect(mockExec.mock.calls.map((call) => call[4])).toEqual([
+        [['ANALYTICS']],
+        [['ALL_NON_ESSENTIALS', 'REFUND_HANDLING']],
+        [[]],
+      ]);
     });
   });
 
