@@ -89,6 +89,8 @@ jobs:
         run: |
           UDID=$(xcrun simctl list devices available | grep -E "iPhone 16|iPhone 15" | head -1 | grep -oE "[0-9A-F-]{36}")
           echo "Booting simulator $UDID"
+          # The runtime of the chosen device is not printed anywhere else.
+          xcrun simctl list devices | grep "$UDID" || true
           xcrun simctl boot "$UDID" || true
           xcrun simctl bootstatus "$UDID" -b || true
           # Start the Simulator UI as well, not just the headless device. XCUITest will not
@@ -103,7 +105,17 @@ jobs:
 
       - name: Run E2E suite on simulator
         working-directory: purchasely/example/e2e
-        run: bash ./tools/ci_run_e2e_ios.sh "${{ steps.sim.outputs.udid }}"
+        run: |
+          # Native log of the app and storekitd: shows which StoreKit await keeps
+          # Purchasely.start() from calling back. Uploaded with ci-logs/ below.
+          mkdir -p ci-logs
+          xcrun simctl spawn "${{ steps.sim.outputs.udid }}" log stream --level debug \
+            --predicate 'process == "HelloCordova" OR process == "storekitd"' > ci-logs/sim.log 2>&1 &
+          LOG_PID=$!
+          status=0
+          bash ./tools/ci_run_e2e_ios.sh "${{ steps.sim.outputs.udid }}" || status=$?
+          kill "$LOG_PID" 2>/dev/null || true
+          exit "$status"
 
       - name: Upload E2E logs
         if: always()
