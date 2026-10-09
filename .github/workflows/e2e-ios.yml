@@ -111,6 +111,23 @@ jobs:
           # `log stream` captured nothing in run 37908229336, so read the stored log after the suite.
           mkdir -p ci-logs
           status=0
+          # Experiment (remove after one run): does storekitd answer a fresh app without Appium/WDA?
+          UDID="${{ steps.sim.outputs.udid }}"
+          APP=$(ls -d ../platforms/ios/build/Debug-iphonesimulator/HelloCordova.app ../platforms/ios/build/emulator/HelloCordova.app 2>/dev/null | head -1)
+          echo "[probe] app: ${APP:-none}"
+          xcrun simctl install "$UDID" "$APP" || true
+          t0=$(date +%s)
+          xcrun simctl launch "$UDID" com.purchasely.demo || true
+          probe=never
+          for _ in $(seq 1 120); do
+            if xcrun simctl spawn "$UDID" log show --last 15m --predicate 'process == "storekitd"' 2>/dev/null \
+              | grep -q "Finished enumerating .* current transactions for com.purchasely.demo"; then
+              probe="$(( $(date +%s) - t0 ))s"; break
+            fi
+            sleep 5
+          done
+          echo "[probe] first currentEntitlements answer without Appium: $probe"
+          xcrun simctl terminate "$UDID" com.purchasely.demo || true
           bash ./tools/ci_run_e2e_ios.sh "${{ steps.sim.outputs.udid }}" || status=$?
           xcrun simctl spawn "${{ steps.sim.outputs.udid }}" log show --last 90m --info --debug \
             --predicate 'process == "HelloCordova" OR process == "storekitd" OR subsystem CONTAINS[c] "purchasely"' \
