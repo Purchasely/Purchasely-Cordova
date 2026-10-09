@@ -6,7 +6,9 @@ const { waitForPurchaselyReady, callPresentation } = require('../helpers/driver'
 const PLACEMENT = process.env.PURCHASELY_E2E_PLACEMENT || 'ONBOARDING';
 
 describe('Presentation preload', () => {
-  before(async () => {
+  before(async function () {
+    // Skipped on iOS: updateStatusFromStoreKit() has no time limit on a simulator without an Apple account, so start() never calls back. Back after the iOS SDK bounds it (Purchasely-Cordova PR #83).
+    if (browser.isIOS) this.skip();
     await waitForPurchaselyReady();
   });
 
