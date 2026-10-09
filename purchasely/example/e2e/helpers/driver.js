@@ -98,7 +98,13 @@ async function pollGlobal(name, timeoutMs) {
   try {
     await browser.waitUntil(
       async () => {
-        value = await browser.execute(function (n) { return window[n]; }, name);
+        // Read the value as JSON text. A raw object with an `error` key ({ ok:false, error }) looks
+        // like a W3C error response, so the driver throws it and the poll never settles.
+        const raw = await browser.execute(function (n) {
+          var v = window[n];
+          return v === undefined || v === null ? null : JSON.stringify(v);
+        }, name);
+        value = raw === null || raw === undefined ? raw : JSON.parse(raw);
         return value !== undefined && value !== null;
       },
       { timeout: timeoutMs, interval: 250, timeoutMsg: name + ' never settled' }
