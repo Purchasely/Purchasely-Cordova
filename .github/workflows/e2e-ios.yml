@@ -108,13 +108,14 @@ jobs:
         run: |
           # Native log of the app and storekitd: shows which StoreKit await keeps
           # Purchasely.start() from calling back. Uploaded with ci-logs/ below.
+          # `log stream` captured nothing in run 37908229336, so read the stored log after the suite.
           mkdir -p ci-logs
-          xcrun simctl spawn "${{ steps.sim.outputs.udid }}" log stream --level debug \
-            --predicate 'process == "HelloCordova" OR process == "storekitd"' > ci-logs/sim.log 2>&1 &
-          LOG_PID=$!
           status=0
           bash ./tools/ci_run_e2e_ios.sh "${{ steps.sim.outputs.udid }}" || status=$?
-          kill "$LOG_PID" 2>/dev/null || true
+          xcrun simctl spawn "${{ steps.sim.outputs.udid }}" log show --last 90m --info --debug \
+            --predicate 'process == "HelloCordova" OR process == "storekitd" OR subsystem CONTAINS[c] "purchasely"' \
+            > ci-logs/sim.log 2>&1 || true
+          wc -l ci-logs/sim.log || true
           exit "$status"
 
       - name: Upload E2E logs
