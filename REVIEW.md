@@ -198,6 +198,8 @@ Publication facts:
 - **Release checklist:** `RELEASE.md` (the files to change, then the GitHub release) and the row
   of `VERSIONS.md`. The repo has no release test plan file: the E2E suite and a smoke test of
   the sample app replace it.
+- **Tier label:** put the label `tier:T0`, `tier:T1`, `tier:T2` or `tier:T3` on the PR. It
+  repeats the **Tier** section of the body.
 - **Reviewers:** `.github/CODEOWNERS` requests the owners of the T2 and T3 paths. Branch
   protection does not require a code owner review: the tier sets who must approve. For a T2 or
   T3 file that `CODEOWNERS` does not list, the author requests the reviewers.
@@ -209,7 +211,6 @@ Publication facts:
 
 - A public API check in CI. The package ships no `.d.ts` typings.
 - A CI check that the native pins have the same version.
-- Labels `tier:T0` to `tier:T3`. Until then, the tier is in the PR body.
 - Required checks on `main`. Today `main` requires 1 approval and no check, does not require
   resolved threads, and allows force pushes.
 - A release test plan file.
