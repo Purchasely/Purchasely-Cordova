@@ -7,6 +7,7 @@
 # T2: hybrid bridge, JS side and public API
 /purchasely/www/        @kherembourg @chouaibMo @El-Fitz @EPIKorial
 /purchasely-google/www/ @kherembourg @chouaibMo @El-Fitz @EPIKorial
+/api/                   @kherembourg @chouaibMo @El-Fitz @EPIKorial
 
 # T2: hybrid bridge, Android side
 /purchasely/src/android/        @kherembourg @chouaibMo @El-Fitz @EPIKorial
