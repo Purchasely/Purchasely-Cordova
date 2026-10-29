@@ -1,0 +1,30 @@
+# Reviewers of the T2 and T3 paths of REVIEW.md, section 5.
+# GitHub requests these owners on each PR that changes a matching path.
+# Branch protection does not require a code owner review: REVIEW.md sets who must approve.
+# Bridge sides: Android owners for android/, iOS owners for ios/, the SDK lead for the
+# JS or Dart side and the native pins.
+# The last pattern that matches a file wins: keep the pins and the T3 paths at the end.
+
+# T2: hybrid bridge, JS side and public API
+/purchasely/www/        @kherembourg
+/purchasely-google/www/ @kherembourg
+
+# T2: hybrid bridge, Android side
+/purchasely/src/android/        @kherembourg @chouaibMo
+/purchasely-google/src/android/ @kherembourg @chouaibMo
+
+# T2: hybrid bridge, iOS side
+/purchasely/src/ios/ @kherembourg @EPIKorial @El-Fitz
+
+# T2: native SDK pins, public API of plugin.xml, build compatibility
+/purchasely/plugin.xml                      @kherembourg
+/purchasely-google/plugin.xml               @kherembourg
+/purchasely/Package.swift                   @kherembourg
+/purchasely/src/android/build-extras.gradle @kherembourg
+
+# T3: publication, published package manifests, this file
+/.github/workflows/publish.yml  @kherembourg @chouaibMo @El-Fitz @EPIKorial
+/publish.sh                     @kherembourg @chouaibMo @El-Fitz @EPIKorial
+/purchasely/package.json        @kherembourg @chouaibMo @El-Fitz @EPIKorial
+/purchasely-google/package.json @kherembourg @chouaibMo @El-Fitz @EPIKorial
+/.github/CODEOWNERS             @kherembourg @chouaibMo @El-Fitz @EPIKorial

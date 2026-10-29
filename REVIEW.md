@@ -198,14 +198,15 @@ Publication facts:
 - **Release checklist:** `RELEASE.md` (the files to change, then the GitHub release) and the row
   of `VERSIONS.md`. The repo has no release test plan file: the E2E suite and a smoke test of
   the sample app replace it.
+- **Reviewers:** `.github/CODEOWNERS` requests the owners of the T2 and T3 paths. Branch
+  protection does not require a code owner review: the tier sets who must approve. For a T2 or
+  T3 file that `CODEOWNERS` does not list, the author requests the reviewers.
 - **The PR also has:** both native handlers, a Jest test and the native tests where they exist
   for a new JS method (bridge parity); all native pins at the same version and a `VERSIONS.md`
   row when a pin changes; a rebase on `origin/main`; the `run-ci` label after the last push.
 
 ### Not in place yet
 
-- A `CODEOWNERS` file that requests the right reviewers for the T2 and T3 paths. Until then,
-  the author requests them.
 - A public API check in CI. The package ships no `.d.ts` typings.
 - A CI check that the native pins have the same version.
 - Labels `tier:T0` to `tier:T3`. Until then, the tier is in the PR body.
