@@ -30,6 +30,7 @@
 
 - [ ] The `tier:T<n>` label of the **Tier** section.
 - [ ] A new JS method has both native handlers (iOS and Android), a Jest test, and the native tests where they exist.
-- [ ] A changed native pin: all native pins have the same version (`plugin.xml`, `Package.swift`, `purchasely-google/plugin.xml`, `android-tests/build.gradle`, `Package.resolved`), and `VERSIONS.md` has the row.
+- [ ] A changed native pin: the pins of each platform have the same version (`plugin.xml`, `Package.swift`, `purchasely-google/plugin.xml`, `android-tests/build.gradle`, `Package.resolved`), and `VERSIONS.md` has the row.
+- [ ] A changed public API or native pin: `scripts/api-check.sh` passes. For an intended change, run `scripts/api-check.sh --update` and commit `api/`.
 - [ ] The branch is rebased on `origin/main`, the `run-ci` label was added after the last push, and CI is green on the head commit.
 - [ ] Conventional Commits, small and atomic.

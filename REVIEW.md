@@ -189,12 +189,20 @@ Publication facts:
   that the suite passed: read the job log for `attempt N/`, `passing`, `failing` and
   `::warning::` (see `AGENTS.md`).
 - **Native pins:** `Validate Version Consistency` compares the plugin version in `plugin.xml`,
-  `package.json` and the lockfiles, and checks that `Package.swift` depends on `cordova-ios`. It
-  does not compare the native pins. The platform reviewer checks that the pins of the table above
-  have the same version and that `VERSIONS.md` has the row.
-- **Public API:** no check in CI. The platform reviewer reads the diff of `www/Purchasely.js` and
-  of the two `plugin.xml` (`<js-module>`, `<clobbers>`, `<engines>`, `<preference>`,
-  `<framework>`, `<pod>`).
+  `package.json` and the lockfiles, and checks that `Package.swift` depends on `cordova-ios`. Its
+  step `Check public API and native pins` runs `scripts/api-check.sh`. The script compares the
+  iOS pins (`<pod name="Purchasely">`, `Package.swift` `exact:`) with each other, and the Android
+  pins (`io.purchasely:core` in `plugin.xml` and `android-tests/build.gradle`,
+  `io.purchasely:google-play`) with each other. iOS and Android can have different versions (see
+  `VERSIONS.md`). The script does not read `Package.resolved` or `VERSIONS.md`: the platform
+  reviewer checks them.
+- **Public API:** the step `Check public API and native pins` of `Validate Version Consistency`
+  runs `scripts/api-check.sh`. The script makes `api/Purchasely.d.ts` from `www/Purchasely.js`
+  (`tsc`) and `api/plugin-xml.txt` from the two `plugin.xml` (`<js-module>`, `<clobbers>`,
+  `<engine>`, `<preference>`, `<feature>`, `<param>`, `<config-file>`, `<framework>`, `<pod>`).
+  Then it compares them with the committed `api/`. When the change is intended, run
+  `scripts/api-check.sh --update` and commit `api/`. The platform reviewer reads the diff of
+  `api/`. This is not a required check. The package does not publish `api/`.
 - **Release checklist:** `RELEASE.md` (the files to change, then the GitHub release) and the row
   of `VERSIONS.md`. The repo has no release test plan file: the E2E suite and a smoke test of
   the sample app replace it.
@@ -204,13 +212,11 @@ Publication facts:
   protection does not require a code owner review: the tier sets who must approve. For a T2 or
   T3 file that `CODEOWNERS` does not list, the author requests the reviewers.
 - **The PR also has:** both native handlers, a Jest test and the native tests where they exist
-  for a new JS method (bridge parity); all native pins at the same version and a `VERSIONS.md`
-  row when a pin changes; a rebase on `origin/main`; the `run-ci` label after the last push.
+  for a new JS method (bridge parity); the native pins of each platform at the same version, the
+  `api/` update and a `VERSIONS.md` row when a pin changes; a rebase on `origin/main`; the `run-ci` label after the last push.
 
 ### Not in place yet
 
-- A public API check in CI. The package ships no `.d.ts` typings.
-- A CI check that the native pins have the same version.
 - Required checks on `main`. Today `main` requires 1 approval and no check, does not require
   resolved threads, and allows force pushes.
 - A release test plan file.

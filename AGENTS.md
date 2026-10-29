@@ -44,6 +44,7 @@ Cordova, iOS and Android SDK versions may differ. `VERSIONS.md` is the mapping; 
 cd purchasely && npm ci && npm test        # Jest unit tests (cordova/exec is mocked)
 cd purchasely/example && ./ios.sh          # build/run example on iOS
 cd purchasely/example && ./android.sh      # build/run example on Android
+scripts/api-check.sh                       # check api/ (JS API, plugin.xml) and the native pins; --update writes api/
 ```
 
 Native unit tests: Android in `purchasely/android-tests` (Gradle), iOS XCTest in `purchasely/example-capacitor`.
