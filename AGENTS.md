@@ -89,3 +89,7 @@ E2E caveat: a green E2E check does not prove the suite passed. `ci_run_e2e_ios.s
 - Commits: Conventional Commits, small and atomic.
 - Keep changes in scope. Do not upgrade dependencies unless asked.
 - Run the tests and confirm CI status before you report work as done.
+
+[REVIEW.md](REVIEW.md) sets the review and merge rules: the tier of the PR (T0 to T3), the
+reviewers it needs, what runs before the release, and the sections of the PR body. Read it
+before you open a PR, and give the tier in the PR body.
