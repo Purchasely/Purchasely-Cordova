@@ -1,0 +1,30 @@
+# Reviewers of the T2 and T3 paths of REVIEW.md, section 5.
+# GitHub requests these owners on each PR that changes a matching path.
+# Branch protection does not require a code owner review: REVIEW.md sets who must approve.
+# The four SDK owners own every bridge path, so an author can get a second owner.
+# The last pattern that matches a file wins: keep the T3 paths at the end.
+
+# T2: hybrid bridge, JS side and public API
+/purchasely/www/        @kherembourg @chouaibMo @El-Fitz @EPIKorial
+/purchasely-google/www/ @kherembourg @chouaibMo @El-Fitz @EPIKorial
+/api/                   @kherembourg @chouaibMo @El-Fitz @EPIKorial
+
+# T2: hybrid bridge, Android side
+/purchasely/src/android/        @kherembourg @chouaibMo @El-Fitz @EPIKorial
+/purchasely-google/src/android/ @kherembourg @chouaibMo @El-Fitz @EPIKorial
+
+# T2: hybrid bridge, iOS side
+/purchasely/src/ios/ @kherembourg @chouaibMo @El-Fitz @EPIKorial
+
+# T2: native SDK pins, public API of plugin.xml, build compatibility
+/purchasely/plugin.xml                      @kherembourg @chouaibMo @El-Fitz @EPIKorial
+/purchasely-google/plugin.xml               @kherembourg @chouaibMo @El-Fitz @EPIKorial
+/purchasely/Package.swift                   @kherembourg @chouaibMo @El-Fitz @EPIKorial
+/purchasely/src/android/build-extras.gradle @kherembourg @chouaibMo @El-Fitz @EPIKorial
+
+# T3: publication, published package manifests, this file
+/.github/workflows/publish.yml  @kherembourg @chouaibMo @El-Fitz @EPIKorial
+/publish.sh                     @kherembourg @chouaibMo @El-Fitz @EPIKorial
+/purchasely/package.json        @kherembourg @chouaibMo @El-Fitz @EPIKorial
+/purchasely-google/package.json @kherembourg @chouaibMo @El-Fitz @EPIKorial
+/.github/CODEOWNERS             @kherembourg @chouaibMo @El-Fitz @EPIKorial

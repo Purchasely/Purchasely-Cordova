@@ -595,3 +595,7 @@ jobs:
 
           if [ $fail -ne 0 ]; then exit 1; fi
           echo "✅ All versions are consistent: $PLUGIN_XML_VERSION"
+
+      # Not a required check. On a failure, run the update command that the log gives.
+      - name: Check public API and native pins
+        run: scripts/api-check.sh

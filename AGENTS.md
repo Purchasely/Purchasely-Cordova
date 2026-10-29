@@ -44,6 +44,7 @@ Cordova, iOS and Android SDK versions may differ. `VERSIONS.md` is the mapping; 
 cd purchasely && npm ci && npm test        # Jest unit tests (cordova/exec is mocked)
 cd purchasely/example && ./ios.sh          # build/run example on iOS
 cd purchasely/example && ./android.sh      # build/run example on Android
+scripts/api-check.sh                       # check api/ (JS API, plugin.xml) and the native pins; --update writes api/
 ```
 
 Native unit tests: Android in `purchasely/android-tests` (Gradle), iOS XCTest in `purchasely/example-capacitor`.
@@ -89,3 +90,7 @@ E2E caveat: a green E2E check does not prove the suite passed. `ci_run_e2e_ios.s
 - Commits: Conventional Commits, small and atomic.
 - Keep changes in scope. Do not upgrade dependencies unless asked.
 - Run the tests and confirm CI status before you report work as done.
+
+[REVIEW.md](REVIEW.md) sets the review and merge rules: the tier of the PR (T0 to T3), the
+reviewers it needs, what runs before the release, and the sections of the PR body. Read it
+before you open a PR, and give the tier in the PR body.
