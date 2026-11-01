@@ -67,7 +67,7 @@ two rows, the more specific row wins. Section 5 gives the paths of each area in 
 | Generated or rewritten files | files that a script builds or rewrites | T2 |
 | Hybrid bridge, contained change | bridge code that keeps the arguments, defaults, type mappings, errors, results, callbacks and listener lifetime | T1 |
 | Hybrid bridge, contract change | a change to one of the items above, or to purchase, restore, identity or entitlement behavior, also with no signature change | T2 |
-| Native SDK version in a bridge | the native pins: `build.gradle`, `.podspec`, `Package.swift`, `plugin.xml`, lockfiles | T2 minimum, or the highest tier of the native changes that the new version brings. Keep all native pins at the same version. |
+| Native SDK version in a bridge | the native pins: `build.gradle`, `.podspec`, `Package.swift`, `plugin.xml`, lockfiles | T2 minimum, or the highest tier of the native changes that the new version brings. Keep the pins of one platform at one version: the iOS pins together, the Android pins together. The two platforms can differ (`VERSIONS.md` gives each pair). |
 | CI: comments and formatting | workflow files, no behavior change | T0 |
 | CI: tests and reports | test workflows, CI scripts, Actions version bumps | T1 |
 | Publication, signing, credentials, required checks | publish workflows and scripts, signing, secrets, `permissions:`, the composition of the published artifact, a required check | T3, wherever the code is. |
@@ -183,7 +183,7 @@ Publication facts:
   `workflow_dispatch` on the branch also runs `ci.yml`.
 - **No required check on `main`:** GitHub does not stop a merge when a check fails or did not
   run. The person who merges reads the checks of the head commit.
-- **E2E:** `e2e-android.yml` and `e2e-ios.yml` run on device against the real backend, with the
+- **E2E:** `e2e-android.yml` and `e2e-ios.yml` run on an Android emulator and an iOS simulator against the real backend, with the
   same triggers and the same label, only when the PR changes `purchasely/www/`, the native side
   of that platform, `purchasely/example/` or the workflow. A green E2E check does not prove
   that the suite passed: read the job log for `attempt N/`, `passing`, `failing` and
