@@ -39,6 +39,9 @@ Update **all** of the following files:
 | `purchasely/example-capacitor/ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved` | `purchasely-ios` `version` and `revision` (`git ls-remote --tags https://github.com/Purchasely/Purchasely-iOS.git IOS_VERSION`) |
 | `VERSIONS.md` | Add new row with Cordova / iOS / Android versions |
 
+Then run `scripts/api-check.sh --update` and commit `api/`. The `<pod>` and `<framework>` lines of
+`api/plugin-xml.txt` contain the native versions, so CI fails until `api/` has the new versions.
+
 > **Tip:** the `Validate Version Consistency` CI job checks `plugin.xml`, `package.json`, and the lockfiles — a forgotten file fails the PR.
 
 > **Note:** The Cordova SDK version, iOS SDK version, and Android SDK version may differ. Check the native release tags for the correct versions.
