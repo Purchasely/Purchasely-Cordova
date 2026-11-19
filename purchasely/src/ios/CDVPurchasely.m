@@ -1606,11 +1606,12 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
         };
         presentationLoaded.onDismissed = ^(PLYPresentationOutcome * _Nonnull outcome) {
             CDVPurchasely *strongSelf = weakSelf; if (strongSelf == nil) return;
-            strongSelf.currentPresentation = nil;
+            if (!hasNoScreen) { strongSelf.currentPresentation = nil; }
             [strongSelf successFor:command resultDict:[strongSelf resultDictionaryForOutcome:outcome]];
         };
 
-        self.currentPresentation = presentationLoaded;
+        // A no-screen display shows nothing, so a paywall still on screen keeps its back()/close handling.
+        if (!hasNoScreen) { self.currentPresentation = presentationLoaded; }
         [presentationLoaded displayFrom:nil transitionType:[self displayModeFromTransition:transition]];
     });
 }
