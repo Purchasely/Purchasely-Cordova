@@ -195,6 +195,13 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                     getStringFromJson(args.getString(2)),
                     callbackContext
                 )
+                "exposed" -> withLoadedPresentation("exposed", args, callbackContext) { it.exposed() }
+                "clientPresentationDisplayed" -> withLoadedPresentation("clientPresentationDisplayed", args, callbackContext) {
+                    Purchasely.clientPresentationDisplayed(it)
+                }
+                "clientPresentationClosed" -> withLoadedPresentation("clientPresentationClosed", args, callbackContext) {
+                    Purchasely.clientPresentationClosed(it)
+                }
                 "restoreAllProducts" -> restoreAllProducts(callbackContext)
                 "silentRestoreAllProducts" -> restoreAllProducts(callbackContext)
                 "userSubscriptions" -> userSubscriptions(args.optBoolean(0, false), callbackContext)
@@ -872,6 +879,26 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 callbackContext.success(JSONObject(outcomeToMap(outcome)))
             }
         }
+    }
+
+    // Runs a native call on the presentation kept by fetchPresentation. args[0] is the presentation
+    // JS sent back (its private `fetchId`); no kept presentation answers ARG_INVALID.
+    private fun withLoadedPresentation(
+        action: String,
+        args: JSONArray,
+        callbackContext: CallbackContext,
+        call: (PLYPresentationBase.Loaded) -> Unit
+    ) {
+        val loaded = args.optJSONObject(0)?.optString("fetchId")?.let { loadedPresentations[it] }
+        if (loaded == null) {
+            callbackContext.error(JSONObject(mapOf(
+                "code" to "ARG_INVALID",
+                "message" to "$action: no loaded presentation, pass a presentation returned by preload()"
+            )))
+            return
+        }
+        call(loaded)
+        callbackContext.success()
     }
 
     // v6: stop receiving default (campaign/deeplink) presentation dismiss outcomes.

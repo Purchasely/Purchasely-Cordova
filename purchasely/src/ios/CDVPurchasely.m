@@ -1522,13 +1522,18 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
         NSString *presentationId = (NSString *)[presentationDictionary objectForKey:@"id"];
         id<PLYPresentation> presentationLoaded = [self findPresentationLoadedFor:presentationId];
 
-        if (presentationLoaded == nil || presentationLoaded.controller == nil) {
+        // A deactivated or client presentation has no controller: native display() still runs and
+        // answers onDismissed once with an empty outcome. Keep its handle for exposed() and the
+        // client lifecycle calls.
+        BOOL hasNoScreen = presentationLoaded.type == PLYPresentationTypeDeactivated ||
+                           presentationLoaded.type == PLYPresentationTypeClient;
+        if (presentationLoaded == nil || (presentationLoaded.controller == nil && !hasNoScreen)) {
             [self failureFor:command resultString: @"Presentation not loaded"];
             return;
         }
 
         NSInteger index = [self findIndexPresentationLoadedFor:presentationId];
-        if (index >= 0) {
+        if (index >= 0 && !hasNoScreen) {
             [self.presentationsLoaded removeObjectAtIndex:index];
         }
 
@@ -1568,6 +1573,45 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
         self.currentPresentation = presentationLoaded;
         [presentationLoaded displayFrom:nil transitionType:[self displayModeFromTransition:transition]];
     });
+}
+
+/// Runs a native call on the presentation kept by `fetchPresentation:`. The presentation JS
+/// sent back is found by its `id`; no kept presentation answers ARG_INVALID.
+- (void)withLoadedPresentationFor:(CDVInvokedUrlCommand *)command
+                           action:(NSString *)action
+                             call:(void (^)(id<PLYPresentation> presentation))call {
+    NSDictionary *presentationDictionary = [command argumentAtIndex:0];
+    NSString *presentationId = [presentationDictionary isKindOfClass:[NSDictionary class]] ? presentationDictionary[@"id"] : nil;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        id<PLYPresentation> presentation = [presentationId isKindOfClass:[NSString class]] ? [self findPresentationLoadedFor:presentationId] : nil;
+        if (presentation == nil) {
+            [self failureFor:command resultDict:@{
+                @"code": @"ARG_INVALID",
+                @"message": [NSString stringWithFormat:@"%@: no loaded presentation, pass a presentation returned by preload()", action]
+            }];
+            return;
+        }
+        call(presentation);
+        [self successFor:command];
+    });
+}
+
+- (void)exposed:(CDVInvokedUrlCommand *)command {
+    [self withLoadedPresentationFor:command action:@"exposed" call:^(id<PLYPresentation> presentation) {
+        [presentation exposed];
+    }];
+}
+
+- (void)clientPresentationDisplayed:(CDVInvokedUrlCommand *)command {
+    [self withLoadedPresentationFor:command action:@"clientPresentationDisplayed" call:^(id<PLYPresentation> presentation) {
+        [Purchasely clientPresentationDisplayedWith:presentation];
+    }];
+}
+
+- (void)clientPresentationClosed:(CDVInvokedUrlCommand *)command {
+    [self withLoadedPresentationFor:command action:@"clientPresentationClosed" call:^(id<PLYPresentation> presentation) {
+        [Purchasely clientPresentationClosedWith:presentation];
+    }];
 }
 
 - (void) revokeDataProcessingConsent:(CDVInvokedUrlCommand *)command {

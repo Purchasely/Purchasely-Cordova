@@ -143,6 +143,9 @@ typedef NS_ENUM(NSInteger, CDVPurchaselyProxyOption) {
 - (void)getBuiltInAttribute:(CDVInvokedUrlCommand*)command;
 - (void)fetchPresentation:(CDVInvokedUrlCommand*)command;
 - (void)presentPresentation:(CDVInvokedUrlCommand*)command;
+- (void)exposed:(CDVInvokedUrlCommand*)command;
+- (void)clientPresentationDisplayed:(CDVInvokedUrlCommand*)command;
+- (void)clientPresentationClosed:(CDVInvokedUrlCommand*)command;
 - (void)signPromotionalOffer:(CDVInvokedUrlCommand*)command;
 - (void)signPromotionalOfferWithToken:(CDVInvokedUrlCommand*)command;
 - (void)isEligibleForIntroOffer:(CDVInvokedUrlCommand*)command;

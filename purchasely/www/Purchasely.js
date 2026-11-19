@@ -383,6 +383,10 @@ function PLYPresentationRequest(config) {
     this._raw = null; // private: native fetch payload (carries the re-display handle)
 }
 
+// The native handle of each presentation preload() resolved. Kept out of the object the
+// app sees (see the screenId note above); exposed() and clientPresentation*() read it.
+var nativeHandles = new WeakMap();
+
 PLYPresentationRequest.prototype.preload = function () {
     var self = this;
     var callbacks = this._config.callbacks;
@@ -397,11 +401,13 @@ PLYPresentationRequest.prototype.preload = function () {
             // Resolve a "loaded presentation": the screenId-normalized data plus
             // display()/close()/back() delegating to this request (parity with RN's
             // PLYLoadedPresentation and the native preload()->display() flow).
-            resolve(Object.assign({}, presentation, {
+            var loaded = Object.assign({}, presentation, {
                 display: function (transition) { return self.display(transition); },
                 close: function () { return self.close(); },
                 back: function () { return self.back(); }
-            }));
+            });
+            nativeHandles.set(loaded, raw);
+            resolve(loaded);
         }, function (error) {
             reject(normalizeError(error));
         }, 'Purchasely', 'fetchPresentation', [
@@ -468,6 +474,33 @@ PLYPresentationRequest.prototype.close = function () {
 // standalone Purchasely.backPresentation(), now request-scoped).
 PLYPresentationRequest.prototype.back = function () {
     exec(() => {}, defaultError, 'Purchasely', 'backPresentation', []);
+};
+
+function presentationHandleCall(action, presentation, success, error) {
+    // A presentation that preload() did not return has no handle: the native side answers ARG_INVALID.
+    exec(success || (() => {}), error || defaultError, 'Purchasely', action, [nativeHandles.get(presentation) || null]);
+}
+
+// Purchasely 6.3.0: tells Purchasely the app reached the moment it would have shown this
+// presentation. Sends EXPERIMENT_EXPOSED for the experiment it serves, at each call, and
+// nothing when it serves none. Call it for a presentation of type PresentationType.deactivated
+// (a campaign NONE arm) that the app handles itself without calling display(). The native SDKs
+// ignore it for any other type. `presentation` is the object preload() resolved; any other
+// value fails with ARG_INVALID.
+exports.exposed = function (presentation, success, error) {
+    presentationHandleCall('exposed', presentation, success, error);
+};
+
+// Purchasely 6.3.0: the app displays its own screen for a presentation of type
+// PresentationType.client. Report it with clientPresentationDisplayed() when the screen
+// appears and clientPresentationClosed() when it goes away. `presentation` is the object
+// preload() resolved; any other value fails with ARG_INVALID.
+exports.clientPresentationDisplayed = function (presentation, success, error) {
+    presentationHandleCall('clientPresentationDisplayed', presentation, success, error);
+};
+
+exports.clientPresentationClosed = function (presentation, success, error) {
+    presentationHandleCall('clientPresentationClosed', presentation, success, error);
 };
 
 function PLYPresentationBuilder(config) {
