@@ -729,6 +729,41 @@ describe('Purchasely', () => {
     });
   });
 
+  describe('addUserSubscriptionStatusListener / removeUserSubscriptionStatusListener (6.3.0)', () => {
+    it('registers the callback itself on the add action, so every status reaches it', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.addUserSubscriptionStatusListener(success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'addUserSubscriptionStatusListener', []);
+    });
+
+    it('passes the status payload through unchanged, null reason and subscription included', () => {
+      const success = jest.fn();
+      Purchasely.addUserSubscriptionStatusListener(success, jest.fn());
+      const deliver = mockExec.mock.calls[0][0];
+
+      deliver({ isActive: false, reason: null, subscription: null });
+      deliver({ isActive: true, reason: 'WEB_REDEEMED', subscription: { plan: { vendorId: 'monthly' } } });
+
+      expect(success).toHaveBeenNthCalledWith(1, { isActive: false, reason: null, subscription: null });
+      expect(success).toHaveBeenNthCalledWith(2, { isActive: true, reason: 'WEB_REDEEMED', subscription: { plan: { vendorId: 'monthly' } } });
+    });
+
+    it('calls the remove action', () => {
+      Purchasely.removeUserSubscriptionStatusListener();
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'removeUserSubscriptionStatusListener',
+        []
+      );
+    });
+  });
+
   describe('addUserAttributeListener', () => {
     it('should call exec with correct parameters', () => {
       const success = jest.fn();
@@ -1453,6 +1488,17 @@ describe('Purchasely', () => {
   });
 
   describe('purchasedSubscription', () => {
+    // Runs first: the warning fires at the first call of the module only.
+    it('is deprecated: warns once on the console, however often it is called', () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      Purchasely.purchasedSubscription(jest.fn(), jest.fn());
+      Purchasely.purchasedSubscription(jest.fn(), jest.fn());
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain('addUserSubscriptionStatusListener');
+      warn.mockRestore();
+    });
+
     it('should call exec with correct parameters', () => {
       const success = jest.fn();
       const error = jest.fn();

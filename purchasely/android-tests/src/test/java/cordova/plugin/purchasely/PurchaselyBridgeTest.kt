@@ -2,6 +2,8 @@ package cordova.plugin.purchasely
 
 import org.apache.cordova.CallbackContext
 import org.apache.cordova.PluginResult
+import io.purchasely.ext.PLYUserSubscriptionStatus
+import io.purchasely.ext.PLYUserSubscriptionStatusReason
 import io.purchasely.ext.PLYWebRedemptionListener
 import io.purchasely.ext.Purchasely
 import io.purchasely.ext.StoreType
@@ -633,6 +635,7 @@ class PurchaselyBridgeTest {
         PurchaselyPlugin.eventsCallback = mock()
         PurchaselyPlugin.attributesCallback = mock()
         PurchaselyPlugin.webRedemptionCallback = mock()
+        PurchaselyPlugin.userSubscriptionStatusCallback = mock()
     }
 
     private fun assertEveryCallbackContextCleared() {
@@ -640,6 +643,7 @@ class PurchaselyBridgeTest {
         assertNull(PurchaselyPlugin.eventsCallback)
         assertNull(PurchaselyPlugin.attributesCallback)
         assertNull(PurchaselyPlugin.webRedemptionCallback)
+        assertNull(PurchaselyPlugin.userSubscriptionStatusCallback)
     }
 
     // endregion
@@ -888,6 +892,51 @@ class PurchaselyBridgeTest {
         assertTrue(PurchaselyPlugin().execute("signPromotionalOfferWithToken", args, callback))
 
         verify(callback).success()
+    }
+
+    // endregion
+    // region presentation handle actions (6.3.0)
+
+    @Test
+    fun `exposed and the client lifecycle answer ARG_INVALID when no presentation was preloaded`() {
+        for (action in listOf("exposed", "clientPresentationDisplayed", "clientPresentationClosed")) {
+            val callback = mock<CallbackContext>()
+            val captor = argumentCaptor<JSONObject>()
+
+            assertTrue(PurchaselyPlugin().execute(action, JSONArray().put(JSONObject().put("fetchId", "unknown")), callback))
+
+            verify(callback).error(captor.capture())
+            assertEquals("ARG_INVALID", captor.firstValue.getString("code"))
+            verify(callback, never()).success()
+        }
+    }
+
+    // endregion
+
+    // region user subscription status payload (6.3.0)
+
+    @Test
+    fun `a status call keeps reason and subscription as JSON null`() {
+        val json = userSubscriptionStatusToJson(
+            PLYUserSubscriptionStatus(false, null, null),
+            fakeSubscriptionMapper
+        )
+
+        assertEquals(false, json.getBoolean("isActive"))
+        assertTrue(json.has("reason") && json.isNull("reason"))
+        assertTrue(json.has("subscription") && json.isNull("subscription"))
+    }
+
+    @Test
+    fun `a change carries the reason name and the shared subscription mapper output`() {
+        val json = userSubscriptionStatusToJson(
+            PLYUserSubscriptionStatus(true, PLYUserSubscriptionStatusReason.WEB_REDEEMED, mock<PLYSubscriptionData>()),
+            fakeSubscriptionMapper
+        )
+
+        assertEquals(true, json.getBoolean("isActive"))
+        assertEquals("WEB_REDEEMED", json.getString("reason"))
+        assertEquals("monthly", json.getJSONObject("subscription").getJSONObject("plan").getString("vendorId"))
     }
 
     // endregion

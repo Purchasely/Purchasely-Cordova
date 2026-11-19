@@ -80,6 +80,24 @@
     };
 }
 
++ (NSDictionary<NSString *, id> * _Nonnull)userSubscriptionStatusBodyWithIsActive:(BOOL)isActive
+                                                                           reason:(PLYUserSubscriptionStatusReason)reason
+                                                                     subscription:(NSDictionary * _Nullable)subscription {
+    NSString *wireReason = nil;
+    switch (reason) {
+        case PLYUserSubscriptionStatusReasonPurchased: wireReason = @"PURCHASED"; break;
+        case PLYUserSubscriptionStatusReasonRestored: wireReason = @"RESTORED"; break;
+        case PLYUserSubscriptionStatusReasonExpired: wireReason = @"EXPIRED"; break;
+        case PLYUserSubscriptionStatusReasonWebRedeemed: wireReason = @"WEB_REDEEMED"; break;
+        case PLYUserSubscriptionStatusReasonNone: break;
+    }
+    return @{
+        @"isActive":     @(isActive),
+        @"reason":       wireReason ?: [NSNull null],
+        @"subscription": subscription ?: [NSNull null]
+    };
+}
+
 + (NSUUID * _Nullable)canonicalUUIDFromString:(id _Nullable)value {
     if (![value isKindOfClass:[NSString class]]) {
         return nil;
@@ -101,6 +119,7 @@
     self.eventCommand = nil;
     self.attributeCommand = nil;
     self.webRedemptionCommand = nil;
+    self.userSubscriptionStatusCommand = nil;
     self.purchasedCommand = nil;
     [super onReset];
 }
@@ -697,6 +716,23 @@
     self.webRedemptionCommand = nil;
     // Acknowledge the remove itself, so ITS callbackId is freed too. A void action that
     // never answers leaks its own entry exactly like the listener's.
+    [self successFor:command resultBool:YES];
+}
+
+// v6.3.0. Records the command the status goes to and registers this plugin as the one native
+// delegate. A second add replaces the JS callback, and the native add runs again so the new
+// callback gets the status call the SDK sends on add.
+- (void)addUserSubscriptionStatusListener:(CDVInvokedUrlCommand*)command {
+    [self releaseCallbackStream:self.userSubscriptionStatusCommand];
+    self.userSubscriptionStatusCommand = command;
+    [Purchasely removeUserSubscriptionStatusDelegate:self];
+    [Purchasely addUserSubscriptionStatusDelegate:self];
+}
+
+- (void)removeUserSubscriptionStatusListener:(CDVInvokedUrlCommand*)command {
+    [Purchasely removeUserSubscriptionStatusDelegate:self];
+    [self releaseCallbackStream:self.userSubscriptionStatusCommand];
+    self.userSubscriptionStatusCommand = nil;
     [self successFor:command resultBool:YES];
 }
 

@@ -297,6 +297,30 @@ Pass `null` to let the SDK make the token. A token string that is not a UUID fai
 SDK does not sign. On Android the method resolves with success and does nothing.
 `signPromotionalOffer` still works and signs over the anonymous user id. It is deprecated.
 
+## What is new in 6.3.0
+
+### User subscription status
+
+`Purchasely.addUserSubscriptionStatusListener(success, error)` replaces `purchasedSubscription()`, which is deprecated.
+The callback gets the current status once, then each change. A second call replaces the callback.
+`Purchasely.removeUserSubscriptionStatusListener()` stops it.
+
+```js
+Purchasely.addUserSubscriptionStatusListener((status) => {
+  // { isActive, reason: 'PURCHASED' | 'RESTORED' | 'EXPIRED' | 'WEB_REDEEMED' | null, subscription | null }
+});
+```
+
+`reason` is `null` for the status call. `subscription` has the shape that `userSubscriptions()` returns.
+
+### Campaign experiments
+
+- `Purchasely.exposed(presentation)` reports that the app reached the moment it would have shown a `PresentationType.deactivated` presentation (a campaign NONE arm).
+- `Purchasely.clientPresentationDisplayed(presentation)` and `Purchasely.clientPresentationClosed(presentation)` report the own screen of the app for a `PresentationType.client` presentation.
+- Pass the object that `preload()` resolved. Any other value fails with the error code `ARG_INVALID`.
+- `display()` of a deactivated or client presentation shows nothing. Its Promise resolves once with the outcome, and `outcome.presentation.type` tells the type.
+- The events `EXPERIMENT_ASSIGNED` and `EXPERIMENT_EXPOSED` carry `experiment_id` and `experiment_variant_id` in `properties`.
+
 ## Data processing consent
 
 Tell the SDK which data processing purposes the user refuses. The native SDK persists the

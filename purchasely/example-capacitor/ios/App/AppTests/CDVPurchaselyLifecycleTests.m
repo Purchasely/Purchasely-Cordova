@@ -794,4 +794,25 @@ typedef void (^CDVSignFailure)(NSError *);
     XCTAssertEqualObjects(run.results.firstObject.message, @"signature failed");
 }
 
+// 6.3.0 user subscription status body: three keys always present, NSNull for a status call.
+- (void)testUserSubscriptionStatusBody {
+    NSDictionary *purchased = [CDVPurchasely userSubscriptionStatusBodyWithIsActive:YES
+                                                                             reason:PLYUserSubscriptionStatusReasonPurchased
+                                                                       subscription:@{ @"plan": @{ @"vendorId": @"monthly" } }];
+    XCTAssertEqual(purchased.count, (NSUInteger)3);
+    XCTAssertEqualObjects(purchased[@"isActive"], @YES);
+    XCTAssertEqualObjects(purchased[@"reason"], @"PURCHASED");
+    XCTAssertEqualObjects(purchased[@"subscription"][@"plan"][@"vendorId"], @"monthly");
+
+    NSDictionary *status = [CDVPurchasely userSubscriptionStatusBodyWithIsActive:NO
+                                                                          reason:PLYUserSubscriptionStatusReasonNone
+                                                                    subscription:nil];
+    XCTAssertEqualObjects(status[@"reason"], [NSNull null]);
+    XCTAssertEqualObjects(status[@"subscription"], [NSNull null]);
+
+    XCTAssertEqualObjects([CDVPurchasely userSubscriptionStatusBodyWithIsActive:YES reason:PLYUserSubscriptionStatusReasonWebRedeemed subscription:nil][@"reason"], @"WEB_REDEEMED");
+    XCTAssertEqualObjects([CDVPurchasely userSubscriptionStatusBodyWithIsActive:NO reason:PLYUserSubscriptionStatusReasonExpired subscription:nil][@"reason"], @"EXPIRED");
+    XCTAssertEqualObjects([CDVPurchasely userSubscriptionStatusBodyWithIsActive:YES reason:PLYUserSubscriptionStatusReasonRestored subscription:nil][@"reason"], @"RESTORED");
+}
+
 @end

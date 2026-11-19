@@ -232,6 +232,24 @@ exports.removeWebRedemptionListener = function () {
     exec(() => {}, defaultError, 'Purchasely', 'removeWebRedemptionListener', []);
 };
 
+// Purchasely 6.3.0: the user subscription status. success receives, once with the current
+// status when the SDK knows it, then at each change:
+//   { isActive, reason, subscription }
+//   isActive      Bool. The user has one or more active subscriptions (non-consumables excluded).
+//   reason        'PURCHASED' | 'RESTORED' | 'EXPIRED' | 'WEB_REDEEMED', or null for the
+//                 status call.
+//   subscription  The subscription of the call, same object as userSubscriptions(), or null
+//                 (only in a status call for a user with no subscription).
+// A second call replaces the callback. Replaces purchasedSubscription().
+exports.addUserSubscriptionStatusListener = function (success, error) {
+    exec(success, error, 'Purchasely', 'addUserSubscriptionStatusListener', []);
+};
+
+// Purchasely 6.3.0: stop receiving the user subscription status.
+exports.removeUserSubscriptionStatusListener = function () {
+    exec(() => {}, defaultError, 'Purchasely', 'removeUserSubscriptionStatusListener', []);
+};
+
 exports.addUserAttributeListener = function(success, error) {
     exec(success, error, 'Purchasely', 'addUserAttributeListener', []);
 };
@@ -579,7 +597,17 @@ exports.silentRestoreAllProducts = function (success, error) {
     exec(success, error, 'Purchasely', 'silentRestoreAllProducts', []);
 };
 
+var purchasedSubscriptionWarned = false;
+
+/**
+ * @deprecated Since 6.3.0, use addUserSubscriptionStatusListener(). It reports the status and
+ * the reason, not only a purchase or a restore.
+ */
 exports.purchasedSubscription = function (success, error) {
+    if (!purchasedSubscriptionWarned) {
+        purchasedSubscriptionWarned = true;
+        console.warn('Purchasely.purchasedSubscription() is deprecated since 6.3.0, use addUserSubscriptionStatusListener().');
+    }
     exec(success, error, 'Purchasely', 'purchasedSubscription', []);
 };
 

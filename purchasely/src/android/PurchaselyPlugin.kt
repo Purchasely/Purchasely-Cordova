@@ -16,7 +16,9 @@ import io.purchasely.ext.PLYEvent
 import io.purchasely.ext.PLYInterceptResult
 import io.purchasely.ext.PLYInterceptorInfo
 import io.purchasely.ext.PLYRunningMode
+import io.purchasely.ext.PLYUserSubscriptionStatus
 import io.purchasely.ext.PLYWebRedemptionListener
+import io.purchasely.ext.UserSubscriptionStatusListener
 import io.purchasely.ext.PurchaseListener
 import io.purchasely.ext.Purchasely
 import io.purchasely.ext.State
@@ -129,6 +131,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         eventsCallback = null
         attributesCallback = null
         webRedemptionCallback = null
+        userSubscriptionStatusCallback = null
     }
 
     override fun execute(
@@ -144,6 +147,8 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 "addUserAttributeListener" -> addUserAttributesListener(callbackContext)
                 "removeUserAttributeListener" -> removeUserAttributesListener()
                 "removeEventsListener" -> removeEventsListener()
+                "addUserSubscriptionStatusListener" -> addUserSubscriptionStatusListener(callbackContext)
+                "removeUserSubscriptionStatusListener" -> removeUserSubscriptionStatusListener(callbackContext)
                 "addWebRedemptionListener" -> addWebRedemptionListener(callbackContext)
                 "removeWebRedemptionListener" -> removeWebRedemptionListener(callbackContext)
                 "getAnonymousUserId" -> getAnonymousUserId(callbackContext)
@@ -511,6 +516,26 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         webRedemptionCallback = null
         // Acknowledge the remove itself, so ITS callbackId is freed too. A void action that
         // never answers leaks its own entry exactly like the listener's.
+        callbackContext.success()
+    }
+
+    /**
+     * v6.3.0. Register the one native [UserSubscriptionStatusListener] and record the callback it
+     * feeds. Not the single-slot `Purchasely.purchaseListener`: the SDK keeps a list. A second add
+     * replaces the JS callback, and the native add runs again so the new callback gets the status
+     * call the SDK sends on add.
+     */
+    private fun addUserSubscriptionStatusListener(callbackContext: CallbackContext) {
+        releaseCallbackStream(userSubscriptionStatusCallback)
+        userSubscriptionStatusCallback = callbackContext
+        Purchasely.removeUserSubscriptionStatusListener(userSubscriptionStatusListener)
+        Purchasely.addUserSubscriptionStatusListener(userSubscriptionStatusListener)
+    }
+
+    private fun removeUserSubscriptionStatusListener(callbackContext: CallbackContext) {
+        Purchasely.removeUserSubscriptionStatusListener(userSubscriptionStatusListener)
+        releaseCallbackStream(userSubscriptionStatusCallback)
+        userSubscriptionStatusCallback = null
         callbackContext.success()
     }
 
@@ -1529,6 +1554,19 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         var eventsCallback: CallbackContext? = null
         var attributesCallback: CallbackContext? = null
         var webRedemptionCallback: CallbackContext? = null
+        var userSubscriptionStatusCallback: CallbackContext? = null
+
+        // The one native status listener. In the companion, like the callback it reads lazily, so a
+        // page reload that adds again does not stack a second one.
+        private val userSubscriptionStatusListener = UserSubscriptionStatusListener { status ->
+            val callback = userSubscriptionStatusCallback ?: return@UserSubscriptionStatusListener
+            val result = PluginResult(
+                PluginResult.Status.OK,
+                userSubscriptionStatusToJson(status, Companion::transformSubscriptionToMap)
+            )
+            result.keepCallback = true
+            callback.sendPluginResult(result)
+        }
 
         // Serializes a v6 PLYPresentationOutcome to the wire contract. `result` is kept as an
         // int (PurchaseResult 0/1/2) for back-compat with the pre-6.0 JS layer.
@@ -1845,6 +1883,20 @@ internal fun webRedemptionResultToJson(
     }
     return json
 }
+
+/**
+ * The payload of the user subscription status listener: `{ isActive, reason, subscription }`.
+ * `reason` is the enum name, or null for a status call. `subscription` is the object
+ * `userSubscriptions()` returns, or null. Nulls are [JSONObject.NULL] for the reason given on
+ * [webRedemptionResultToJson].
+ */
+internal fun userSubscriptionStatusToJson(
+    status: PLYUserSubscriptionStatus,
+    subscriptionToMap: (PLYSubscriptionData) -> Map<String, Any?>,
+): JSONObject = JSONObject()
+    .put("isActive", status.isActive)
+    .put("reason", status.reason?.name ?: JSONObject.NULL)
+    .put("subscription", status.subscription?.let { JSONObject(subscriptionToMap(it)) } ?: JSONObject.NULL)
 
 /**
  * Parse a canonical UUID string, or return null.
