@@ -71,6 +71,11 @@
 @implementation CDVEmitRun
 @end
 
+// Declared in CDVPurchasely.m only.
+@interface CDVPurchasely (FetchIdLookup)
+- (id<PLYPresentation>)findPresentationLoadedFor:(NSString *)fetchId;
+@end
+
 @interface CDVPurchaselyLifecycleTests : XCTestCase
 @end
 
@@ -120,11 +125,26 @@
 
     // Any object stands in for a presentation here: the bug is in the container, not in
     // what it holds, and building a real PLYPresentation would need a started SDK.
-    [plugin.presentationsLoaded addObject:[NSObject new]];
+    plugin.presentationsLoaded[@"fetch-1"] = (id<PLYPresentation>)[NSObject new];
 
     XCTAssertEqual(plugin.presentationsLoaded.count, (NSUInteger)1,
-                   @"The preloaded presentation did not survive addObject:. Sending "
-                   @"addObject: to a nil array is discarded silently.");
+                   @"The preloaded presentation did not survive the write. A subscript "
+                   @"write into a nil dictionary is discarded silently.");
+}
+
+// Two preloads of the same screen (or two deactivated presentations, which have no
+// screenId) must each be found by their own fetchId, never by a shared screenId.
+- (void)testLoadedPresentationsAreFoundByFetchIdNotByScreen {
+    CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+    id<PLYPresentation> first = (id<PLYPresentation>)[NSObject new];
+    id<PLYPresentation> second = (id<PLYPresentation>)[NSObject new];
+    plugin.presentationsLoaded[@"fetch-1"] = first;
+    plugin.presentationsLoaded[@"fetch-2"] = second;
+
+    XCTAssertIdentical([plugin findPresentationLoadedFor:@"fetch-1"], first);
+    XCTAssertIdentical([plugin findPresentationLoadedFor:@"fetch-2"], second);
+    XCTAssertNil([plugin findPresentationLoadedFor:@"fetch-3"]);
+    XCTAssertNil([plugin findPresentationLoadedFor:nil]);
 }
 
 #pragma mark - Web2App redemption (6.1.0)

@@ -24,7 +24,7 @@
 - (void)pluginInitialize {
     [super pluginInitialize];
 
-    self.presentationsLoaded = [NSMutableArray new];
+    self.presentationsLoaded = [NSMutableDictionary new];
     self.actionInterceptorCallbackIds = [NSMutableDictionary new];
     self.pendingInterceptCompletions = [NSMutableDictionary new];
 }
@@ -1523,8 +1523,13 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
             if (error != nil) {
                 [self failureFor:command resultString: error.localizedDescription];
             } else if (presentation != nil) {
-                [self.presentationsLoaded addObject:presentation];
-                [self successFor:command resultDict:[self resultDictionaryForFetchPresentation:presentation]];
+                // Per-fetch handle (Android's `fetchId`): two preloads of one screen, or a
+                // deactivated presentation with no screenId, must not share a lookup key.
+                NSString *fetchId = [[NSUUID UUID] UUIDString];
+                self.presentationsLoaded[fetchId] = presentation;
+                NSMutableDictionary *result = [[self resultDictionaryForFetchPresentation:presentation] mutableCopy];
+                result[@"fetchId"] = fetchId;
+                [self successFor:command resultDict:result];
             } else {
                 // Neither branch taken means the Cordova command is never completed and the
                 // JS promise returned by preload() stays pending for the life of the page:
@@ -1555,8 +1560,8 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
     self.purchaseResolve = command;
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        NSString *presentationId = (NSString *)[presentationDictionary objectForKey:@"id"];
-        id<PLYPresentation> presentationLoaded = [self findPresentationLoadedFor:presentationId];
+        NSString *fetchId = (NSString *)[presentationDictionary objectForKey:@"fetchId"];
+        id<PLYPresentation> presentationLoaded = [self findPresentationLoadedFor:fetchId];
 
         // A deactivated or client presentation has no controller: native display() still runs and
         // answers onDismissed once with an empty outcome. Keep its handle for exposed() and the
@@ -1568,9 +1573,8 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
             return;
         }
 
-        NSInteger index = [self findIndexPresentationLoadedFor:presentationId];
-        if (index >= 0 && !hasNoScreen) {
-            [self.presentationsLoaded removeObjectAtIndex:index];
+        if (!hasNoScreen) {
+            [self.presentationsLoaded removeObjectForKey:fetchId];
         }
 
         if (loadingBackgroundColor != nil) {
@@ -1612,14 +1616,14 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
 }
 
 /// Runs a native call on the presentation kept by `fetchPresentation:`. The presentation JS
-/// sent back is found by its `id`; no kept presentation answers ARG_INVALID.
+/// sent back is found by its `fetchId`; no kept presentation answers ARG_INVALID.
 - (void)withLoadedPresentationFor:(CDVInvokedUrlCommand *)command
                            action:(NSString *)action
                              call:(void (^)(id<PLYPresentation> presentation))call {
     NSDictionary *presentationDictionary = [command argumentAtIndex:0];
-    NSString *presentationId = [presentationDictionary isKindOfClass:[NSDictionary class]] ? presentationDictionary[@"id"] : nil;
+    NSString *fetchId = [presentationDictionary isKindOfClass:[NSDictionary class]] ? presentationDictionary[@"fetchId"] : nil;
     dispatch_async(dispatch_get_main_queue(), ^{
-        id<PLYPresentation> presentation = [presentationId isKindOfClass:[NSString class]] ? [self findPresentationLoadedFor:presentationId] : nil;
+        id<PLYPresentation> presentation = [fetchId isKindOfClass:[NSString class]] ? [self findPresentationLoadedFor:fetchId] : nil;
         if (presentation == nil) {
             [self failureFor:command resultDict:@{
                 @"code": @"ARG_INVALID",
@@ -1682,24 +1686,8 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
     [Purchasely setDebugModeWithEnabled: enabled];
 }
 
-- (id<PLYPresentation>) findPresentationLoadedFor:(NSString * _Nullable) presentationId {
-    for (id<PLYPresentation> presentationLoaded in self.presentationsLoaded) {
-        if ([presentationLoaded.screenId isEqualToString: presentationId]) {
-            return presentationLoaded;
-        }
-    }
-    return nil;
-}
-
-- (NSInteger) findIndexPresentationLoadedFor:(NSString * _Nullable) presentationId {
-    NSInteger index = 0;
-    for (id<PLYPresentation> presentationLoaded in self.presentationsLoaded) {
-        if ([presentationLoaded.screenId isEqualToString: presentationId]) {
-            return index;
-        }
-        index++;
-    }
-    return -1;
+- (id<PLYPresentation>) findPresentationLoadedFor:(NSString * _Nullable) fetchId {
+    return [fetchId isKindOfClass:[NSString class]] ? self.presentationsLoaded[fetchId] : nil;
 }
 
 - (NSDictionary *)resultSignatureForSignPromoOffer:(PLYOfferSignature * _Nullable) signature  {
@@ -1731,12 +1719,8 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
 
         if (presentation.screenId != nil) {
             // `screenId` is the sole authoritative, public presentation identifier (matches
-            // Android's presentationToMap() key, so shared JS reads either platform the same
-            // way). `id` is kept ONLY as a private/internal re-display lookup key --
-            // findPresentationLoadedFor:/findIndexPresentationLoadedFor: key off it, and on
-            // this platform it always equals screenId (iOS has no separate synthetic fetch
-            // handle, unlike Android's `fetchId`) -- it is NOT a documented public field; the
-            // JS bridge normalizes with `screenId ?? id` tolerance and never surfaces `id`.
+            // Android's presentationToMap() key). `id` equals screenId and is not a lookup
+            // key: the re-display lookup uses `fetchId`, added by fetchPresentation:.
             [presentationResult setObject:presentation.screenId forKey:@"id"];
             [presentationResult setObject:presentation.screenId forKey:@"screenId"];
         }

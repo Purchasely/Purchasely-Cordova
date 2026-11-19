@@ -87,7 +87,7 @@ typedef NS_ENUM(NSInteger, CDVPurchaselyProxyOption) {
 // the plugin alive. nil makes `userSubscriptionStatusUpdated:` a no-op.
 @property CDVInvokedUrlCommand* userSubscriptionStatusCommand;
 
-@property (nonatomic) NSMutableArray<id<PLYPresentation>> *presentationsLoaded;
+@property (nonatomic) NSMutableDictionary<NSString *, id<PLYPresentation>> *presentationsLoaded;
 
 @property (nonatomic) CDVInvokedUrlCommand* purchaseResolve;
 
