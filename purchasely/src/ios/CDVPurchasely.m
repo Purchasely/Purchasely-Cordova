@@ -1670,6 +1670,8 @@ static BOOL PLYPresentationActionFromString(NSString *kind, PLYPresentationActio
             [purposesSet addObject:[PLYDataProcessingPurpose thirdPartyIntegrations]];
         } else if ([string isEqualToString:@"REFUND_HANDLING"]) {
             [purposesSet addObject:[PLYDataProcessingPurpose refundHandling]];
+        } else if ([string isEqualToString:@"SUPPORT_INVESTIGATION"]) {
+            [purposesSet addObject:[PLYDataProcessingPurpose supportInvestigation]];
         }
     }
     [Purchasely revokeDataProcessingConsentFor: purposesSet];

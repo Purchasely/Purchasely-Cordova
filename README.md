@@ -313,6 +313,10 @@ Purchasely.addUserSubscriptionStatusListener((status) => {
 
 `reason` is `null` for the status call. `subscription` has the shape that `userSubscriptions()` returns.
 
+### Data processing purpose `supportInvestigation`
+
+`Purchasely.DataProcessingPurpose.supportInvestigation` is a new purpose for `revokeDataProcessingConsent`. The native `allNonEssentials` bundle now includes it.
+
 ### Campaign experiments
 
 - `Purchasely.exposed(presentation)` reports that the app reached the moment it would have shown a `PresentationType.deactivated` presentation (a campaign NONE arm).
@@ -341,7 +345,8 @@ Purchasely.revokeDataProcessingConsent([
 | `personalization` | Paywall and content personalization |
 | `thirdPartyIntegrations` | Forwarding to the third-party integrations you have set up |
 | `refundHandling` | iOS 6.2.0+ only. Processing of the consumption data attached to an App Store refund request. Not part of `allNonEssentials`; ignored on Android |
-| `allNonEssentials` | Bundle of `analytics`, `campaigns`, `personalization`, `thirdPartyIntegrations`. Android adds `identifiedAnalytics`. Neither platform adds `refundHandling` |
+| `supportInvestigation` | SDK 6.3.0+. Processing of the data that Purchasely support uses to investigate an issue reported by the user |
+| `allNonEssentials` | Bundle of `analytics`, `campaigns`, `personalization`, `thirdPartyIntegrations`, `supportInvestigation`. Android adds `identifiedAnalytics`. Neither platform adds `refundHandling` |
 
 **Each call replaces the whole set.** The SDK does not merge with the previous call, so pass
 the complete list of refused purposes every time; a call with `[refundHandling]` after a

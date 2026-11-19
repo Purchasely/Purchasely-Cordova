@@ -69,9 +69,10 @@ describe('Purchasely', () => {
         expect(Purchasely.DataProcessingPurpose.personalization).toBe('PERSONALIZATION');
         expect(Purchasely.DataProcessingPurpose.thirdPartyIntegrations).toBe('THIRD_PARTY_INTEGRATIONS');
         expect(Purchasely.DataProcessingPurpose.refundHandling).toBe('REFUND_HANDLING');
+        expect(Purchasely.DataProcessingPurpose.supportInvestigation).toBe('SUPPORT_INVESTIGATION');
       });
 
-      it('should expose exactly the seven known purposes', () => {
+      it('should expose exactly the eight known purposes', () => {
         expect(Object.keys(Purchasely.DataProcessingPurpose).sort()).toEqual([
           'allNonEssentials',
           'analytics',
@@ -79,6 +80,7 @@ describe('Purchasely', () => {
           'identifiedAnalytics',
           'personalization',
           'refundHandling',
+          'supportInvestigation',
           'thirdPartyIntegrations',
         ]);
       });

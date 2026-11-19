@@ -577,6 +577,14 @@
     XCTAssertEqualObjects([self setHandedToNativeFor:input], expected);
 }
 
+- (void)testConsentSupportInvestigationReachesNative {
+    NSSet *expected = [NSSet setWithArray:@[[PLYDataProcessingPurpose supportInvestigation]]];
+
+    NSArray *input = @[@"SUPPORT_INVESTIGATION"];
+
+    XCTAssertEqualObjects([self setHandedToNativeFor:input], expected);
+}
+
 - (void)testConsentEmptyListReachesNativeToGrantEverythingBack {
     NSSet *empty = [NSSet set];
 

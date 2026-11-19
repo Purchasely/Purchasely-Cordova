@@ -1526,6 +1526,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                     "CAMPAIGNS" -> mappedPurposes.add(PLYDataProcessingPurpose.Campaigns)
                     "PERSONALIZATION" -> mappedPurposes.add(PLYDataProcessingPurpose.Personalization)
                     "THIRD_PARTY_INTEGRATIONS" -> mappedPurposes.add(PLYDataProcessingPurpose.ThirdPartyIntegrations)
+                    "SUPPORT_INVESTIGATION" -> mappedPurposes.add(PLYDataProcessingPurpose.SupportInvestigation)
                 }
             } catch (e: JSONException) {
                 Log.e("Purchasely", "Error in string array" + e.message, e)

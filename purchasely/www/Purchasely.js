@@ -927,7 +927,10 @@ exports.DataProcessingPurpose = {
     thirdPartyIntegrations: 'THIRD_PARTY_INTEGRATIONS',
     // iOS only (SDK 6.2.0+): the user refuses processing of the consumption data attached
     // to a refund request. Carries a flag to the backend; gates nothing in the SDK.
-    refundHandling:         'REFUND_HANDLING'
+    refundHandling:         'REFUND_HANDLING',
+    // SDK 6.3.0+: processing of the data Purchasely support uses to investigate an issue
+    // reported by the user. Part of allNonEssentials.
+    supportInvestigation:   'SUPPORT_INVESTIGATION'
 }
 
 exports.PurchaseResult = {
