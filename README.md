@@ -340,21 +340,22 @@ Purchasely.revokeDataProcessingConsent([
 | Purpose | Meaning |
 |---------|---------|
 | `analytics` | Usage analytics |
-| `identifiedAnalytics` | Analytics tied to the user's identifiers (vendor id). Part of `allNonEssentials` on Android, not on iOS |
+| `identifiedAnalytics` | Analytics tied to the user's identifiers (vendor id). Part of `allNonEssentials` on both platforms since 6.3.0 |
 | `campaigns` | Campaign targeting and triggers |
 | `personalization` | Paywall and content personalization |
 | `thirdPartyIntegrations` | Forwarding to the third-party integrations you have set up |
 | `refundHandling` | iOS 6.2.0+ only. Processing of the consumption data attached to an App Store refund request. Not part of `allNonEssentials`; ignored on Android |
 | `supportInvestigation` | SDK 6.3.0+. Processing of the data that Purchasely support uses to investigate an issue reported by the user |
-| `allNonEssentials` | Bundle of `analytics`, `campaigns`, `personalization`, `thirdPartyIntegrations`, `supportInvestigation`. Android adds `identifiedAnalytics`. Neither platform adds `refundHandling` |
+| `allNonEssentials` | Bundle of `analytics`, `identifiedAnalytics`, `campaigns`, `personalization`, `thirdPartyIntegrations`, `supportInvestigation` on both platforms. Neither platform adds `refundHandling` |
 
 **Each call replaces the whole set.** The SDK does not merge with the previous call, so pass
 the complete list of refused purposes every time; a call with `[refundHandling]` after a
 call with `[analytics]` grants analytics back. Pass `[]` to grant everything back.
 
-`allNonEssentials` is a fixed bundle: bumping the plugin never adds a purpose to it, so an
-app that already calls it does not start refusing refund data processing. On iOS, list
-`refundHandling` and `identifiedAnalytics` explicitly next to it when you want them. The
+`allNonEssentials` never contains `refundHandling`, so an app that already calls it does not
+start refusing refund data processing. In 6.3.0 it gains `supportInvestigation` on both
+platforms, and `identifiedAnalytics` on iOS. On iOS, list
+`refundHandling` explicitly next to it when you want it. The
 plugin keeps every purpose in the list, whatever the order:
 
 ```js
