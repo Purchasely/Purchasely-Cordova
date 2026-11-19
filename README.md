@@ -299,6 +299,8 @@ SDK does not sign. On Android the method resolves with success and does nothing.
 
 ## What is new in 6.3.0
 
+Full changelog available at https://docs.purchasely.com/changelog/63-subscription-status-listener.
+
 ### User subscription status
 
 `Purchasely.addUserSubscriptionStatusListener(success, error)` replaces `purchasedSubscription()`, which is deprecated.
