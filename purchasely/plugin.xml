@@ -14,25 +14,17 @@
               <param name="ios-package" value="CDVPurchasely" />
             </feature>
         </config-file>
-        <header-file src="src/ios/CDVPurchasely.h" />
-        <source-file src="src/ios/CDVPurchasely.m" />
-        <header-file src="src/ios/CDVPurchasely+Events.h" />
-        <source-file src="src/ios/CDVPurchasely+Events.m" />
-        <header-file src="src/ios/CDVPurchasely+UserAttributes.h" />
-        <source-file src="src/ios/CDVPurchasely+UserAttributes.m" />
-        <header-file src="src/ios/Hybrid/Purchasely_Hybrid.h" />
-        <header-file src="src/ios/Hybrid/UIViewController+Hybrid.h" />
-        <source-file src="src/ios/Hybrid/UIViewController+Hybrid.m" />
-        <header-file src="src/ios/Hybrid/PLYProduct+Hybrid.h" />
-        <source-file src="src/ios/Hybrid/PLYProduct+Hybrid.m" />
-        <header-file src="src/ios/Hybrid/PLYPlan+Hybrid.h" />
-        <source-file src="src/ios/Hybrid/PLYPlan+Hybrid.m" />
-        <header-file src="src/ios/Hybrid/PLYSubscription+Hybrid.h" />
-        <source-file src="src/ios/Hybrid/PLYSubscription+Hybrid.m" />
-        <header-file src="src/ios/Hybrid/PLYPresentationPlan+Hybrid.h" />
-        <source-file src="src/ios/Hybrid/PLYPresentationPlan+Hybrid.m" />
-        <header-file src="src/ios/Hybrid/UIColor+PLYHelper.h" />
-        <source-file src="src/ios/Hybrid/UIColor+PLYHelper.m" />
+        <source-file src="src/ios/CDVPurchasely.swift" />
+        <source-file src="src/ios/CDVPurchasely+Events.swift" />
+        <source-file src="src/ios/CDVPurchasely+UserAttributes.swift" />
+        <source-file src="src/ios/CDVPurchasely+Store.swift" />
+        <source-file src="src/ios/CDVPurchasely+Promotions.swift" />
+        <source-file src="src/ios/Hybrid/PLYProduct+Hybrid.swift" />
+        <source-file src="src/ios/Hybrid/PLYPlan+Hybrid.swift" />
+        <source-file src="src/ios/Hybrid/PLYSubscription+Hybrid.swift" />
+        <source-file src="src/ios/Hybrid/PLYPresentationPlan+Hybrid.swift" />
+        <source-file src="src/ios/Hybrid/UIColor+PLYHelper.swift" />
+        <source-file src="src/ios/Hybrid/UIViewController+Hybrid.swift" />
         <podspec>
             <config>
                 <source url="https://github.com/CocoaPods/Specs.git"/>

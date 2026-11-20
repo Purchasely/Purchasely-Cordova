@@ -24,7 +24,7 @@
 #import <XCTest/XCTest.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
-#import "CDVPurchasely.h"
+#import "../../../../src/ios/CDVPurchasely.h"
 
 /// Records what the bridge hands to Cordova.
 ///
@@ -33,6 +33,25 @@
 @interface CDVFakeCommandDelegate : NSObject <CDVCommandDelegate>
 @property (nonatomic, strong) NSMutableArray<CDVPluginResult *> *results;
 @property (nonatomic, strong) NSMutableArray<NSString *> *callbackIds;
+@end
+
+@interface CDVFakePresentation : NSObject <PLYPresentation>
+@end
+
+@implementation CDVFakePresentation
+@dynamic screenId, language, placementId, audienceId, abTestId, abTestVariantId;
+@dynamic campaignId, flowId, type, controller, plans, metadata, backgroundColor, height;
+@dynamic transition, connections, isFlow, onPresented, onCloseRequested, onDismissed;
+
+- (void)displayFrom:(UIViewController *)sourceViewController {}
+- (void)displayFrom:(UIViewController *)sourceViewController transitionType:(PLYTransition *)transitionType {}
+- (void)close {}
+- (void)back {}
+- (void)exposed {}
+- (void)executeConnection:(PLYConnection *)connection {}
+- (void)preloadWithCompletion:(void (^)(id<PLYPresentation> presentation, NSError *error))completion {
+    completion(self, nil);
+}
 @end
 
 @implementation CDVFakeCommandDelegate
@@ -76,6 +95,10 @@
 - (id<PLYPresentation>)findPresentationLoadedFor:(NSString *)fetchId;
 @end
 
+@interface CDVPurchasely (WebRedemptionDelivery)
+- (void)deliverWebRedemption:(NSDictionary * (^)(void))makeBody;
+@end
+
 @interface CDVPurchaselyLifecycleTests : XCTestCase
 @end
 
@@ -90,6 +113,143 @@
     CDVPurchasely *plugin = [[CDVPurchasely alloc] initWithWebViewEngine:webView];
     [plugin pluginInitialize];
     return plugin;
+}
+
+- (id)runtimePluginBuiltTheCapacitorWay {
+    Class pluginClass = NSClassFromString(@"CDVPurchasely");
+    XCTAssertNotNil(pluginClass, @"Cordova must be able to discover CDVPurchasely by runtime name.");
+    if (pluginClass == Nil) { return nil; }
+
+    WKWebView *webView = [[WKWebView alloc] initWithFrame:CGRectZero];
+    id plugin = [[pluginClass alloc] initWithWebViewEngine:webView];
+    [plugin performSelector:@selector(pluginInitialize)];
+    return plugin;
+}
+
+- (CDVInvokedUrlCommand *)runtimeCommand:(NSString *)action callbackId:(NSString *)callbackId arguments:(NSArray *)arguments {
+    return [[CDVInvokedUrlCommand alloc] initWithArguments:arguments
+                                               callbackId:callbackId
+                                                className:@"CDVPurchasely"
+                                               methodName:action];
+}
+
+- (BOOL)invokeRuntimeAction:(NSString *)action plugin:(id)plugin callbackId:(NSString *)callbackId arguments:(NSArray *)arguments {
+    SEL selector = NSSelectorFromString([action stringByAppendingString:@":"]);
+    NSMethodSignature *signature = [plugin methodSignatureForSelector:selector];
+    if (signature == nil) { return NO; }
+
+    NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
+    invocation.target = plugin;
+    invocation.selector = selector;
+    CDVInvokedUrlCommand *command = [self runtimeCommand:action callbackId:callbackId arguments:arguments];
+    __unsafe_unretained CDVInvokedUrlCommand *argument = command;
+    [invocation setArgument:&argument atIndex:2];
+    [invocation invoke];
+    return YES;
+}
+
+- (void)invokeAppConfiguredEventOnPlugin:(id)plugin {
+    SEL selector = NSSelectorFromString(@"eventTriggered:properties:");
+    NSMethodSignature *signature = [plugin methodSignatureForSelector:selector];
+    XCTAssertNotNil(signature);
+    if (signature == nil) { return; }
+
+    NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
+    invocation.target = plugin;
+    invocation.selector = selector;
+    NSInteger event = PLYEventAppConfigured;
+    NSDictionary *properties = @{@"contract_probe": @YES};
+    __unsafe_unretained NSDictionary *propertyArgument = properties;
+    [invocation setArgument:&event atIndex:2];
+    [invocation setArgument:&propertyArgument atIndex:3];
+    [invocation invoke];
+}
+
+- (void)assertOneTerminalErrorFrom:(CDVFakeCommandDelegate *)delegate callbackId:(NSString *)callbackId {
+    XCTAssertEqual(delegate.results.count, (NSUInteger)1);
+    XCTAssertEqualObjects(delegate.callbackIds.firstObject, callbackId);
+    XCTAssertEqualObjects(delegate.results.firstObject.status, @(CDVCommandStatus_ERROR));
+    XCTAssertEqualObjects(delegate.results.firstObject.keepCallback, @NO,
+                          @"Every one-shot JS action must free its callback after the terminal error.");
+}
+
+- (void)testRuntimeMigrationContract {
+    id plugin = [self runtimePluginBuiltTheCapacitorWay];
+    XCTAssertNotNil(plugin);
+    if (plugin == nil) { return; }
+
+    // These names are the distinct `cordova.exec` actions in Purchasely.js. The last three
+    // are passed through presentationHandleCall(), whose action is selected by the public
+    // exposed()/clientPresentation*() callers.
+    NSArray<NSString *> *jsActions = @[
+        @"addEventsListener", @"addUserAttributeListener", @"addUserSubscriptionStatusListener",
+        @"addWebRedemptionListener", @"allProducts", @"allowCampaigns", @"allowDeeplink",
+        @"backPresentation", @"clearBuiltInAttributes", @"clearDynamicOfferings", @"clearUserAttribute",
+        @"clearUserAttributes", @"closeAllScreens", @"completeActionInterceptor", @"decrementUserAttribute",
+        @"emit", @"fetchPresentation", @"getAnonymousUserId", @"getBuiltInAttribute", @"getBuiltInAttributes",
+        @"getDynamicOfferings", @"handleDeeplink", @"incrementUserAttribute", @"isAnonymous",
+        @"isEligibleForIntroOffer", @"planWithIdentifier", @"presentPresentation", @"presentPresentationForDefault",
+        @"presentPresentationForPlacement", @"presentPresentationWithIdentifier", @"productWithIdentifier",
+        @"purchaseWithPlanVendorId", @"purchasedSubscription", @"registerActionInterceptor",
+        @"removeDefaultPresentationDismissHandler", @"removeDynamicOffering", @"removeEventsListener",
+        @"removeUserAttributeListener", @"removeUserSubscriptionStatusListener", @"removeWebRedemptionListener",
+        @"restoreAllProducts", @"revokeDataProcessingConsent", @"setAttribute", @"setDebugMode",
+        @"setDefaultPresentationDismissHandler", @"setDynamicOffering", @"setLanguage", @"setLogLevel",
+        @"setThemeMode", @"setUserAttributeWithBoolean", @"setUserAttributeWithBooleanArray",
+        @"setUserAttributeWithDate", @"setUserAttributeWithDouble", @"setUserAttributeWithDoubleArray",
+        @"setUserAttributeWithInt", @"setUserAttributeWithIntArray", @"setUserAttributeWithString",
+        @"setUserAttributeWithStringArray", @"signPromotionalOffer", @"signPromotionalOfferWithToken",
+        @"silentRestoreAllProducts", @"start", @"synchronize", @"unregisterActionInterceptor",
+        @"userAttribute", @"userAttributes", @"userDidConsumeSubscriptionContent", @"userLogin",
+        @"userLogout", @"userSubscriptions", @"userSubscriptionsHistory", @"exposed",
+        @"clientPresentationDisplayed", @"clientPresentationClosed"
+    ];
+    for (NSString *action in jsActions) {
+        XCTAssertTrue([plugin respondsToSelector:NSSelectorFromString([action stringByAppendingString:@":"])],
+                      @"The native plugin is missing the selector for JavaScript action %@:", action);
+    }
+
+    CDVFakeCommandDelegate *delegate = [CDVFakeCommandDelegate new];
+    [plugin setValue:delegate forKey:@"commandDelegate"];
+
+    XCTAssertTrue([self invokeRuntimeAction:@"start" plugin:plugin callbackId:@"malformed-start" arguments:@[]]);
+    [self assertOneTerminalErrorFrom:delegate callbackId:@"malformed-start"];
+
+    [delegate.results removeAllObjects];
+    [delegate.callbackIds removeAllObjects];
+    XCTAssertTrue([self invokeRuntimeAction:@"exposed" plugin:plugin callbackId:@"missing-exposed" arguments:@[[NSNull null]]]);
+    // The legacy implementation deliberately resolves loaded-presentation actions on
+    // the main queue. Let that callback reach the fake Cordova delegate before asserting
+    // its terminal result; a synchronous assertion here would make a timing change look
+    // like an error-contract change.
+    XCTNSPredicateExpectation *exposedErrorArrived = [[XCTNSPredicateExpectation alloc]
+        initWithPredicate:[NSPredicate predicateWithFormat:@"results.@count > 0"] object:delegate];
+    [self waitForExpectations:@[exposedErrorArrived] timeout:5];
+    [self assertOneTerminalErrorFrom:delegate callbackId:@"missing-exposed"];
+
+    [delegate.results removeAllObjects];
+    [delegate.callbackIds removeAllObjects];
+    XCTAssertTrue([self invokeRuntimeAction:@"addEventsListener" plugin:plugin callbackId:@"events" arguments:@[]]);
+    [self invokeAppConfiguredEventOnPlugin:plugin];
+    XCTAssertEqual(delegate.results.count, (NSUInteger)1);
+    XCTAssertEqualObjects(delegate.callbackIds.firstObject, @"events");
+    XCTAssertEqualObjects(delegate.results.firstObject.status, @(CDVCommandStatus_OK));
+    XCTAssertEqualObjects(delegate.results.firstObject.keepCallback, @YES,
+                          @"An event listener remains open after each event.");
+
+    [self invokeRuntimeAction:@"addWebRedemptionListener" plugin:plugin callbackId:@"replaced-redemption" arguments:@[]];
+    [self invokeRuntimeAction:@"addWebRedemptionListener" plugin:plugin callbackId:@"current-redemption" arguments:@[]];
+    XCTAssertEqual(delegate.results.count, (NSUInteger)2);
+    XCTAssertEqualObjects(delegate.callbackIds[1], @"replaced-redemption");
+    XCTAssertEqualObjects(delegate.results[1].status, @(CDVCommandStatus_NO_RESULT));
+    XCTAssertEqualObjects(delegate.results[1].keepCallback, @NO,
+                          @"Replacing a listener must terminate its old Cordova callback.");
+
+    [plugin performSelector:@selector(onReset)];
+    XCTAssertNil([plugin valueForKey:@"webRedemptionCommand"],
+                 @"WebView reset invalidates the listener callbackId from the old page.");
+    XCTAssertEqual(delegate.results.count, (NSUInteger)2,
+                   @"After reset, subsequent native callbacks must not target a stale JS callbackId.");
 }
 
 - (void)testCollectionsAreAllocatedOnTheCapacitorInitPath {
@@ -125,7 +285,7 @@
 
     // Any object stands in for a presentation here: the bug is in the container, not in
     // what it holds, and building a real PLYPresentation would need a started SDK.
-    plugin.presentationsLoaded[@"fetch-1"] = (id<PLYPresentation>)[NSObject new];
+    plugin.presentationsLoaded[@"fetch-1"] = [CDVFakePresentation new];
 
     XCTAssertEqual(plugin.presentationsLoaded.count, (NSUInteger)1,
                    @"The preloaded presentation did not survive the write. A subscript "
@@ -136,8 +296,8 @@
 // screenId) must each be found by their own fetchId, never by a shared screenId.
 - (void)testLoadedPresentationsAreFoundByFetchIdNotByScreen {
     CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
-    id<PLYPresentation> first = (id<PLYPresentation>)[NSObject new];
-    id<PLYPresentation> second = (id<PLYPresentation>)[NSObject new];
+    id<PLYPresentation> first = [CDVFakePresentation new];
+    id<PLYPresentation> second = [CDVFakePresentation new];
     plugin.presentationsLoaded[@"fetch-1"] = first;
     plugin.presentationsLoaded[@"fetch-2"] = second;
 
@@ -180,15 +340,33 @@
 // callbackId.
 - (void)testRedemptionOutcomeIsANoOpWithNoListener {
     CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+    CDVFakeCommandDelegate *delegate = [CDVFakeCommandDelegate new];
+    plugin.commandDelegate = delegate;
 
     XCTAssertNil(plugin.webRedemptionCommand,
                  @"No listener is recorded before addWebRedemptionListener runs.");
-    // Called through the protocol: the implementation lives on the (Events) category, whose
-    // header the test target does not compile. A nil result would crash a callback that
-    // dereferenced it before the nil-command guard, which is the ordering this asserts.
-    id<PLYWebRedemptionDelegate> delegate = (id<PLYWebRedemptionDelegate>)plugin;
-    XCTAssertNoThrow([delegate webRedemptionCompletedWithResult:(PLYWebRedemptionResult * _Nonnull)nil],
-                     @"The redemption callback should return early when no listener is recorded.");
+    __block BOOL bodyBuilt = NO;
+    [plugin deliverWebRedemption:^NSDictionary *{
+        bodyBuilt = YES;
+        return @{@"success": @YES};
+    }];
+    XCTAssertFalse(bodyBuilt, @"No listener should avoid building the payload.");
+    XCTAssertEqual(delegate.results.count, (NSUInteger)0,
+                   @"There is no callbackId capable of receiving a redemption result.");
+}
+
+- (void)testRedemptionDeliveryKeepsTheCurrentCallbackOpen {
+    CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+    CDVFakeCommandDelegate *delegate = [CDVFakeCommandDelegate new];
+    plugin.commandDelegate = delegate;
+    [plugin addWebRedemptionListener:[self commandWithId:@"active-redemption"]];
+
+    [plugin deliverWebRedemption:^{ return @{@"success": @YES}; }];
+
+    XCTAssertEqual(delegate.results.count, (NSUInteger)1);
+    XCTAssertEqualObjects(delegate.callbackIds.firstObject, @"active-redemption");
+    XCTAssertEqualObjects(delegate.results.firstObject.message, @{@"success": @YES});
+    XCTAssertEqualObjects(delegate.results.firstObject.keepCallback, @YES);
 }
 
 #pragma mark - proxy: the three states (6.1.0)
@@ -325,10 +503,10 @@
 // keep working; clearing is what makes the window in between a clean no-op.
 - (void)testOnResetClearsEveryStoredCommand {
     CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
-    plugin.eventCommand = (CDVInvokedUrlCommand *)[NSObject new];
-    plugin.attributeCommand = (CDVInvokedUrlCommand *)[NSObject new];
-    plugin.webRedemptionCommand = (CDVInvokedUrlCommand *)[NSObject new];
-    plugin.purchasedCommand = (CDVInvokedUrlCommand *)[NSObject new];
+    plugin.eventCommand = [self runtimeCommand:@"event" callbackId:@"event" arguments:@[]];
+    plugin.attributeCommand = [self runtimeCommand:@"attribute" callbackId:@"attribute" arguments:@[]];
+    plugin.webRedemptionCommand = [self runtimeCommand:@"redemption" callbackId:@"redemption" arguments:@[]];
+    plugin.purchasedCommand = [self runtimeCommand:@"purchase" callbackId:@"purchase" arguments:@[]];
 
     [plugin onReset];
 
@@ -343,13 +521,20 @@
 // reload too. With the command cleared it must be a no-op rather than a send on a dead id.
 - (void)testRedemptionOutcomeIsANoOpAfterAReset {
     CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
-    plugin.webRedemptionCommand = (CDVInvokedUrlCommand *)[NSObject new];
+    CDVFakeCommandDelegate *delegate = [CDVFakeCommandDelegate new];
+    plugin.commandDelegate = delegate;
+    plugin.webRedemptionCommand = [self runtimeCommand:@"redemption" callbackId:@"redemption" arguments:@[]];
 
     [plugin onReset];
 
-    id<PLYWebRedemptionDelegate> delegate = (id<PLYWebRedemptionDelegate>)plugin;
-    XCTAssertNoThrow([delegate webRedemptionCompletedWithResult:(PLYWebRedemptionResult * _Nonnull)nil],
-                     @"the redemption callback must return early once the command is cleared");
+    __block BOOL bodyBuilt = NO;
+    [plugin deliverWebRedemption:^NSDictionary *{
+        bodyBuilt = YES;
+        return @{@"success": @YES};
+    }];
+    XCTAssertFalse(bodyBuilt, @"Reset must prevent stale callback payload construction.");
+    XCTAssertEqual(delegate.results.count, (NSUInteger)0,
+                   @"Reset clears the old callbackId before a redemption result can be sent.");
 }
 #pragma mark - the redemption body's five-key contract (6.1.0)
 
@@ -549,14 +734,14 @@
 #pragma mark - revokeDataProcessingConsent: the set handed to native
 
 // Native replaces the stored set on every call, so a purpose lost on the way is a refusal
-// that never reaches the backend. `+revokeDataProcessingConsentFor:` is a class method on
-// the SDK, so the test swaps its implementation to capture the set, and restores it.
+// that never reaches the backend. The Swift bridge's native adapter is the owning
+// boundary, so the test captures the exact argument it sends.
 
 - (NSSet<PLYDataProcessingPurpose *> *)setHandedToNativeFor:(NSArray<NSString *> *)purposes {
-    Method method = class_getClassMethod([Purchasely class], @selector(revokeDataProcessingConsentFor:));
+    Method method = class_getInstanceMethod([CDVPurchasely class], NSSelectorFromString(@"revokeConsentNative:"));
     IMP original = method_getImplementation(method);
     __block NSSet<PLYDataProcessingPurpose *> *captured = nil;
-    method_setImplementation(method, imp_implementationWithBlock(^(id _self, NSSet *set) { captured = set; }));
+    method_setImplementation(method, imp_implementationWithBlock(^(CDVPurchasely *plugin, NSSet *set) { captured = set; }));
     @try {
         CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
         CDVInvokedUrlCommand *command = [[CDVInvokedUrlCommand alloc] initWithArguments:@[purposes]
@@ -605,10 +790,9 @@
 
 #pragma mark - emit
 
-// `+emitWithName:properties:` is a class method on the SDK, so the test swaps its
-// implementation for a stub that records what reaches native, and restores it. The bridge
-// also owns the callback: one terminal result, or the JS closure stays in cordova.callbacks
-// until the WebView reloads.
+// The Swift bridge's native adapter is the owning boundary, so the test captures the exact
+// values it sends. The bridge also owns the callback: one terminal result, or the JS closure
+// stays in cordova.callbacks until the WebView reloads.
 
 - (CDVInvokedUrlCommand *)commandWithId:(NSString *)callbackId arguments:(NSArray *)arguments {
     return [[CDVInvokedUrlCommand alloc] initWithArguments:arguments
@@ -618,11 +802,11 @@
 }
 
 - (CDVEmitRun *)emitWithArguments:(NSArray *)arguments {
-    Method method = class_getClassMethod([Purchasely class], @selector(emitWithName:properties:));
+    Method method = class_getInstanceMethod([CDVPurchasely class], NSSelectorFromString(@"emitNativeWithName:properties:"));
     IMP original = method_getImplementation(method);
     CDVEmitRun *run = [CDVEmitRun new];
     run.delegate = [CDVFakeCommandDelegate new];
-    method_setImplementation(method, imp_implementationWithBlock(^(id _self, NSString *name, NSDictionary *properties) {
+    method_setImplementation(method, imp_implementationWithBlock(^(CDVPurchasely *plugin, NSString *name, NSDictionary *properties) {
         run.nativeCalls += 1;
         run.nameSeenByNative = name;
         run.propertiesSeenByNative = properties;
@@ -680,6 +864,42 @@
 
     XCTAssertEqual(run.nativeCalls, (NSUInteger)0);
     XCTAssertEqualObjects(run.delegate.results.firstObject.status, @(CDVCommandStatus_ERROR));
+}
+
+- (void)testAttributeReadsKeepScalarArrayAndDictionaryWireTypes {
+    NSArray *values = @[@"string-value", @42, @YES, @[@1, @"two"], @{ @"nested": @YES }];
+    Method userValueMethod = class_getInstanceMethod([CDVPurchasely class], NSSelectorFromString(@"userAttributeValueForKey:"));
+    IMP originalUserValue = method_getImplementation(userValueMethod);
+    Method builtInMethod = class_getInstanceMethod([CDVPurchasely class], NSSelectorFromString(@"builtInAttributeValueForKey:"));
+    IMP originalBuiltIn = method_getImplementation(builtInMethod);
+    @try {
+        for (id value in values) {
+            method_setImplementation(userValueMethod, imp_implementationWithBlock(^id(CDVPurchasely *plugin, NSString *key) {
+                return value;
+            }));
+            CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+            CDVFakeCommandDelegate *delegate = [CDVFakeCommandDelegate new];
+            plugin.commandDelegate = delegate;
+            [plugin userAttribute:[self commandWithId:@"attribute-read" arguments:@[@"key"]]];
+            XCTAssertEqual(delegate.results.count, (NSUInteger)1);
+            XCTAssertEqualObjects(delegate.results.firstObject.status, @(CDVCommandStatus_OK));
+            XCTAssertEqualObjects(delegate.results.firstObject.message, value);
+        }
+
+        method_setImplementation(builtInMethod, imp_implementationWithBlock(^id(CDVPurchasely *plugin, NSString *key) {
+            return @YES;
+        }));
+        CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+        CDVFakeCommandDelegate *delegate = [CDVFakeCommandDelegate new];
+        plugin.commandDelegate = delegate;
+        [plugin getBuiltInAttribute:[self commandWithId:@"built-in-read" arguments:@[@"enabled"]]];
+        XCTAssertEqual(delegate.results.count, (NSUInteger)1);
+        XCTAssertEqualObjects(delegate.results.firstObject.message, @YES);
+        XCTAssertTrue([delegate.results.firstObject.message isKindOfClass:[NSNumber class]]);
+    } @finally {
+        method_setImplementation(userValueMethod, originalUserValue);
+        method_setImplementation(builtInMethod, originalBuiltIn);
+    }
 }
 
 @end
@@ -800,6 +1020,31 @@ typedef void (^CDVSignFailure)(NSError *);
 
     XCTAssertEqual(run.nativeCalls, (NSUInteger)0);
     XCTAssertEqualObjects(run.results.firstObject.status, @(CDVCommandStatus_ERROR));
+}
+
+- (void)testMalformedTokenIsRejectedBeforeMissingProductArguments {
+    CDVSignRun *run = [self signWithArguments:@[[NSNull null], @42, @"not-a-uuid"]
+                                   nativeToken:[NSUUID UUID]
+                                   nativeError:nil];
+
+    XCTAssertEqual(run.nativeCalls, (NSUInteger)0);
+    XCTAssertEqual(run.results.count, (NSUInteger)1);
+    XCTAssertEqualObjects(run.results.firstObject.status, @(CDVCommandStatus_ERROR));
+    XCTAssertEqualObjects(run.results.firstObject.message, @"purchaseContextToken must be a UUID string or null");
+}
+
+- (void)testMissingProductOrOfferReturnsOneTerminalError {
+    NSArray<NSArray *> *invalidArguments = @[
+        @[[NSNull null], @"offer", [NSNull null]],
+        @[@"product", @42, [NSNull null]]
+    ];
+    for (NSArray *arguments in invalidArguments) {
+        CDVSignRun *run = [self signWithArguments:arguments nativeToken:[NSUUID UUID] nativeError:nil];
+        XCTAssertEqual(run.nativeCalls, (NSUInteger)0);
+        XCTAssertEqual(run.results.count, (NSUInteger)1);
+        XCTAssertEqualObjects(run.results.firstObject.status, @(CDVCommandStatus_ERROR));
+        XCTAssertEqualObjects(run.results.firstObject.message, @"storeProductId and storeOfferId are required");
+    }
 }
 
 - (void)testSignWithATokenForwardsANativeError {
