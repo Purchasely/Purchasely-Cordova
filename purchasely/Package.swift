@@ -66,11 +66,18 @@ let package = Package(
                 .product(name: "Purchasely", package: "Purchasely-iOS")
             ],
             path: "src/ios",
-            publicHeadersPath: ".",
-            cSettings: [
-                // The Hybrid/ type-marshalling headers are imported unqualified from the
-                // sources next to them, so their directory has to be on the search path.
-                .headerSearchPath("Hybrid")
+            sources: [
+                "CDVPurchasely.swift",
+                "CDVPurchasely+Events.swift",
+                "CDVPurchasely+UserAttributes.swift",
+                "CDVPurchasely+Store.swift",
+                "CDVPurchasely+Promotions.swift",
+                "Hybrid/PLYProduct+Hybrid.swift",
+                "Hybrid/PLYPlan+Hybrid.swift",
+                "Hybrid/PLYSubscription+Hybrid.swift",
+                "Hybrid/PLYPresentationPlan+Hybrid.swift",
+                "Hybrid/UIColor+PLYHelper.swift",
+                "Hybrid/UIViewController+Hybrid.swift"
             ]
         )
     ]
