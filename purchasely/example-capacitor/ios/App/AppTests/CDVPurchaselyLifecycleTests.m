@@ -99,6 +99,14 @@
 - (void)deliverWebRedemption:(NSDictionary * (^)(void))makeBody;
 @end
 
+@interface CDVPurchasely (PresentationCallback)
+- (void)presentationDidPresent:(id<PLYPresentation>)presentation error:(NSError *)error callbackId:(NSString *)callbackId;
+@end
+
+@interface CDVPurchasely (UserAttributeCallback)
+- (void)onUserAttributeSetWithKey:(NSString *)key type:(PLYUserAttributeType)type value:(id)value source:(PLYUserAttributeSource)source;
+@end
+
 @interface CDVPurchaselyLifecycleTests : XCTestCase
 @end
 
@@ -867,7 +875,7 @@
 }
 
 - (void)testAttributeReadsKeepScalarArrayAndDictionaryWireTypes {
-    NSArray *values = @[@"string-value", @42, @YES, @[@1, @"two"], @{ @"nested": @YES }];
+    NSArray *values = @[@"string-value", @42, @4294967297LL, @YES, @[@1, @"two"], @{ @"nested": @YES }];
     Method userValueMethod = class_getInstanceMethod([CDVPurchasely class], NSSelectorFromString(@"userAttributeValueForKey:"));
     IMP originalUserValue = method_getImplementation(userValueMethod);
     Method builtInMethod = class_getInstanceMethod([CDVPurchasely class], NSSelectorFromString(@"builtInAttributeValueForKey:"));
@@ -900,6 +908,45 @@
         method_setImplementation(userValueMethod, originalUserValue);
         method_setImplementation(builtInMethod, originalBuiltIn);
     }
+}
+
+- (void)testFailedPresentationCallbackClearsTheBackTarget {
+    CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+    plugin.currentPresentation = [CDVFakePresentation new];
+    CDVFakeCommandDelegate *delegate = [CDVFakeCommandDelegate new];
+    plugin.commandDelegate = delegate;
+    NSError *error = [NSError errorWithDomain:@"presentation" code:1
+                                     userInfo:@{NSLocalizedDescriptionKey: @"display failed"}];
+
+    // Exercise the same callback boundary registered with PLYPresentationBuilder. A
+    // failed or empty presentation must replace the previous target before back() runs.
+    [plugin presentationDidPresent:nil error:error callbackId:@"presentation"];
+
+    XCTAssertNil(plugin.currentPresentation);
+    XCTAssertEqual(delegate.results.count, (NSUInteger)1);
+    XCTAssertEqualObjects(delegate.callbackIds.firstObject, @"presentation");
+    XCTAssertEqualObjects(delegate.results.firstObject.message,
+                          (@{ @"event": @"presented", @"error": @"display failed" }));
+    XCTAssertEqualObjects(delegate.results.firstObject.keepCallback, @YES);
+}
+
+- (void)testUserAttributeListenerPreservesLegacyIntWidth {
+    CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+    CDVFakeCommandDelegate *delegate = [CDVFakeCommandDelegate new];
+    plugin.commandDelegate = delegate;
+    [plugin addUserAttributeListener:[self runtimeCommand:@"addUserAttributeListener"
+                                                callbackId:@"attribute-stream"
+                                                 arguments:@[]]];
+
+    [plugin onUserAttributeSetWithKey:@"count"
+                                 type:PLYUserAttributeTypeInt
+                                value:@4294967297LL
+                               source:PLYUserAttributeSourceClient];
+
+    XCTAssertEqual(delegate.results.count, (NSUInteger)1);
+    XCTAssertEqualObjects(delegate.callbackIds.firstObject, @"attribute-stream");
+    XCTAssertEqualObjects(delegate.results.firstObject.message[@"value"], @1);
+    XCTAssertEqualObjects(delegate.results.firstObject.keepCallback, @YES);
 }
 
 @end

@@ -108,7 +108,7 @@ public class CDVPurchasely: CDVPlugin {
             } else if ["f", "d"].contains(String(cString: value.objCType)) {
                 result = CDVPluginResult(status: .ok, messageAs: value.doubleValue)
             } else {
-                result = CDVPluginResult(status: .ok, messageAs: Int32(value.int32Value))
+                result = CDVPluginResult(status: .ok, messageAs: value.intValue)
             }
         } else {
             result = nil
@@ -774,12 +774,7 @@ public class CDVPurchasely: CDVPlugin {
         let callbackId = command.callbackId
         builder.onPresented { [weak self] presentation, error in
             guard let self else { return }
-            if let presentation, case nil = error { self.currentPresentation = presentation }
-            var body: [String: Any] = ["event": "presented"]
-            if let presentation { body["presentation"] = self.resultDictionaryForFetchPresentation(presentation) }
-            if let error { body["error"] = error.localizedDescription }
-            let result = CDVPluginResult(status: .ok, messageAs: body)
-            self.send(result, callbackId: callbackId, keepCallback: true)
+            self.presentationDidPresent(presentation, error: error, callbackId: callbackId)
         }
         builder.onCloseRequested { [weak self] in
             guard let self else { return }
@@ -793,6 +788,16 @@ public class CDVPurchasely: CDVPlugin {
         }
         let request = builder.build()
         request.display(transition: displayMode(from: transition), completion: nil)
+    }
+
+    @objc(presentationDidPresent:error:callbackId:)
+    func presentationDidPresent(_ presentation: (any PLYPresentation)?, error: Error?, callbackId: String?) {
+        currentPresentation = presentation
+        var body: [String: Any] = ["event": "presented"]
+        if let presentation { body["presentation"] = resultDictionaryForFetchPresentation(presentation) }
+        if let error { body["error"] = error.localizedDescription }
+        let result = CDVPluginResult(status: .ok, messageAs: body)
+        send(result, callbackId: callbackId, keepCallback: true)
     }
 
     @objc(presentPresentationWithIdentifier:)

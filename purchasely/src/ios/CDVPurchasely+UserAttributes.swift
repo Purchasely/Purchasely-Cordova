@@ -41,7 +41,7 @@ extension CDVPurchasely: PLYUserAttributeDelegate {
         case .bool:
             if let value = value as? NSNumber { body["value"] = value.boolValue }
         case .int:
-            if let value = value as? NSNumber { body["value"] = value.intValue }
+            if let value = value as? NSNumber { body["value"] = value.int32Value }
         case .double:
             if let value = value as? NSNumber { body["value"] = value.doubleValue }
         case .date:
