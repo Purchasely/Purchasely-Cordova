@@ -167,8 +167,12 @@ function onPurchaselySdkReady() {
 		console.log("Error: " + error)
 	})
 
-	Purchasely.purchasedSubscription(() => {
-		console.log("Purchased performed, reload content to unlock.");
+	Purchasely.addUserSubscriptionStatusListener((status) => {
+		console.log("User subscription status: isActive=" + status.isActive
+			+ " reason=" + status.reason
+			+ " subscription=" + (status.subscription ? status.subscription.plan.vendorId : null));
+	}, (error) => {
+		console.log("User subscription status error: " + error);
 	});
 
 	Purchasely.userLogin('test_cordova', refresh => {

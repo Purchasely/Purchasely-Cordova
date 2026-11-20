@@ -69,9 +69,10 @@ describe('Purchasely', () => {
         expect(Purchasely.DataProcessingPurpose.personalization).toBe('PERSONALIZATION');
         expect(Purchasely.DataProcessingPurpose.thirdPartyIntegrations).toBe('THIRD_PARTY_INTEGRATIONS');
         expect(Purchasely.DataProcessingPurpose.refundHandling).toBe('REFUND_HANDLING');
+        expect(Purchasely.DataProcessingPurpose.supportInvestigation).toBe('SUPPORT_INVESTIGATION');
       });
 
-      it('should expose exactly the seven known purposes', () => {
+      it('should expose exactly the eight known purposes', () => {
         expect(Object.keys(Purchasely.DataProcessingPurpose).sort()).toEqual([
           'allNonEssentials',
           'analytics',
@@ -79,6 +80,7 @@ describe('Purchasely', () => {
           'identifiedAnalytics',
           'personalization',
           'refundHandling',
+          'supportInvestigation',
           'thirdPartyIntegrations',
         ]);
       });
@@ -298,7 +300,7 @@ describe('Purchasely', () => {
           expect.any(Function),
           'Purchasely',
           'start',
-          [{ apiKey: 'API_KEY', sdkVersion: '6.2.0' }]
+          [{ apiKey: 'API_KEY', sdkVersion: '6.3.0' }]
         );
       } finally {
         metadata['cordova-plugin-purchasely'] = original;
@@ -724,6 +726,41 @@ describe('Purchasely', () => {
         expect.any(Function),
         'Purchasely',
         'removeWebRedemptionListener',
+        []
+      );
+    });
+  });
+
+  describe('addUserSubscriptionStatusListener / removeUserSubscriptionStatusListener (6.3.0)', () => {
+    it('registers the callback itself on the add action, so every status reaches it', () => {
+      const success = jest.fn();
+      const error = jest.fn();
+
+      Purchasely.addUserSubscriptionStatusListener(success, error);
+
+      expect(mockExec).toHaveBeenCalledWith(success, error, 'Purchasely', 'addUserSubscriptionStatusListener', []);
+    });
+
+    it('passes the status payload through unchanged, null reason and subscription included', () => {
+      const success = jest.fn();
+      Purchasely.addUserSubscriptionStatusListener(success, jest.fn());
+      const deliver = mockExec.mock.calls[0][0];
+
+      deliver({ isActive: false, reason: null, subscription: null });
+      deliver({ isActive: true, reason: 'WEB_REDEEMED', subscription: { plan: { vendorId: 'monthly' } } });
+
+      expect(success).toHaveBeenNthCalledWith(1, { isActive: false, reason: null, subscription: null });
+      expect(success).toHaveBeenNthCalledWith(2, { isActive: true, reason: 'WEB_REDEEMED', subscription: { plan: { vendorId: 'monthly' } } });
+    });
+
+    it('calls the remove action', () => {
+      Purchasely.removeUserSubscriptionStatusListener();
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        'Purchasely',
+        'removeUserSubscriptionStatusListener',
         []
       );
     });
@@ -1212,6 +1249,60 @@ describe('Purchasely', () => {
         expect(execCallFor('backPresentation')).toBeDefined();
       });
 
+      // 6.3.0: no-op display. A deactivated or client presentation has no screen; the bridge
+      // still calls native display() and settles the Promise once with the outcome the native sends.
+      it('display() of a deactivated presentation resolves once with the native outcome and no error', async () => {
+        const onPresented = jest.fn();
+        const request = Purchasely.presentation.placement('p1').onPresented(onPresented).build();
+        const preloadPromise = request.preload();
+        const rawFetched = { screenId: '', type: 2, fetchId: 'ply_fetch_none' };
+        execCallFor('fetchPresentation')[0](rawFetched);
+        await preloadPromise;
+
+        const outcomePromise = request.display();
+        const displayCall = execCallFor('presentPresentation');
+        expect(displayCall[4][0]).toBe(rawFetched);
+        displayCall[0]({ presentation: { screenId: '', type: 2 } });
+
+        const outcome = await outcomePromise;
+        expect(outcome.error).toBeNull();
+        expect(outcome.presentation.type).toBe(2);
+        expect(onPresented).not.toHaveBeenCalled();
+      });
+
+      describe('exposed() and the client lifecycle (6.3.0)', () => {
+        const preloaded = async (raw) => {
+          const promise = Purchasely.presentation.placement('p1').build().preload();
+          execCallFor('fetchPresentation')[0](raw);
+          return promise;
+        };
+
+        it.each(['exposed', 'clientPresentationDisplayed', 'clientPresentationClosed'])(
+          '%s() calls the native action with the handle kept from preload()',
+          async (action) => {
+            const raw = { screenId: 's1', type: 3, fetchId: 'ply_fetch_1' };
+            const loaded = await preloaded(raw);
+            const success = jest.fn();
+
+            Purchasely[action](loaded, success);
+
+            const call = execCallFor(action);
+            expect(call[2]).toBe('Purchasely');
+            expect(call[4]).toEqual([raw]);
+            call[0]();
+            expect(success).toHaveBeenCalled();
+          }
+        );
+
+        it.each(['exposed', 'clientPresentationDisplayed', 'clientPresentationClosed'])(
+          '%s() sends a null handle for a presentation that preload() did not return',
+          (action) => {
+            Purchasely[action]({ screenId: 's1' });
+            expect(execCallFor(action)[4]).toEqual([null]);
+          }
+        );
+      });
+
       it('rejects preload() on native failure', async () => {
         const request = Purchasely.presentation.screen('screen1').build();
         const preloadPromise = request.preload();
@@ -1399,6 +1490,17 @@ describe('Purchasely', () => {
   });
 
   describe('purchasedSubscription', () => {
+    // Runs first: the warning fires at the first call of the module only.
+    it('is deprecated: warns once on the console, however often it is called', () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      Purchasely.purchasedSubscription(jest.fn(), jest.fn());
+      Purchasely.purchasedSubscription(jest.fn(), jest.fn());
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain('addUserSubscriptionStatusListener');
+      warn.mockRestore();
+    });
+
     it('should call exec with correct parameters', () => {
       const success = jest.fn();
       const error = jest.fn();

@@ -61,6 +61,23 @@
 	[self.commandDelegate sendPluginResult:pluginResult callbackId:self.webRedemptionCommand.callbackId];
 }
 
+/// `PLYUserSubscriptionStatusDelegate`. The SDK calls this on the main thread: the current
+/// status once on add, then each change.
+- (void)userSubscriptionStatusUpdated:(PLYUserSubscriptionStatus *)status {
+	if (self.userSubscriptionStatusCommand == nil) {
+		return;
+	}
+
+	NSDictionary<NSString *, id> *body =
+		[CDVPurchasely userSubscriptionStatusBodyWithIsActive:status.isActive
+													   reason:status.reason
+												 subscription:status.subscription != nil ? status.subscription.asDictionary : nil];
+
+	CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:body];
+	[pluginResult setKeepCallbackAsBool:YES];
+	[self.commandDelegate sendPluginResult:pluginResult callbackId:self.userSubscriptionStatusCommand.callbackId];
+}
+
 - (void)reloadContent: (NSNotification *)aNotification {
 	if (self.purchasedCommand) {
 		CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];

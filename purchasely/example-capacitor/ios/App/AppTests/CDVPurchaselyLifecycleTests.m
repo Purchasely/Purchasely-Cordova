@@ -71,6 +71,11 @@
 @implementation CDVEmitRun
 @end
 
+// Declared in CDVPurchasely.m only.
+@interface CDVPurchasely (FetchIdLookup)
+- (id<PLYPresentation>)findPresentationLoadedFor:(NSString *)fetchId;
+@end
+
 @interface CDVPurchaselyLifecycleTests : XCTestCase
 @end
 
@@ -120,11 +125,26 @@
 
     // Any object stands in for a presentation here: the bug is in the container, not in
     // what it holds, and building a real PLYPresentation would need a started SDK.
-    [plugin.presentationsLoaded addObject:[NSObject new]];
+    plugin.presentationsLoaded[@"fetch-1"] = (id<PLYPresentation>)[NSObject new];
 
     XCTAssertEqual(plugin.presentationsLoaded.count, (NSUInteger)1,
-                   @"The preloaded presentation did not survive addObject:. Sending "
-                   @"addObject: to a nil array is discarded silently.");
+                   @"The preloaded presentation did not survive the write. A subscript "
+                   @"write into a nil dictionary is discarded silently.");
+}
+
+// Two preloads of the same screen (or two deactivated presentations, which have no
+// screenId) must each be found by their own fetchId, never by a shared screenId.
+- (void)testLoadedPresentationsAreFoundByFetchIdNotByScreen {
+    CDVPurchasely *plugin = [self pluginBuiltTheCapacitorWay];
+    id<PLYPresentation> first = (id<PLYPresentation>)[NSObject new];
+    id<PLYPresentation> second = (id<PLYPresentation>)[NSObject new];
+    plugin.presentationsLoaded[@"fetch-1"] = first;
+    plugin.presentationsLoaded[@"fetch-2"] = second;
+
+    XCTAssertIdentical([plugin findPresentationLoadedFor:@"fetch-1"], first);
+    XCTAssertIdentical([plugin findPresentationLoadedFor:@"fetch-2"], second);
+    XCTAssertNil([plugin findPresentationLoadedFor:@"fetch-3"]);
+    XCTAssertNil([plugin findPresentationLoadedFor:nil]);
 }
 
 #pragma mark - Web2App redemption (6.1.0)
@@ -792,6 +812,27 @@ typedef void (^CDVSignFailure)(NSError *);
     XCTAssertEqual(run.nativeCalls, (NSUInteger)1);
     XCTAssertEqualObjects(run.results.firstObject.status, @(CDVCommandStatus_ERROR));
     XCTAssertEqualObjects(run.results.firstObject.message, @"signature failed");
+}
+
+// 6.3.0 user subscription status body: three keys always present, NSNull for a status call.
+- (void)testUserSubscriptionStatusBody {
+    NSDictionary *purchased = [CDVPurchasely userSubscriptionStatusBodyWithIsActive:YES
+                                                                             reason:PLYUserSubscriptionStatusReasonPurchased
+                                                                       subscription:@{ @"plan": @{ @"vendorId": @"monthly" } }];
+    XCTAssertEqual(purchased.count, (NSUInteger)3);
+    XCTAssertEqualObjects(purchased[@"isActive"], @YES);
+    XCTAssertEqualObjects(purchased[@"reason"], @"PURCHASED");
+    XCTAssertEqualObjects(purchased[@"subscription"][@"plan"][@"vendorId"], @"monthly");
+
+    NSDictionary *status = [CDVPurchasely userSubscriptionStatusBodyWithIsActive:NO
+                                                                          reason:PLYUserSubscriptionStatusReasonNone
+                                                                    subscription:nil];
+    XCTAssertEqualObjects(status[@"reason"], [NSNull null]);
+    XCTAssertEqualObjects(status[@"subscription"], [NSNull null]);
+
+    XCTAssertEqualObjects([CDVPurchasely userSubscriptionStatusBodyWithIsActive:YES reason:PLYUserSubscriptionStatusReasonWebRedeemed subscription:nil][@"reason"], @"WEB_REDEEMED");
+    XCTAssertEqualObjects([CDVPurchasely userSubscriptionStatusBodyWithIsActive:NO reason:PLYUserSubscriptionStatusReasonExpired subscription:nil][@"reason"], @"EXPIRED");
+    XCTAssertEqualObjects([CDVPurchasely userSubscriptionStatusBodyWithIsActive:YES reason:PLYUserSubscriptionStatusReasonRestored subscription:nil][@"reason"], @"RESTORED");
 }
 
 @end

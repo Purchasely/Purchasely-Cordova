@@ -61,6 +61,14 @@ typedef NS_ENUM(NSInteger, CDVPurchaselyProxyOption) {
 /// bridge adds a round-trip check.
 + (NSUUID * _Nullable)canonicalUUIDFromString:(id _Nullable)value;
 
+/// Build the `{ isActive, reason, subscription }` body of the user subscription status
+/// listener (6.3.0). `reason` is the wire name, or nil for a status call; `subscription` is the
+/// `userSubscriptions()` dictionary or nil. Both become NSNull, never a missing key.
+/// Takes primitives because `PLYUserSubscriptionStatus` cannot be constructed in a test.
++ (NSDictionary<NSString *, id> * _Nonnull)userSubscriptionStatusBodyWithIsActive:(BOOL)isActive
+                                                                           reason:(PLYUserSubscriptionStatusReason)reason
+                                                                     subscription:(NSDictionary * _Nullable)subscription;
+
 // The presentation currently displayed (v6 uses id<PLYPresentation> for close()/back()).
 @property (nonatomic, strong) id<PLYPresentation> currentPresentation;
 
@@ -74,7 +82,12 @@ typedef NS_ENUM(NSInteger, CDVPurchaselyProxyOption) {
 // `webRedemptionCompletedWithResult:` a no-op.
 @property CDVInvokedUrlCommand* webRedemptionCommand;
 
-@property (nonatomic) NSMutableArray<id<PLYPresentation>> *presentationsLoaded;
+// Purchasely 6.3.0. The command `addUserSubscriptionStatusListener` recorded, or nil. This
+// plugin is the one PLYUserSubscriptionStatusDelegate: the SDK holds it weakly, Cordova keeps
+// the plugin alive. nil makes `userSubscriptionStatusUpdated:` a no-op.
+@property CDVInvokedUrlCommand* userSubscriptionStatusCommand;
+
+@property (nonatomic) NSMutableDictionary<NSString *, id<PLYPresentation>> *presentationsLoaded;
 
 @property (nonatomic) CDVInvokedUrlCommand* purchaseResolve;
 
@@ -114,6 +127,8 @@ typedef NS_ENUM(NSInteger, CDVPurchaselyProxyOption) {
 - (void)releaseCallbackStream:(CDVInvokedUrlCommand * _Nullable)command;
 - (void)addWebRedemptionListener:(CDVInvokedUrlCommand*)command;
 - (void)removeWebRedemptionListener:(CDVInvokedUrlCommand*)command;
+- (void)addUserSubscriptionStatusListener:(CDVInvokedUrlCommand*)command;
+- (void)removeUserSubscriptionStatusListener:(CDVInvokedUrlCommand*)command;
 - (void)registerActionInterceptor:(CDVInvokedUrlCommand*)command;
 - (void)unregisterActionInterceptor:(CDVInvokedUrlCommand*)command;
 - (void)completeActionInterceptor:(CDVInvokedUrlCommand*)command;
@@ -143,6 +158,9 @@ typedef NS_ENUM(NSInteger, CDVPurchaselyProxyOption) {
 - (void)getBuiltInAttribute:(CDVInvokedUrlCommand*)command;
 - (void)fetchPresentation:(CDVInvokedUrlCommand*)command;
 - (void)presentPresentation:(CDVInvokedUrlCommand*)command;
+- (void)exposed:(CDVInvokedUrlCommand*)command;
+- (void)clientPresentationDisplayed:(CDVInvokedUrlCommand*)command;
+- (void)clientPresentationClosed:(CDVInvokedUrlCommand*)command;
 - (void)signPromotionalOffer:(CDVInvokedUrlCommand*)command;
 - (void)signPromotionalOfferWithToken:(CDVInvokedUrlCommand*)command;
 - (void)isEligibleForIntroOffer:(CDVInvokedUrlCommand*)command;

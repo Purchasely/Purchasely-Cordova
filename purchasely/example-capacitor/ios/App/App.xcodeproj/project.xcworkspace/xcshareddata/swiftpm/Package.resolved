@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Purchasely/Purchasely-iOS.git",
       "state" : {
-        "revision" : "82f50b546e26f0df4a04b49af3bc694fe4949b96",
-        "version" : "6.2.0"
+        "revision" : "eca649d4b01ad3e8928f84d52d0db3ccc79469dc",
+        "version" : "6.3.0"
       }
     }
   ],

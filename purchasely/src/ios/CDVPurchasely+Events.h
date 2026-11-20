@@ -8,7 +8,7 @@
 #import <Cordova/CDVPlugin.h>
 #import "CDVPurchasely.h"
 
-@interface CDVPurchasely (Events) <PLYEventDelegate, PLYWebRedemptionDelegate> {
+@interface CDVPurchasely (Events) <PLYEventDelegate, PLYWebRedemptionDelegate, PLYUserSubscriptionStatusDelegate> {
 
 }
 

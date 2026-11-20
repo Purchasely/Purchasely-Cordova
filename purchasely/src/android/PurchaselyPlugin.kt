@@ -16,7 +16,9 @@ import io.purchasely.ext.PLYEvent
 import io.purchasely.ext.PLYInterceptResult
 import io.purchasely.ext.PLYInterceptorInfo
 import io.purchasely.ext.PLYRunningMode
+import io.purchasely.ext.PLYUserSubscriptionStatus
 import io.purchasely.ext.PLYWebRedemptionListener
+import io.purchasely.ext.UserSubscriptionStatusListener
 import io.purchasely.ext.PurchaseListener
 import io.purchasely.ext.Purchasely
 import io.purchasely.ext.State
@@ -45,6 +47,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import org.apache.cordova.CallbackContext
 import org.apache.cordova.CordovaPlugin
@@ -129,6 +133,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         eventsCallback = null
         attributesCallback = null
         webRedemptionCallback = null
+        userSubscriptionStatusCallback = null
     }
 
     override fun execute(
@@ -144,6 +149,8 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 "addUserAttributeListener" -> addUserAttributesListener(callbackContext)
                 "removeUserAttributeListener" -> removeUserAttributesListener()
                 "removeEventsListener" -> removeEventsListener()
+                "addUserSubscriptionStatusListener" -> addUserSubscriptionStatusListener(callbackContext)
+                "removeUserSubscriptionStatusListener" -> removeUserSubscriptionStatusListener(callbackContext)
                 "addWebRedemptionListener" -> addWebRedemptionListener(callbackContext)
                 "removeWebRedemptionListener" -> removeWebRedemptionListener(callbackContext)
                 "getAnonymousUserId" -> getAnonymousUserId(callbackContext)
@@ -195,6 +202,13 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                     getStringFromJson(args.getString(2)),
                     callbackContext
                 )
+                "exposed" -> withLoadedPresentation("exposed", args, callbackContext) { it.exposed() }
+                "clientPresentationDisplayed" -> withLoadedPresentation("clientPresentationDisplayed", args, callbackContext) {
+                    Purchasely.clientPresentationDisplayed(it)
+                }
+                "clientPresentationClosed" -> withLoadedPresentation("clientPresentationClosed", args, callbackContext) {
+                    Purchasely.clientPresentationClosed(it)
+                }
                 "restoreAllProducts" -> restoreAllProducts(callbackContext)
                 "silentRestoreAllProducts" -> restoreAllProducts(callbackContext)
                 "userSubscriptions" -> userSubscriptions(args.optBoolean(0, false), callbackContext)
@@ -504,6 +518,26 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         webRedemptionCallback = null
         // Acknowledge the remove itself, so ITS callbackId is freed too. A void action that
         // never answers leaks its own entry exactly like the listener's.
+        callbackContext.success()
+    }
+
+    /**
+     * v6.3.0. Register the one native [UserSubscriptionStatusListener] and record the callback it
+     * feeds. Not the single-slot `Purchasely.purchaseListener`: the SDK keeps a list. A second add
+     * replaces the JS callback, and the native add runs again so the new callback gets the status
+     * call the SDK sends on add.
+     */
+    private fun addUserSubscriptionStatusListener(callbackContext: CallbackContext) {
+        releaseCallbackStream(userSubscriptionStatusCallback)
+        userSubscriptionStatusCallback = callbackContext
+        Purchasely.removeUserSubscriptionStatusListener(userSubscriptionStatusListener)
+        Purchasely.addUserSubscriptionStatusListener(userSubscriptionStatusListener)
+    }
+
+    private fun removeUserSubscriptionStatusListener(callbackContext: CallbackContext) {
+        Purchasely.removeUserSubscriptionStatusListener(userSubscriptionStatusListener)
+        releaseCallbackStream(userSubscriptionStatusCallback)
+        userSubscriptionStatusCallback = null
         callbackContext.success()
     }
 
@@ -872,6 +906,26 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                 callbackContext.success(JSONObject(outcomeToMap(outcome)))
             }
         }
+    }
+
+    // Runs a native call on the presentation kept by fetchPresentation. args[0] is the presentation
+    // JS sent back (its private `fetchId`); no kept presentation answers ARG_INVALID.
+    private fun withLoadedPresentation(
+        action: String,
+        args: JSONArray,
+        callbackContext: CallbackContext,
+        call: (PLYPresentationBase.Loaded) -> Unit
+    ) {
+        val loaded = args.optJSONObject(0)?.optString("fetchId")?.let { loadedPresentations[it] }
+        if (loaded == null) {
+            callbackContext.error(JSONObject(mapOf(
+                "code" to "ARG_INVALID",
+                "message" to "$action: no loaded presentation, pass a presentation returned by preload()"
+            )))
+            return
+        }
+        call(loaded)
+        callbackContext.success()
     }
 
     // v6: stop receiving default (campaign/deeplink) presentation dismiss outcomes.
@@ -1333,37 +1387,6 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         Purchasely.decrementUserAttribute(key, value)
     }
 
-    private fun getUserAttributeValueForCordova(value: Any?): Any? {
-        return when (value) {
-            is Date -> {
-                val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", Locale.getDefault())
-                } else {
-                    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault())
-                }
-                format.timeZone = TimeZone.getTimeZone("GMT")
-                try {
-                    format.format(value)
-                } catch (e: Exception) {
-                    ""
-                }
-            }
-            is Int -> value
-            //awful but to keep same precision so 1.2f = 1.2 double and not 1.20000056
-            is Float -> value.toString().toDouble()
-            is String -> value
-            is Boolean -> value
-            is Array<*> -> {
-                val jsonArray = JSONArray()
-                value.forEach {
-                    jsonArray.put(getUserAttributeValueForCordova(it))
-                }
-                jsonArray
-            }
-            else -> null
-        }
-    }
-
     fun clearUserAttribute(key: String?) {
         if(key == null) return
         Purchasely.clearUserAttribute(key)
@@ -1394,6 +1417,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         val value = getUserAttributeValueForCordova(Purchasely.getBuiltInAttribute(key))
         when (value) {
             is JSONArray -> callbackContext.success(value)
+            is JSONObject -> callbackContext.success(value)
             is String -> callbackContext.success(value)
             is Int -> callbackContext.success(value)
             is Double -> callbackContext.sendPluginResult(PluginResult(PluginResult.Status.OK, value.toFloat()))
@@ -1474,6 +1498,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
                     "CAMPAIGNS" -> mappedPurposes.add(PLYDataProcessingPurpose.Campaigns)
                     "PERSONALIZATION" -> mappedPurposes.add(PLYDataProcessingPurpose.Personalization)
                     "THIRD_PARTY_INTEGRATIONS" -> mappedPurposes.add(PLYDataProcessingPurpose.ThirdPartyIntegrations)
+                    "SUPPORT_INVESTIGATION" -> mappedPurposes.add(PLYDataProcessingPurpose.SupportInvestigation)
                 }
             } catch (e: JSONException) {
                 Log.e("Purchasely", "Error in string array" + e.message, e)
@@ -1502,6 +1527,19 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         var eventsCallback: CallbackContext? = null
         var attributesCallback: CallbackContext? = null
         var webRedemptionCallback: CallbackContext? = null
+        var userSubscriptionStatusCallback: CallbackContext? = null
+
+        // The one native status listener. In the companion, like the callback it reads lazily, so a
+        // page reload that adds again does not stack a second one.
+        private val userSubscriptionStatusListener = UserSubscriptionStatusListener { status ->
+            val callback = userSubscriptionStatusCallback ?: return@UserSubscriptionStatusListener
+            val result = PluginResult(
+                PluginResult.Status.OK,
+                userSubscriptionStatusToJson(status, Companion::transformSubscriptionToMap)
+            )
+            result.keepCallback = true
+            callback.sendPluginResult(result)
+        }
 
         // Serializes a v6 PLYPresentationOutcome to the wire contract. `result` is kept as an
         // int (PurchaseResult 0/1/2) for back-compat with the pre-6.0 JS layer.
@@ -1820,6 +1858,20 @@ internal fun webRedemptionResultToJson(
 }
 
 /**
+ * The payload of the user subscription status listener: `{ isActive, reason, subscription }`.
+ * `reason` is the enum name, or null for a status call. `subscription` is the object
+ * `userSubscriptions()` returns, or null. Nulls are [JSONObject.NULL] for the reason given on
+ * [webRedemptionResultToJson].
+ */
+internal fun userSubscriptionStatusToJson(
+    status: PLYUserSubscriptionStatus,
+    subscriptionToMap: (PLYSubscriptionData) -> Map<String, Any?>,
+): JSONObject = JSONObject()
+    .put("isActive", status.isActive)
+    .put("reason", status.reason?.name ?: JSONObject.NULL)
+    .put("subscription", status.subscription?.let { JSONObject(subscriptionToMap(it)) } ?: JSONObject.NULL)
+
+/**
  * Parse a canonical UUID string, or return null.
  *
  * JS has no UUID type, so an anonymous user id crosses the bridge as a string.
@@ -1845,3 +1897,45 @@ internal fun parseCanonicalUuid(value: String?): UUID? {
  */
 internal fun customEventProperties(json: JSONObject?): Map<String, Any?> =
     json?.let { Json.parseToJsonElement(it.toString()).jsonObject } ?: emptyMap()
+
+/**
+ * Converts a user or built-in attribute value of the native SDK to a value that a Cordova
+ * callback can carry. `internal` so a unit test drives it.
+ */
+internal fun getUserAttributeValueForCordova(value: Any?): Any? {
+    return when (value) {
+        is Date -> {
+            val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", Locale.getDefault())
+            } else {
+                SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault())
+            }
+            format.timeZone = TimeZone.getTimeZone("GMT")
+            try {
+                format.format(value)
+            } catch (e: Exception) {
+                ""
+            }
+        }
+        is Int -> value
+        //awful but to keep same precision so 1.2f = 1.2 double and not 1.20000056
+        is Float -> value.toString().toDouble()
+        is String -> value
+        is Boolean -> value
+        is Array<*> -> {
+            val jsonArray = JSONArray()
+            value.forEach {
+                jsonArray.put(getUserAttributeValueForCordova(it))
+            }
+            jsonArray
+        }
+        // Keep native JSON types ahead of List and Map so their primitives and explicit nulls survive.
+        is JsonArray -> JSONArray(value.toString())
+        is JsonObject -> JSONObject(value.toString())
+        is List<*> -> JSONArray().apply { value.forEach { put(getUserAttributeValueForCordova(it)) } }
+        is Map<*, *> -> JSONObject().apply {
+            value.forEach { (k, v) -> if (k != null) put(k.toString(), getUserAttributeValueForCordova(v)) }
+        }
+        else -> null
+    }
+}

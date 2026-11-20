@@ -2,6 +2,8 @@ package cordova.plugin.purchasely
 
 import org.apache.cordova.CallbackContext
 import org.apache.cordova.PluginResult
+import io.purchasely.ext.PLYUserSubscriptionStatus
+import io.purchasely.ext.PLYUserSubscriptionStatusReason
 import io.purchasely.ext.PLYWebRedemptionListener
 import io.purchasely.ext.Purchasely
 import io.purchasely.ext.StoreType
@@ -623,6 +625,62 @@ class PurchaselyBridgeTest {
         assertNull(PurchaselyPlugin.webRedemptionCallback)
     }
 
+    // region built-in attributes (6.3.0 Campaigns v2)
+
+    // Native 6.3.0 returns ply_experiments as a list of maps and ply_holdout as a map. The
+    // converter dropped both (it knew only scalars and arrays), so JS never saw them.
+    @Test
+    fun `a list of maps and a map convert to JSON, not null`() {
+        val experiments = listOf(
+            mapOf(
+                "experiment_id" to "camp_1",
+                "experiment_variant_id" to "expv_1",
+                "assigned_at" to "2026-11-20T09:15:41Z",
+                "is_active" to true,
+            )
+        )
+
+        val list = getUserAttributeValueForCordova(experiments) as JSONArray
+        val first = list.getJSONObject(0)
+        assertEquals("camp_1", first.getString("experiment_id"))
+        assertEquals("expv_1", first.getString("experiment_variant_id"))
+        assertEquals("2026-11-20T09:15:41Z", first.getString("assigned_at"))
+        assertTrue(first.getBoolean("is_active"))
+
+        val holdout = getUserAttributeValueForCordova(mapOf("in_holdout" to false, "version" to 3)) as JSONObject
+        assertFalse(holdout.getBoolean("in_holdout"))
+        assertEquals(3, holdout.getInt("version"))
+
+        assertEquals(0, (getUserAttributeValueForCordova(emptyList<Any>()) as JSONArray).length())
+    }
+
+    @Test
+    fun `native subscription JSON reaches Cordova with its values and explicit nulls`() {
+        val subscription = JsonObject(
+            mapOf(
+                "plan" to JsonObject(mapOf("id" to JsonNull, "vendor_id" to JsonPrimitive("monthly"))),
+                "promotional_offer" to JsonNull,
+                "store_type" to JsonPrimitive("GOOGLE_PLAY_STORE"),
+                "cumulated_revenues_in_usd" to JsonPrimitive(4.99),
+                "subscription_duration_in_days" to JsonPrimitive(31),
+            )
+        )
+
+        val subscriptions = getUserAttributeValueForCordova(JsonArray(listOf(subscription))) as JSONArray
+        val returned = subscriptions.getJSONObject(0)
+        val plan = returned.getJSONObject("plan")
+        assertEquals("monthly", plan.getString("vendor_id"))
+        assertTrue(plan.has("id"))
+        assertTrue(plan.isNull("id"))
+        assertTrue(returned.has("promotional_offer"))
+        assertTrue(returned.isNull("promotional_offer"))
+        assertEquals("GOOGLE_PLAY_STORE", returned.getString("store_type"))
+        assertEquals(4.99, returned.getDouble("cumulated_revenues_in_usd"), 0.0)
+        assertEquals(31, returned.getInt("subscription_duration_in_days"))
+    }
+
+    // endregion
+
     /** Drives the real `execute` dispatch, so a renamed action fails the test. */
     private fun PurchaselyPlugin.dispatch(action: String, callback: CallbackContext) {
         assertTrue("$action must be handled by execute()", execute(action, JSONArray(), callback))
@@ -633,6 +691,7 @@ class PurchaselyBridgeTest {
         PurchaselyPlugin.eventsCallback = mock()
         PurchaselyPlugin.attributesCallback = mock()
         PurchaselyPlugin.webRedemptionCallback = mock()
+        PurchaselyPlugin.userSubscriptionStatusCallback = mock()
     }
 
     private fun assertEveryCallbackContextCleared() {
@@ -640,6 +699,7 @@ class PurchaselyBridgeTest {
         assertNull(PurchaselyPlugin.eventsCallback)
         assertNull(PurchaselyPlugin.attributesCallback)
         assertNull(PurchaselyPlugin.webRedemptionCallback)
+        assertNull(PurchaselyPlugin.userSubscriptionStatusCallback)
     }
 
     // endregion
@@ -888,6 +948,51 @@ class PurchaselyBridgeTest {
         assertTrue(PurchaselyPlugin().execute("signPromotionalOfferWithToken", args, callback))
 
         verify(callback).success()
+    }
+
+    // endregion
+    // region presentation handle actions (6.3.0)
+
+    @Test
+    fun `exposed and the client lifecycle answer ARG_INVALID when no presentation was preloaded`() {
+        for (action in listOf("exposed", "clientPresentationDisplayed", "clientPresentationClosed")) {
+            val callback = mock<CallbackContext>()
+            val captor = argumentCaptor<JSONObject>()
+
+            assertTrue(PurchaselyPlugin().execute(action, JSONArray().put(JSONObject().put("fetchId", "unknown")), callback))
+
+            verify(callback).error(captor.capture())
+            assertEquals("ARG_INVALID", captor.firstValue.getString("code"))
+            verify(callback, never()).success()
+        }
+    }
+
+    // endregion
+
+    // region user subscription status payload (6.3.0)
+
+    @Test
+    fun `a status call keeps reason and subscription as JSON null`() {
+        val json = userSubscriptionStatusToJson(
+            PLYUserSubscriptionStatus(false, null, null),
+            fakeSubscriptionMapper
+        )
+
+        assertEquals(false, json.getBoolean("isActive"))
+        assertTrue(json.has("reason") && json.isNull("reason"))
+        assertTrue(json.has("subscription") && json.isNull("subscription"))
+    }
+
+    @Test
+    fun `a change carries the reason name and the shared subscription mapper output`() {
+        val json = userSubscriptionStatusToJson(
+            PLYUserSubscriptionStatus(true, PLYUserSubscriptionStatusReason.WEB_REDEEMED, mock<PLYSubscriptionData>()),
+            fakeSubscriptionMapper
+        )
+
+        assertEquals(true, json.getBoolean("isActive"))
+        assertEquals("WEB_REDEEMED", json.getString("reason"))
+        assertEquals("monthly", json.getJSONObject("subscription").getJSONObject("plan").getString("vendorId"))
     }
 
     // endregion

@@ -297,6 +297,37 @@ Pass `null` to let the SDK make the token. A token string that is not a UUID fai
 SDK does not sign. On Android the method resolves with success and does nothing.
 `signPromotionalOffer` still works and signs over the anonymous user id. It is deprecated.
 
+## What is new in 6.3.0
+
+Full changelog available at https://docs.purchasely.com/changelog/63-subscription-status-listener.
+
+### User subscription status
+
+`Purchasely.addUserSubscriptionStatusListener(success, error)` replaces `purchasedSubscription()`, which is deprecated.
+The callback gets the current status once, then each change. A second call replaces the callback.
+`Purchasely.removeUserSubscriptionStatusListener()` stops it.
+
+```js
+Purchasely.addUserSubscriptionStatusListener((status) => {
+  // { isActive, reason: 'PURCHASED' | 'RESTORED' | 'EXPIRED' | 'WEB_REDEEMED' | null, subscription | null }
+});
+```
+
+`reason` is `null` for the status call. `subscription` has the shape that `userSubscriptions()` returns.
+
+### Data processing purpose `supportInvestigation`
+
+`Purchasely.DataProcessingPurpose.supportInvestigation` is a new purpose for `revokeDataProcessingConsent`. The native `allNonEssentials` bundle now includes it.
+
+### Campaign experiments
+
+- `Purchasely.exposed(presentation)` reports that the app reached the moment it would have shown a `PresentationType.deactivated` presentation (a campaign NONE arm).
+- `Purchasely.clientPresentationDisplayed(presentation)` and `Purchasely.clientPresentationClosed(presentation)` report the own screen of the app for a `PresentationType.client` presentation.
+- Pass the object that `preload()` resolved. Any other value fails with the error code `ARG_INVALID`.
+- `display()` of a deactivated or client presentation shows nothing. Its Promise resolves once with the outcome, and `outcome.presentation.type` tells the type.
+- The events `EXPERIMENT_ASSIGNED` and `EXPERIMENT_EXPOSED` carry `experiment_id` and `experiment_variant_id` in `properties`.
+- `getBuiltInAttributes()` and `getBuiltInAttribute(key)` return `ply_experiments` as a list of objects on both platforms. They return `ply_holdout` as an object after the SDK has stored a holdout value.
+
 ## Data processing consent
 
 Tell the SDK which data processing purposes the user refuses. The native SDK persists the
@@ -312,20 +343,22 @@ Purchasely.revokeDataProcessingConsent([
 | Purpose | Meaning |
 |---------|---------|
 | `analytics` | Usage analytics |
-| `identifiedAnalytics` | Analytics tied to the user's identifiers (vendor id). Part of `allNonEssentials` on Android, not on iOS |
+| `identifiedAnalytics` | Analytics tied to the user's identifiers (vendor id). Part of `allNonEssentials` on both platforms since 6.3.0 |
 | `campaigns` | Campaign targeting and triggers |
 | `personalization` | Paywall and content personalization |
 | `thirdPartyIntegrations` | Forwarding to the third-party integrations you have set up |
 | `refundHandling` | iOS 6.2.0+ only. Processing of the consumption data attached to an App Store refund request. Not part of `allNonEssentials`; ignored on Android |
-| `allNonEssentials` | Bundle of `analytics`, `campaigns`, `personalization`, `thirdPartyIntegrations`. Android adds `identifiedAnalytics`. Neither platform adds `refundHandling` |
+| `supportInvestigation` | SDK 6.3.0+. Processing of the data that Purchasely support uses to investigate an issue reported by the user |
+| `allNonEssentials` | Bundle of `analytics`, `identifiedAnalytics`, `campaigns`, `personalization`, `thirdPartyIntegrations`, `supportInvestigation` on both platforms. Neither platform adds `refundHandling` |
 
 **Each call replaces the whole set.** The SDK does not merge with the previous call, so pass
 the complete list of refused purposes every time; a call with `[refundHandling]` after a
 call with `[analytics]` grants analytics back. Pass `[]` to grant everything back.
 
-`allNonEssentials` is a fixed bundle: bumping the plugin never adds a purpose to it, so an
-app that already calls it does not start refusing refund data processing. On iOS, list
-`refundHandling` and `identifiedAnalytics` explicitly next to it when you want them. The
+`allNonEssentials` never contains `refundHandling`, so an app that already calls it does not
+start refusing refund data processing. In 6.3.0 it gains `supportInvestigation` on both
+platforms, and `identifiedAnalytics` on iOS. On iOS, list
+`refundHandling` explicitly next to it when you want it. The
 plugin keeps every purpose in the list, whatever the order:
 
 ```js
