@@ -1385,37 +1385,6 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         Purchasely.decrementUserAttribute(key, value)
     }
 
-    private fun getUserAttributeValueForCordova(value: Any?): Any? {
-        return when (value) {
-            is Date -> {
-                val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", Locale.getDefault())
-                } else {
-                    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault())
-                }
-                format.timeZone = TimeZone.getTimeZone("GMT")
-                try {
-                    format.format(value)
-                } catch (e: Exception) {
-                    ""
-                }
-            }
-            is Int -> value
-            //awful but to keep same precision so 1.2f = 1.2 double and not 1.20000056
-            is Float -> value.toString().toDouble()
-            is String -> value
-            is Boolean -> value
-            is Array<*> -> {
-                val jsonArray = JSONArray()
-                value.forEach {
-                    jsonArray.put(getUserAttributeValueForCordova(it))
-                }
-                jsonArray
-            }
-            else -> null
-        }
-    }
-
     fun clearUserAttribute(key: String?) {
         if(key == null) return
         Purchasely.clearUserAttribute(key)
@@ -1446,6 +1415,7 @@ class PurchaselyPlugin : CordovaPlugin(), CoroutineScope {
         val value = getUserAttributeValueForCordova(Purchasely.getBuiltInAttribute(key))
         when (value) {
             is JSONArray -> callbackContext.success(value)
+            is JSONObject -> callbackContext.success(value)
             is String -> callbackContext.success(value)
             is Int -> callbackContext.success(value)
             is Double -> callbackContext.sendPluginResult(PluginResult(PluginResult.Status.OK, value.toFloat()))
@@ -1925,3 +1895,43 @@ internal fun parseCanonicalUuid(value: String?): UUID? {
  */
 internal fun customEventProperties(json: JSONObject?): Map<String, Any?> =
     json?.let { Json.parseToJsonElement(it.toString()).jsonObject } ?: emptyMap()
+
+/**
+ * Converts a user or built-in attribute value of the native SDK to a value that a Cordova
+ * callback can carry. `internal` so a unit test drives it.
+ */
+internal fun getUserAttributeValueForCordova(value: Any?): Any? {
+    return when (value) {
+        is Date -> {
+            val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", Locale.getDefault())
+            } else {
+                SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault())
+            }
+            format.timeZone = TimeZone.getTimeZone("GMT")
+            try {
+                format.format(value)
+            } catch (e: Exception) {
+                ""
+            }
+        }
+        is Int -> value
+        //awful but to keep same precision so 1.2f = 1.2 double and not 1.20000056
+        is Float -> value.toString().toDouble()
+        is String -> value
+        is Boolean -> value
+        is Array<*> -> {
+            val jsonArray = JSONArray()
+            value.forEach {
+                jsonArray.put(getUserAttributeValueForCordova(it))
+            }
+            jsonArray
+        }
+        // 6.3.0 Campaigns v2: ply_experiments is a list of maps, ply_holdout a map.
+        is List<*> -> JSONArray().apply { value.forEach { put(getUserAttributeValueForCordova(it)) } }
+        is Map<*, *> -> JSONObject().apply {
+            value.forEach { (k, v) -> if (k != null) put(k.toString(), getUserAttributeValueForCordova(v)) }
+        }
+        else -> null
+    }
+}

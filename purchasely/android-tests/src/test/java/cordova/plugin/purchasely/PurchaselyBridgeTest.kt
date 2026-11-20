@@ -625,6 +625,37 @@ class PurchaselyBridgeTest {
         assertNull(PurchaselyPlugin.webRedemptionCallback)
     }
 
+    // region built-in attributes (6.3.0 Campaigns v2)
+
+    // Native 6.3.0 returns ply_experiments as a list of maps and ply_holdout as a map. The
+    // converter dropped both (it knew only scalars and arrays), so JS never saw them.
+    @Test
+    fun `a list of maps and a map convert to JSON, not null`() {
+        val experiments = listOf(
+            mapOf(
+                "experiment_id" to "camp_1",
+                "experiment_variant_id" to "expv_1",
+                "assigned_at" to "2026-11-20T09:15:41Z",
+                "is_active" to true,
+            )
+        )
+
+        val list = getUserAttributeValueForCordova(experiments) as JSONArray
+        val first = list.getJSONObject(0)
+        assertEquals("camp_1", first.getString("experiment_id"))
+        assertEquals("expv_1", first.getString("experiment_variant_id"))
+        assertEquals("2026-11-20T09:15:41Z", first.getString("assigned_at"))
+        assertTrue(first.getBoolean("is_active"))
+
+        val holdout = getUserAttributeValueForCordova(mapOf("in_holdout" to false, "version" to 3)) as JSONObject
+        assertFalse(holdout.getBoolean("in_holdout"))
+        assertEquals(3, holdout.getInt("version"))
+
+        assertEquals(0, (getUserAttributeValueForCordova(emptyList<Any>()) as JSONArray).length())
+    }
+
+    // endregion
+
     /** Drives the real `execute` dispatch, so a renamed action fails the test. */
     private fun PurchaselyPlugin.dispatch(action: String, callback: CallbackContext) {
         assertTrue("$action must be handled by execute()", execute(action, JSONArray(), callback))

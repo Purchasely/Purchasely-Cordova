@@ -326,6 +326,7 @@ Purchasely.addUserSubscriptionStatusListener((status) => {
 - Pass the object that `preload()` resolved. Any other value fails with the error code `ARG_INVALID`.
 - `display()` of a deactivated or client presentation shows nothing. Its Promise resolves once with the outcome, and `outcome.presentation.type` tells the type.
 - The events `EXPERIMENT_ASSIGNED` and `EXPERIMENT_EXPOSED` carry `experiment_id` and `experiment_variant_id` in `properties`.
+- `getBuiltInAttributes()` and `getBuiltInAttribute(key)` return `ply_experiments` (a list of objects) and `ply_holdout` (an object) on both platforms. Before this fix, Android dropped list and map values.
 
 ## Data processing consent
 
