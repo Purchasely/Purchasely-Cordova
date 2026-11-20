@@ -654,6 +654,31 @@ class PurchaselyBridgeTest {
         assertEquals(0, (getUserAttributeValueForCordova(emptyList<Any>()) as JSONArray).length())
     }
 
+    @Test
+    fun `native subscription JSON reaches Cordova with its values and explicit nulls`() {
+        val subscription = JsonObject(
+            mapOf(
+                "plan" to JsonObject(mapOf("id" to JsonNull, "vendor_id" to JsonPrimitive("monthly"))),
+                "promotional_offer" to JsonNull,
+                "store_type" to JsonPrimitive("GOOGLE_PLAY_STORE"),
+                "cumulated_revenues_in_usd" to JsonPrimitive(4.99),
+                "subscription_duration_in_days" to JsonPrimitive(31),
+            )
+        )
+
+        val subscriptions = getUserAttributeValueForCordova(JsonArray(listOf(subscription))) as JSONArray
+        val returned = subscriptions.getJSONObject(0)
+        val plan = returned.getJSONObject("plan")
+        assertEquals("monthly", plan.getString("vendor_id"))
+        assertTrue(plan.has("id"))
+        assertTrue(plan.isNull("id"))
+        assertTrue(returned.has("promotional_offer"))
+        assertTrue(returned.isNull("promotional_offer"))
+        assertEquals("GOOGLE_PLAY_STORE", returned.getString("store_type"))
+        assertEquals(4.99, returned.getDouble("cumulated_revenues_in_usd"), 0.0)
+        assertEquals(31, returned.getInt("subscription_duration_in_days"))
+    }
+
     // endregion
 
     /** Drives the real `execute` dispatch, so a renamed action fails the test. */

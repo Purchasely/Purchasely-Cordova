@@ -47,6 +47,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import org.apache.cordova.CallbackContext
 import org.apache.cordova.CordovaPlugin
@@ -1927,7 +1929,9 @@ internal fun getUserAttributeValueForCordova(value: Any?): Any? {
             }
             jsonArray
         }
-        // 6.3.0 Campaigns v2: ply_experiments is a list of maps, ply_holdout a map.
+        // Keep native JSON types ahead of List and Map so their primitives and explicit nulls survive.
+        is JsonArray -> JSONArray(value.toString())
+        is JsonObject -> JSONObject(value.toString())
         is List<*> -> JSONArray().apply { value.forEach { put(getUserAttributeValueForCordova(it)) } }
         is Map<*, *> -> JSONObject().apply {
             value.forEach { (k, v) -> if (k != null) put(k.toString(), getUserAttributeValueForCordova(v)) }
